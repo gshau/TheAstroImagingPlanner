@@ -1,4 +1,4 @@
-name: astrodash
+name: astro_planner
 channels:
   - defaults
 dependencies:

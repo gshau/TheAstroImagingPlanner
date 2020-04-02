@@ -82,10 +82,6 @@ class DarkSky_Forecast:
         df_forecast_data = {}
         for timeframe in ["minutely", "hourly", "daily"]:
             if timeframe in self.forecast_data.keys():
-                # if timeframe == "currently":
-                #     df = pd.Series(self.forecast_data[timeframe])
-                #     df["time"] = convert_time(df["time"], self.timezone)
-                # else:
                 df = pd.DataFrame(self.forecast_data[timeframe]["data"])
                 df["time"] = convert_time(df["time"].values, self.timezone)
                 df = df.set_index("time")

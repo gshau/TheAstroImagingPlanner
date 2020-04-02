@@ -17,9 +17,6 @@ from astropy.utils.exceptions import AstropyWarning
 
 warnings.simplefilter("ignore", category=AstropyWarning)
 
-# external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-
-# app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 # app = dash.Dash(external_stylesheets=[dbc.themes.SLATE])
 app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
 # app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
@@ -27,7 +24,9 @@ app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
 # app = dash.Dash(external_stylesheets=[dbc.themes.GRID])
 
 
-markdown_text = """
+app.title = 'The AstroImaging Planner'
+
+markdown_roadmap = """
 ## Future work:
 - [x] Profile Selection - select which equipment profile you want to view
 - [x] Airmass/Altitude selection
@@ -40,13 +39,29 @@ markdown_text = """
 - [x] Target progress table
 - [ ] Profile details
 - [x] Contrast calculations
-
-## SECONDARY:
+- [ ] Aladin target view
+- [ ] user-controlled
+  - [ ] priority
+  - [ ] filter goals
+  - [ ] exposure totals and progress
+  - [ ] 
+- [ ] mpsas level at current location
+  - [ ] read from mpsas map
+  - [ ] snowpack inflation?
+- [ ] 
+- [ ] docker deploymeent
+  - [ ] darksky api key
+- [ ] add openweathermap datasource
 - [x] Organization of divs - use bootstrap columns
 - [ ] Notes search
 - [ ] Allow other sources for targets - json, astroplanner, etc.
 - [ ] Allow upload of targets file
 - [x] Fix double-click zoom reset
+"""
+
+markdown_info = """
+This tool attempts to...
+
 """
 
 
@@ -56,6 +71,9 @@ DSF_FORECAST = DarkSky_Forecast(key="")
 DEFAULT_LAT = 43.37
 DEFAULT_LON = -88.37
 DEFAULT_UTC_OFFSET = -6
+DEFAULT_MPSAS = 21.5
+DEFAULT_BANDWIDTH = 120
+DEFAULT_K_EXTINCTION = 0.2
 
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
 path_to_astrobox = "/Volumes/Users/gshau/Dropbox/AstroBox"
@@ -90,15 +108,22 @@ def get_time_limits(targets, sun_alt=10):
     return sun.index[sun_dn], sun.index[sun_up]
 
 
-def get_data(target_coords, targets, value="alt", sun_alt_for_twilight=-15):
+def get_data(target_coords, targets, value="alt", sun_alt_for_twilight=-18, local_mpsas=20, filter_bandwidth=300, k_ext=0.2):
     target_names = [
         name for name in list(target_coords.keys()) if name not in ["sun", "moon"]
     ]
+    if local_mpsas is None:
+        local_mpsas = DEFAULT_MPSAS
+    if filter_bandwidth is None:
+        filter_bandwidth = DEFAULT_BANDWIDTH
+    if k_ext is None:
+        k_ext = DEFAULT_K_EXTINCTION
 
+    print(local_mpsas)
     # this is where we sort by transit time
     # print(sorted(target_coords.values, key=lambda x: x["alt"].argmax()))
     if value == 'contrast':
-        target_coords = add_contrast(target_coords, filter_bandwidth=300, mpsas=22, object_brightness=19, include_airmass=True)
+        target_coords = add_contrast(target_coords, filter_bandwidth=filter_bandwidth, mpsas=local_mpsas, object_brightness=19, include_airmass=True, k_ext=k_ext)
 
     moon_data = dict(
         x=target_coords["moon"].index,
@@ -168,17 +193,7 @@ def get_data(target_coords, targets, value="alt", sun_alt_for_twilight=-15):
             )
         )
     return data
-
-
-navbar = dbc.NavbarSimple(
-    children=[
-        # dbc.NavItem(dbc.NavLink("Clear Outside Report",
-        #                         href="http://clearoutside.com/forecast/43.10/-88.40?view=current", target="_blank")),
-        # dbc.NavItem(dbc.NavLink(
-        #     "Weather", href="http://forecast.weather.gov/MapClick.php?lon=-88.39866&lat=43.08719#.U1xl5F7N7wI", target="_blank")),
-        # dbc.NavItem(dbc.NavLink(
-        #     "Satellite", href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12", target="_blank")),
-        dbc.DropdownMenu(
+weather_dropdown = dbc.DropdownMenu(
             children=[
                 # dbc.DropdownMenuItem("", header=True),
                 dbc.DropdownMenuItem(
@@ -200,18 +215,66 @@ navbar = dbc.NavbarSimple(
             nav=True,
             in_navbar=True,
             label="Weather",
-        ),
-        dbc.DropdownMenu(
+        )
+
+settings_dropdown = dbc.DropdownMenu(
             children=[
                 dbc.DropdownMenuItem("", header=True),
-                dbc.DropdownMenuItem("Profiles", href="#"),
-                dbc.DropdownMenuItem("UI Theme", href="#"),
-                dbc.DropdownMenuItem("Logout", href="#"),
+                # dbc.DropdownMenuItem("Profiles", href="#"),
+                # dbc.DropdownMenuItem("UI Theme", href="#"),
+                dbc.DropdownMenuItem("Config", href="#"),
+                # dbc.DropdownMenuItem("Logout", href="#"),
             ],
             nav=True,
             in_navbar=True,
-            label="More",
+            label="Settings",
+        )
+
+roadmap_modal = html.Div(
+    [
+        dbc.Button("Roadmap", id="open_roadmap_modal", color='primary', block=True, className="mr-1"),
+        dbc.Modal(
+            [
+                dbc.ModalHeader("Roadmap"),
+                dbc.ModalBody(dcc.Markdown(children=markdown_roadmap)),
+                dbc.ModalFooter(
+                    dbc.Button("Close", id="close_roadmap_modal", color='danger', block=True, className="mr-1"),
+                ),
+            ],
+            id="roadmap_modal",
+            size='xl',
         ),
+    ]
+)
+
+info_modal = html.Div(
+    [
+        dbc.Button("More Info", id="open_info_modal", color='primary', block=False, className="mr-1"),
+        dbc.Modal(
+            [
+                dbc.ModalHeader("Info"),
+                dbc.ModalBody(dcc.Markdown(children=markdown_info)),
+                dbc.ModalFooter(
+                    dbc.Button("Close", id="close_info_modal", color='danger', block=False, className="mr-1"),
+                ),
+            ],
+            id="info_modal",
+            size='xl',
+        ),
+    ]
+)
+
+navbar = dbc.NavbarSimple(
+    children=[
+        # dbc.NavItem(dbc.NavLink("Clear Outside Report",
+        #                         href="http://clearoutside.com/forecast/43.10/-88.40?view=current", target="_blank")),
+        # dbc.NavItem(dbc.NavLink(
+        #     "Weather", href="http://forecast.weather.gov/MapClick.php?lon=-88.39866&lat=43.08719#.U1xl5F7N7wI", target="_blank")),
+        # dbc.NavItem(dbc.NavLink(
+        #     "Satellite", href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12", target="_blank")),
+        roadmap_modal,
+        weather_dropdown,
+        settings_dropdown,
     ],
     brand="The AstroImaging Planner",
     brand_href="#",
@@ -221,22 +284,24 @@ navbar = dbc.NavbarSimple(
 
 banner_jumbotron = dbc.Jumbotron(
     [
-        html.H2("AstroImaging Planner", className="display-5"),
+        html.H2("The AstroImaging Planner", className="display-6"),
+        # html.Hr(className="my-2"),
+        html.Hr(className="my-2"),
         html.P(
-            "This tool reads a Voyager RoboClip target database and provides ephermeris for all targets for tonight.",
+            "This tool reads a Voyager RoboClip database and provides data for all targets for tonight.",
             className="lead",
         ),
-        html.Hr(className="my-2"),
-        html.P(""),
+        info_modal
         # html.P(dbc.Button("GitHub", color="primary"), className="lead"),
-    ]
+    ],
+    fluid=True
 )
 
-markdown_todos = None
-if show_todos:
-    markdown_todos = dbc.Row(
-        dbc.Col(html.Div(dcc.Markdown(children=markdown_text)), style={"marginTop": 80})
-    )
+# markdown_todos = None
+# if show_todos:
+#     markdown_todos = dbc.Row(
+#         dbc.Col(html.Div(dcc.Markdown(children=markdown_text)), style={"marginTop": 80})
+#     )
 
 date_picker = dbc.Row([dbc.Col(html.Label("DATE: ")),
     dbc.Col(html.Div(
@@ -247,8 +312,10 @@ date_picker = dbc.Row([dbc.Col(html.Label("DATE: ")),
 yaxis_map = {
     "alt": "Altitude",
     "airmass": "Airmass",
-    'contrast': 'Relative Contrast'
+    'contrast': 'Relative Contrast',
 }
+
+
 
 
 yaxis_picker = dbc.Col(
@@ -258,7 +325,7 @@ yaxis_picker = dbc.Col(
             dcc.Dropdown(
                 id="y_axis_type",
                 options=[{"label": v, "value": k} for k, v in yaxis_map.items()],
-                value="alt",
+                value="contrast",
             ),
         ],
         style={"textAlign": "center"},
@@ -356,6 +423,28 @@ location_selection = dbc.Col(
                             ),)
                         ]
                     ),
+                    dbc.Row(
+                        [
+                            dbc.Col(html.Label("Local SQM (mpsas):  ", style={"textAlign": "left"},),),
+                            dbc.Col(dcc.Input(
+                                id="local_mpsas",
+                                debounce=True,
+                                placeholder=DEFAULT_MPSAS,
+                                type="number",
+                            ),)
+                        ]
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(html.Label("Extinction Coeff:  ", style={"textAlign": "left"},),),
+                            dbc.Col(dcc.Input(
+                                id="k_ext",
+                                debounce=True,
+                                placeholder=DEFAULT_K_EXTINCTION,
+                                type="number",
+                            ),)
+                        ]
+                    ),
                 ]
             )
         ]
@@ -404,24 +493,25 @@ body = dbc.Container(
                     [dbc.Container(
     fluid=True,
     style={"width": "95%"},children=[
-                        dbc.Row(date_picker, justify='around'),
-                        html.Br(),
-                        dbc.Row(location_selection, justify='around'),
-                        html.Br(),
                         dbc.Row(yaxis_picker, justify='around'),
                         html.Br(),
                         dbc.Row(profile_picker, justify='around'),
                         html.Br(),
                         dbc.Row(filter_picker, justify='around'),
                         html.Br(),
+                        dbc.Row(date_picker, justify='around'),
+                        html.Br(),
+                        dbc.Row(location_selection, justify='around'),
+                        html.Br(),
                         # dbc.Row(search_notes, justify='around'),
                         # html.Br(),
                         dbc.Row(weather_modal, justify='around'),
-                        html.Br(),
-                        dbc.Row(markdown_todos, justify='around'),])
+                        # html.Br(),
+                        # dbc.Row(markdown_todos, justify='around'),
+                        ])
                     ],
                     width=3,
-                    style={"border": "2px solid"},
+                    style={"border": "0px solid"},
                 ),
                 dbc.Col(
                     [
@@ -461,6 +551,27 @@ def toggle_modal(n1, n2, is_open):
         return not is_open
     return is_open
 
+@app.callback(
+    Output("roadmap_modal", "is_open"),
+    [Input("open_roadmap_modal", "n_clicks"), Input("close_roadmap_modal", "n_clicks")],
+    [State("roadmap_modal", "is_open")],
+)
+def toggle_roadmap_modal(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
+
+@app.callback(
+    Output("info_modal", "is_open"),
+    [Input("open_info_modal", "n_clicks"), Input("close_info_modal", "n_clicks")],
+    [State("info_modal", "is_open")],
+)
+def toggle_info_modal(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
 
 
 translated_filter = {
@@ -486,13 +597,13 @@ def update_site(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET)
 @app.callback(
     Output("weather_graph", "children"),
     [
-        Input("date_picker", "date"),
+        # Input("date_picker", "date"),
         Input("input_lat", "value"),
         Input("input_lon", "value"),
         Input("input_utc_offset", "value"),
     ],
 )
-def update_weather_graph(date, lat, lon, utc_offset):
+def update_weather_graph(lat, lon, utc_offset):
     # global date_range
     
     site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
@@ -533,8 +644,9 @@ def update_weather_graph(date, lat, lon, utc_offset):
                 "layout": dict(
                     title=df_weather.index.name,
                     margin={"l": 50, "b": 100, "t": 50, "r": 50},
-                    legend={"x": 0, "y": 0.5},
+                    legend={"x": 1, "y": 0.5},
                     xaxis={'range': date_range},
+                    yaxis={'range': [0, 100]},
                     height=600,
                     plot_bgcolor="#ddd",
                     paper_bgcolor="#fff",
@@ -556,6 +668,8 @@ def update_weather_graph(date, lat, lon, utc_offset):
         Input("input_lat", "value"),
         Input("input_lon", "value"),
         Input("input_utc_offset", "value"),
+        Input("local_mpsas", 'value'),
+        Input("k_ext", 'value')
     ],
 )
 def update_target_graph(
@@ -566,6 +680,8 @@ def update_target_graph(
     lat=DEFAULT_LAT,
     lon=DEFAULT_LON,
     utc_offset=DEFAULT_UTC_OFFSET,
+    local_mpsas=DEFAULT_MPSAS,
+    k_ext=DEFAULT_K_EXTINCTION
 ):
     date = str(date_string.split('T')[0])
     # global date_range
@@ -587,8 +703,8 @@ def update_target_graph(
         targets = list(set(targets_with_filter))
     site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
     coords = get_coords(targets, date_string, site, time_resolution_in_sec=300)
-
-    data = get_data(coords, targets, value=value)
+    
+    data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
 
     if value == "alt":
         y_range = [0, 90]
@@ -617,7 +733,7 @@ def update_target_graph(
                     yaxis={"title": yaxis_map[value], "range": y_range},
                     title=title,
                     margin={"l": 50, "b": 100, "t": 50, "r": 50},
-                    legend={"x": 0, "y": 0.5},
+                    legend={"x": 1, "y": 0.5},
                     height=600,
                     plot_bgcolor="#ddd",
                     paper_bgcolor="#fff",

@@ -14,10 +14,11 @@ RADIANS_PER_DEGREE = np.pi / 180.0
 
 
 class SkyBackgroundModel:
-    def __init__(self, mpsas):
+    def __init__(self, mpsas, k=0.16):
         self.mpsas = mpsas
+        self.k = k
 
-    def _bmoon(self, phase, separation, moon_alt, sky_alt, k=0.16, aod=0):
+    def _bmoon(self, phase, separation, moon_alt, sky_alt, aod=0):
         #     http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
         alpha = phase
         rho = separation * RADIANS_PER_DEGREE
@@ -26,12 +27,15 @@ class SkyBackgroundModel:
 
         Istar = 10 ** (-0.4 * (3.84 + 0.026 * np.abs(alpha) + 4e-9 * alpha ** 4))
         X = lambda z: (1 - 0.96 * np.sin(z) ** 2) ** (-0.5)
-        f = lambda rho: 10 ** 5.36 * (1.06 + np.cos(rho) ** 2) + 10 ** (
-            6.15 - rho / 40.0
+        f = lambda rho_arg: 10 ** 5.36 * (1.06 + np.cos(rho_arg) ** 2) + 10 ** (
+            6.15 - rho_arg / 40.0
         )
 
         result = (
-            f(rho) * Istar * 10 ** (-0.4 * k * X(Zm)) * (1 - 10 ** (-0.4 * k * X(Z)))
+            f(rho)
+            * Istar
+            * 10 ** (-0.4 * self.k * X(Zm))
+            * (1 - 10 ** (-0.4 * self.k * X(Z)))
         )
         return result
 
@@ -69,10 +73,10 @@ def logistic(x, x0, tau):
     return 1 / (1 + np.exp((x - x0) / tau))
 
 
-def get_sky_bkg(df_locs, target_name, mpsas):
+def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     df_target = df_locs[target_name]
-    sbm = SkyBackgroundModel(mpsas=mpsas)
+    sbm = SkyBackgroundModel(mpsas=mpsas, k=k_ext)
 
     df_moon = df_locs["moon"]
     df_sun = df_locs["sun"]
@@ -81,10 +85,10 @@ def get_sky_bkg(df_locs, target_name, mpsas):
     phase = (distance(df_moon, df_sun, lat_key="dec", long_key="ra") + 360) % 360 - 180
     separation = distance(df_moon, df_target)
 
-    b_moon = sbm._bmoon(phase, separation, df_moon["alt"], df_target["alt"], k=0.2)
+    b_moon = sbm._bmoon(phase, separation, df_moon["alt"], df_target["alt"])
     b_moon *= df_moon["alt"] > 0
-    #     b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
-    b_moon *= logistic(df_moon["airmass"], 5, 1)
+    # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
+    b_moon *= logistic(df_moon["airmass"], 10, 5)
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
     A0 = sbm._mpsas_to_b(11) / np.exp(-5)
@@ -93,7 +97,10 @@ def get_sky_bkg(df_locs, target_name, mpsas):
     # Ad-hoc LP model
     b_lp = 2000 * np.exp(-(df_target["alt"] / 20 - 1))
 
-    b_all_terms = b_moon + 0 * b_lp + b_sun + sbm._mpsas_to_b(mpsas)
+    b_all_terms = b_moon
+    b_all_terms += sbm._mpsas_to_b(mpsas)
+    # b_all_terms += b_lp
+    b_all_terms += b_sun
 
     sky_bkg = sbm._b_to_mpsas(b_all_terms)
 
@@ -109,9 +116,10 @@ def get_contrast(
     filter_bandwidth=None,
     mpsas=20.2,
     object_brightness=19,
+    k_ext=0.2,
     include_airmass=True,
 ):
-    sky_bkg = get_sky_bkg(df_locs, target_name, mpsas)
+    sky_bkg = get_sky_bkg(df_locs, target_name, mpsas, k_ext=k_ext)
 
     vis_bw = 300
 
@@ -119,23 +127,30 @@ def get_contrast(
     bkg = 2.5 ** (-sky_bkg)
     dark_bkg = 2.5 ** (-mpsas)
 
-    if filter_bandwidth:
-        bkg *= filter_bandwidth / vis_bw
+    # if filter_bandwidth:
+    #     bkg *= filter_bandwidth / vis_bw
+    #     dark_bkg *= filter_bandwidth / vis_bw
 
-    contrast = obj / (bkg)
-    contrast_dark = obj / (dark_bkg)
+    # contrast = obj / (bkg)
+    # contrast_dark = obj / (dark_bkg)
     # contrast = obj / bkg
 
-    contrast_ratio = contrast / contrast_dark
+    contrast_ratio = dark_bkg / bkg
 
     if include_airmass:
-        contrast_ratio *= np.exp(-(df_locs[target_name]["airmass"] - 1))
+        contrast_ratio *= np.exp(-k_ext * (df_locs[target_name]["airmass"]) + 0.16)
+        # contrast_ratio *= np.exp(-(df_locs[target_name]["airmass"] - 1))
 
     return contrast_ratio
 
 
 def add_contrast(
-    df_loc, filter_bandwidth=300, include_airmass=True, mpsas=20.2, object_brightness=19
+    df_loc,
+    filter_bandwidth=300,
+    include_airmass=True,
+    mpsas=20.2,
+    object_brightness=19,
+    k_ext=0.2,
 ):
     result = {}
     for target in df_loc.keys():
@@ -149,6 +164,7 @@ def add_contrast(
             include_airmass=include_airmass,
             mpsas=mpsas,
             object_brightness=object_brightness,
+            k_ext=k_ext,
         )
         df0 = df_loc[target]
         if "contrast" in df0.columns:

@@ -106,7 +106,7 @@ class RoboClipObjects:
             self.target_list[profile][row.TARGET] = target
 
 
-rco = RoboClipObjects("./VoyRC_for_testing.mdb")
+rco = RoboClipObjects("./data/VoyRC_default.mdb")
 
 # df_summary = get_exposure_summary(data_dir=f"{path_to_astrobox}/data").reset_index()
 

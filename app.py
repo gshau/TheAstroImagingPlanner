@@ -1,5 +1,6 @@
 import base64
 import io
+import ntpath
 
 import dash
 import dash_core_components as dcc
@@ -15,7 +16,7 @@ import os
 from datetime import datetime as dt
 from dash.dependencies import Input, Output, State
 from plotly.subplots import make_subplots
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from astro_planner import *
 from astropy.utils.exceptions import AstropyWarning
 
@@ -84,19 +85,91 @@ DEFAULT_K_EXTINCTION = 0.2
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
 
 
-class RoboClipObjects:
-    def __init__(self, filename):
-        self.df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
-        self.load_from_df(self.df_rc)
+# class Objects:
+#     def __init__(self):
+#         self.target_list = defaultdict(dict)
+#         self.profiles = []
 
-    def load_from_df(self, df_input):
-        self.process_roboclips(df_input.sort_values(by="RAJ2000"))
-        self.profiles = list(self.target_list.keys())
 
-    def process_roboclips(self, df_input):
+# class RoboClipObjects(Objects):
+#     def __init__(self, filename):
+#         super().__init__()
+#         self.df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
+#         print(self.df_rc)
+#         self.load_from_df(self.df_rc)
+
+#     def load_from_df(self, df_input):
+#         self.process_roboclips(df_input.sort_values(by="RAJ2000"))
+#         self.profiles = list(self.target_list.keys())
+
+#     def process_roboclips(self, df_input):
+#         self.target_list = defaultdict(dict)
+#         for row in df_input.itertuples():
+#             profile = row.GRUPPO
+#             target = Target(
+#                 row.TARGET,
+#                 ra=row.RAJ2000 * u.hourangle,
+#                 dec=row.DECJ2000 * u.deg,
+#                 notes=row.NOTE,
+#             )
+#             self.target_list[profile][row.TARGET] = target
+
+
+# class SGPSequenceObjects(Objects):
+#     def __init__(self, filenames):
+#         super().__init__()
+#         for self.filename in filenames:
+#             with open(self.filename, "r") as f:
+#                 self.data = json.load(f)
+#                 self.parse_data()
+#                 self.process_sequence()
+
+#     def parse_data(self):
+#         self.sequence = {}
+#         for sequence in self.data["arEventGroups"]:
+#             name = sequence["sName"]
+#             ref = sequence["siReference"]
+
+#             RA = ref["nRightAscension"]
+#             DEC = ref["nDeclination"]
+#             events = sequence["Events"]
+#             filters = []
+#             for event in events:
+#                 filters.append(event["sSuffix"])
+
+#             notes = " ".join(filters)
+
+#             self.sequence[name] = dict(
+#                 RAJ2000=RA, DECJ2000=DEC, NOTES=notes, filters=filters
+#             )
+
+#     def process_sequence(self):
+
+#         for name, entry in self.sequence.items():
+#             profile = ntpath.basename(self.filename)
+#             print(entry)
+#             target = Target(
+#                 #             target = dict(
+#                 name=name,
+#                 ra=entry["RAJ2000"] * u.hourangle,
+#                 dec=entry["DECJ2000"] * u.deg,
+#                 notes=" ".join(entry["filters"]),
+#             )
+#             self.target_list[profile][name] = target
+
+
+import ntpath
+
+
+class Objects:
+    def __init__(self):
+        self.target_list = defaultdict(dict)
+        self.profiles = []
+
+    def process_objects(self, df_input):
         self.target_list = defaultdict(dict)
         for row in df_input.itertuples():
-            profile = row.GRUPPO
+            profile = row.GROUP
             target = Target(
                 row.TARGET,
                 ra=row.RAJ2000 * u.hourangle,
@@ -105,8 +178,80 @@ class RoboClipObjects:
             )
             self.target_list[profile][row.TARGET] = target
 
+    def load_from_df(self, df_input):
+        self.df_objects = df_input
+        self.process_objects(df_input)
+        self.profiles = list(self.target_list.keys())
 
-rco = RoboClipObjects("./data/VoyRC_default.mdb")
+
+class RoboClipObjects(Objects):
+    def __init__(self, filename):
+        super().__init__()
+        self.df_objects = mdb.read_table(
+            filename, "RoboClip", converters_from_schema=False
+        )
+        self.df_objects.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)
+        self.load_from_df(self.df_objects)
+
+
+class SGPSequenceObjects(Objects):
+    def __init__(self, filename):
+        super().__init__()
+        for self.filename in [filename]:
+            with open(self.filename, "r") as f:
+                self.data = json.load(f)
+                self.df_objects = self.parse_data()
+                self.process_objects(self.df_objects)
+
+    def parse_data(self):
+        self.sequence = {}
+        root_name = ntpath.basename(self.filename)
+        self.profiles.append(root_name)
+        for sequence in self.data["arEventGroups"]:
+            name = sequence["sName"]
+            ref = sequence["siReference"]
+
+            RA = ref["nRightAscension"]
+            DEC = ref["nDeclination"]
+            events = sequence["Events"]
+            filters = []
+            event_data = []
+            note_string = ""
+            for event in events:
+                filters.append(event["sSuffix"])
+
+                event_data.append(event)
+                print(event_data)
+                note_string += "<br> {filter} {exp}s ({ncomplete} / {ntotal}) exposure: {total_exposure:.1f}h".format(
+                    filter=event["sSuffix"],
+                    exp=event["nExposureTime"],
+                    ncomplete=event["nNumComplete"],
+                    ntotal=event["nRepeat"],
+                    total_exposure=event["nNumComplete"]
+                    * event["nExposureTime"]
+                    / 3600,
+                )
+            # notes = "<br>" + "<br>".join(filters)
+            notes = note_string
+            self.sequence[name] = dict(
+                RAJ2000=RA, DECJ2000=DEC, NOTE=notes, TARGET=name, GROUP=root_name
+            )
+        return pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
+            drop=True
+        )
+
+
+def object_file_reader(filename):
+    if ".mdb" in filename:
+        return RoboClipObjects(filename)
+    # if isinstance(filename, list):
+    #     for file in
+    elif ".sgf" in filename:
+        return SGPSequenceObjects(filename)
+
+
+object_data = object_file_reader("./data/VoyRC_default.mdb")
+# object_data = object_file_reader("./data/test.sgf")
 
 # df_summary = get_exposure_summary(data_dir=f"{path_to_astrobox}/data").reset_index()
 
@@ -235,6 +380,8 @@ def get_data(
         )
     return data
 
+
+# region ui
 
 weather_dropdown = dbc.DropdownMenu(
     children=[
@@ -403,7 +550,7 @@ yaxis_picker = dbc.Col(
             dcc.Dropdown(
                 id="y_axis_type",
                 options=[{"label": v, "value": k} for k, v in yaxis_map.items()],
-                value="contrast",
+                value="alt",
             ),
         ],
         style={"textAlign": "center"},
@@ -418,9 +565,10 @@ profile_picker = dbc.Col(
             dcc.Dropdown(
                 id="profile_selection",
                 options=[
-                    {"label": profile, "value": profile} for profile in rco.profiles
+                    {"label": profile, "value": profile}
+                    for profile in object_data.profiles
                 ],
-                value=rco.profiles[0],
+                value=object_data.profiles[0],
             ),
         ],
         style={"textAlign": "center"},
@@ -566,7 +714,6 @@ location_selection = dbc.Col(
 #     sort_action="native",
 #     # sort_mode="multi",
 # )
-
 weather_graph = html.Div(id="weather_graph", children=[dbc.Spinner(color="warning")])
 
 weather_modal = html.Div(
@@ -597,21 +744,19 @@ weather_modal = html.Div(
         ),
     ]
 )
+# endregion
 
 upload = dcc.Upload(
     id="upload_data",
-    children=html.Div([html.A("Drag and Drop Voyager RoboClip .mdb File Here ")]),
-    style={
-        "width": "50%",
-        "height": "60px",
-        "lineHeight": "60px",
-        "borderWidth": "1px",
-        "borderStyle": "dashed",
-        "borderRadius": "5px",
-        "textAlign": "center",
-        "margin": "10px",
-    },
-    # Allow multiple files to be uploaded
+    children=html.Div(
+        [
+            dbc.Button(
+                "Drag and drop Voyager RoboClip (.mdb) or Sequence Generator Pro (.sgf) file or click here ",
+                color="dark",
+                className="mr-1",
+            )
+        ]
+    ),
     multiple=True,
 )
 
@@ -648,14 +793,18 @@ body = dbc.Container(
                     style={"border": "0px solid"},
                 ),
                 dbc.Col(
-                    [
+                    children=[
                         html.Div(
                             id="target_graph", children=[dbc.Spinner(color="primary")]
                         ),
-                        html.Div(id="upload_button", children=[upload]),
+                        html.Br(),
+                        dbc.Row(
+                            html.Div(id="upload_button", children=[upload]),
+                            justify="center",
+                        ),
                     ],
                     width=9,
-                    style={"border": "0px solid"},
+                    # style={"border": "0px solid"},
                 ),
             ]
         ),
@@ -668,7 +817,7 @@ app.layout = html.Div(
         body,
         html.Div(
             id="target_data",
-            children=rco.df_rc.to_json(orient="table"),
+            children=object_data.df_objects.to_json(orient="table"),
             style={"display": "none"},
         ),
     ]
@@ -680,32 +829,52 @@ def parse_contents(contents, filename, date):
     decoded = base64.b64decode(content_string)
     try:
         if ".mdb" in filename:
-            local_file = f"VoyRC_{uuid.uuid1()}.mdb"
+            file_id = uuid.uuid1()
+            local_file = f"VoyRC_{file_id}.mdb"
             with open(local_file, "wb") as f:
                 f.write(decoded)
-            rco = RoboClipObjects(local_file)
+            object_data = object_file_reader(local_file)
             os.remove(local_file)
-            df = rco.df_rc
-            print(df.head())
+            print(object_data.df_objects.head())
+        elif ".sgf" in filename:
+            out_data = io.StringIO(decoded.decode("utf-8"))
+            file_id = uuid.uuid1()
+            local_file = f"./{filename}"
+            with open(local_file, "w") as f:
+                f.write(out_data.read())
+            print("Done!")
+            object_data = object_file_reader(local_file)
+            os.remove(local_file)
+            print(object_data.df_objects.head())
         else:
             return html.Div(["Unsupported file!"])
     except Exception as e:
         print(e)
         return html.Div(["There was an error processing this file."])
-    return df.to_json(orient="table")
+    return object_data
 
 
 @app.callback(
-    Output("target_data", "children"),
+    [
+        Output("target_data", "children"),
+        Output("profile_selection", "options"),
+        Output("profile_selection", "value"),
+    ],
     [Input("upload_data", "contents")],
     [State("upload_data", "filename"), State("upload_data", "last_modified")],
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
     if list_of_contents is not None:
         children = []
+        options = []
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
-            children.append(parse_contents(c, n, d))
-        return children[0]
+            object_data = parse_contents(c, n, d)
+            object_data.df_objects.to_json(orient="table")
+            children.append(object_data.df_objects.to_json(orient="table"))
+            for profile in object_data.profiles:
+                options.append({"label": profile, "value": profile})
+
+        return children[0], options, options[0]["value"]
 
 
 @app.callback(
@@ -744,8 +913,8 @@ def toggle_info_modal(n1, n2, is_open):
 translated_filter = {
     "ha": ["ho", "sho", "hoo", "hos", "halpha", "h-alpha"],
     "oiii": ["ho", "sho", "hoo", "hos"],
-    "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
-    "rgb": ["osc", "bayer", "dslr", "slr"],
+    "nb": ["ha", "oiii", "sii", "sho", "ho ", "hoo", "hos", "halpha", "h-alpha"],
+    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
     "lum": ["luminance", "lrgb"],
 }
 
@@ -854,11 +1023,12 @@ def update_target_graph(
     json_targets=None,
 ):
     if json_targets is None:
-        json_targets = rco.df_rc.to_json(orient="table")
-    rco.load_from_df(pd.read_json(json_targets, orient="table"))
+        print("json_targets is None")
+        json_targets = object_data.df_objects.to_json(orient="table")
+    object_data.load_from_df(pd.read_json(json_targets, orient="table"))
 
     date = str(date_string.split("T")[0])
-    targets = list(rco.target_list[profile].values())
+    targets = list(object_data.target_list[profile].values())
     if filters:
         print(filters)
         targets_with_filter = []
@@ -875,7 +1045,7 @@ def update_target_graph(
                     ]
         targets = list(set(targets_with_filter))
     site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
-    coords = get_coords(targets, date_string, site, time_resolution_in_sec=300)
+    coords = get_coords(targets, date_string, site, time_resolution_in_sec=600)
 
     data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
 
@@ -916,4 +1086,4 @@ def update_target_graph(
 
 if __name__ == "__main__":
     app.run_server(debug=debug_status, host="0.0.0.0")
-    # app.run_server()
+    # app.run_server(host="0.0.0.0")

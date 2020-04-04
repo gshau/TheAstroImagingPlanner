@@ -1,3 +1,6 @@
+import base64
+import io
+
 from datetime import datetime as dt
 import dash
 import dash_core_components as dcc
@@ -10,6 +13,7 @@ import dash_table
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
+from collections import OrderedDict
 
 from astro_planner import *
 import warnings
@@ -78,9 +82,44 @@ DEFAULT_K_EXTINCTION = 0.2
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
 path_to_astrobox = "/Volumes/Users/gshau/Dropbox/AstroBox"
 # path_to_astrobox = "/Users/gshau/Dropbox/AstroBox"
-target_list = get_roboclips(filename=f"{path_to_astrobox}/roboclip/VoyRC.mdb")
 
-profiles = list(target_list.keys())
+
+def process_roboclips(df_rc):
+
+    target_list = defaultdict(OrderedDict)
+    for row in df_rc.itertuples():
+        profile = row.GRUPPO
+        target = Target(
+            row.TARGET,
+            ra=row.RAJ2000 * u.hourangle,
+            dec=row.DECJ2000 * u.deg,
+            notes=row.NOTE,
+        )
+        target_list[profile][row.TARGET] = target
+
+    return target_list
+
+
+class RoboClipObjects:
+    def __init__(self, filename):
+        self.df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
+        self.load_from_df(self.df_rc)
+
+    def load_from_df(self, df_input):
+        print('****')
+        print(df_input.head())
+        print(df_input.sort_values(by='RAJ2000').head())
+        print('****')
+        self.target_list = process_roboclips(df_input.sort_values(by='RAJ2000'))
+        print(self.target_list['tmb130ss qsi690'].keys())
+        self.profiles = list(self.target_list.keys())
+
+
+rco = RoboClipObjects(f"./VoyRC_for_testing.mdb")
+
+# df_rc = mdb.read_table(f"{path_to_astrobox}/roboclip/VoyRC.mdb", "RoboClip", converters_from_schema=False)
+# target_list = process_roboclips(df_rc)
+# profiles = list(target_list.keys())
 
 df_summary = get_exposure_summary(data_dir=f"{path_to_astrobox}/data").reset_index()
 
@@ -88,6 +127,8 @@ df_summary = get_exposure_summary(data_dir=f"{path_to_astrobox}/data").reset_ind
 debug_status = True
 
 show_todos = False
+
+
 
 
 if not debug_status:
@@ -110,7 +151,7 @@ def get_time_limits(targets, sun_alt=10):
 
 def get_data(target_coords, targets, value="alt", sun_alt_for_twilight=-18, local_mpsas=20, filter_bandwidth=300, k_ext=0.2):
     target_names = [
-        name for name in list(target_coords.keys()) if name not in ["sun", "moon"]
+        name for name in sorted(list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
     if local_mpsas is None:
         local_mpsas = DEFAULT_MPSAS
@@ -220,10 +261,10 @@ weather_dropdown = dbc.DropdownMenu(
 settings_dropdown = dbc.DropdownMenu(
             children=[
                 dbc.DropdownMenuItem("", header=True),
-                # dbc.DropdownMenuItem("Profiles", href="#"),
-                # dbc.DropdownMenuItem("UI Theme", href="#"),
+                dbc.DropdownMenuItem("Profiles", href="#"),
+                dbc.DropdownMenuItem("UI Theme", href="#"),
                 dbc.DropdownMenuItem("Config", href="#"),
-                # dbc.DropdownMenuItem("Logout", href="#"),
+                dbc.DropdownMenuItem("Logout", href="#"),
             ],
             nav=True,
             in_navbar=True,
@@ -266,14 +307,14 @@ info_modal = html.Div(
 
 navbar = dbc.NavbarSimple(
     children=[
-        # dbc.NavItem(dbc.NavLink("Clear Outside Report",
-        #                         href="http://clearoutside.com/forecast/43.10/-88.40?view=current", target="_blank")),
-        # dbc.NavItem(dbc.NavLink(
-        #     "Weather", href="http://forecast.weather.gov/MapClick.php?lon=-88.39866&lat=43.08719#.U1xl5F7N7wI", target="_blank")),
-        # dbc.NavItem(dbc.NavLink(
-        #     "Satellite", href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12", target="_blank")),
+        dbc.NavItem(dbc.NavLink("Clear Outside Report",
+                                href="http://clearoutside.com/forecast/43.10/-88.40?view=current", target="_blank")),
+        dbc.NavItem(dbc.NavLink(
+            "Weather", href="http://forecast.weather.gov/MapClick.php?lon=-88.39866&lat=43.08719#.U1xl5F7N7wI", target="_blank")),
+        dbc.NavItem(dbc.NavLink(
+            "Satellite", href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12", target="_blank")),
         roadmap_modal,
-        weather_dropdown,
+        # weather_dropdown,
         settings_dropdown,
     ],
     brand="The AstroImaging Planner",
@@ -291,7 +332,7 @@ banner_jumbotron = dbc.Jumbotron(
             "This tool reads a Voyager RoboClip database and provides data for all targets for tonight.",
             className="lead",
         ),
-        info_modal
+        info_modal,
         # html.P(dbc.Button("GitHub", color="primary"), className="lead"),
     ],
     fluid=True
@@ -339,8 +380,8 @@ profile_picker = dbc.Col(
             html.Label("Group (Equipment Profiles)", style={"textAlign": "center"},),
             dcc.Dropdown(
                 id="profile_selection",
-                options=[{"label": profile, "value": profile} for profile in profiles],
-                value=profiles[0],
+                options=[{"label": profile, "value": profile} for profile in rco.profiles],
+                value=rco.profiles[0],
             ),
         ],
         style={"textAlign": "center"},
@@ -481,6 +522,27 @@ weather_modal = html.Div(
     ]
 )
 
+upload =     dcc.Upload(
+        id='upload_data',
+        children=html.Div([
+            html.A('Drag and Drop Voyager RoboClip .mdb File Here ')
+        ]),
+        style={
+            'width': '50%',
+            'height': '60px',
+            'lineHeight': '60px',
+            'borderWidth': '1px',
+            'borderStyle': 'dashed',
+            'borderRadius': '5px',
+            'textAlign': 'center',
+            'margin': '10px'
+        },
+        # Allow multiple files to be uploaded
+        multiple=True
+    )
+        
+
+
 body = dbc.Container(
     fluid=True,
     style={"width": "90%"},
@@ -515,16 +577,15 @@ body = dbc.Container(
                 ),
                 dbc.Col(
                     [
-                        # html.Div(
-                        #     id="all_graph", children=[dbc.Spinner(color="primary")]
-                        # ),
+                    
                         html.Div(
                             id="target_graph", children=[dbc.Spinner(color="primary")]
                         ),
-                        # html.Div(
-                        #     id="weather_graph", children=[dbc.Spinner(color="warning")]
-                        # ),
-                        # exposure_summary,
+                        html.Div(
+                            id="upload_button", children=[upload]
+                        ),
+                        
+                
                     ],
                     width=9,
                     style={"border": "0px solid"},
@@ -538,7 +599,48 @@ body = dbc.Container(
 
 
 
-app.layout = html.Div([body])
+
+app.layout = html.Div([body, 
+html.Div(id='target_data', children=rco.df_rc.to_json(orient='table'), style={'display': 'none'})
+])
+
+import uuid
+import os
+            
+def parse_contents(contents, filename, date):
+    content_type, content_string = contents.split(',')
+    print(filename, content_type)
+    decoded = base64.b64decode(content_string)
+    try:
+        if '.mdb' in filename:
+            local_file = f'VoyRC_{uuid.uuid1()}.mdb'
+            print(local_file)
+            with open(local_file, 'wb') as f:
+                f.write(decoded)
+            # df = mdb.read_table(local_file, "RoboClip", converters_from_schema=False)
+            rco = RoboClipObjects(local_file)
+            os.remove(local_file)
+            df = rco.df_rc
+            print(df)
+    except Exception as e:
+        print(e)
+        return html.Div([
+            'There was an error processing this file.'
+        ])
+    return df.to_json(orient='table')
+
+
+@app.callback(Output('target_data', 'children'),
+              [Input('upload_data', 'contents')],
+              [State('upload_data', 'filename'),
+               State('upload_data', 'last_modified')])
+def update_output(list_of_contents, list_of_names, list_of_dates):
+    if list_of_contents is not None:
+        children = []
+        for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
+            children.append(parse_contents(c, n, d))
+        return children[0]
+
 
 
 @app.callback(
@@ -657,7 +759,7 @@ def update_weather_graph(lat, lon, utc_offset):
         )
     ]
 
-
+import json
 @app.callback(
     Output("target_graph", "children"),
     [
@@ -669,7 +771,8 @@ def update_weather_graph(lat, lon, utc_offset):
         Input("input_lon", "value"),
         Input("input_utc_offset", "value"),
         Input("local_mpsas", 'value'),
-        Input("k_ext", 'value')
+        Input("k_ext", 'value'),
+        Input('target_data', 'children')
     ],
 )
 def update_target_graph(
@@ -681,11 +784,16 @@ def update_target_graph(
     lon=DEFAULT_LON,
     utc_offset=DEFAULT_UTC_OFFSET,
     local_mpsas=DEFAULT_MPSAS,
-    k_ext=DEFAULT_K_EXTINCTION
+    k_ext=DEFAULT_K_EXTINCTION,
+    json_targets=None,
 ):
+    if json_targets is None:
+        json_targets = rco.df_rc.to_json(orient='table')
+    rco.load_from_df(pd.read_json(json_targets, orient='table'))
+
+
     date = str(date_string.split('T')[0])
-    # global date_range
-    targets = list(target_list[profile].values())
+    targets = list(rco.target_list[profile].values())
     if filters:
         print(filters)
         targets_with_filter = []

@@ -90,12 +90,7 @@ class RoboClipObjects:
         self.load_from_df(self.df_rc)
 
     def load_from_df(self, df_input):
-        print("****")
-
-        print(df_input[["TARGET", "GRUPPO", "NOTE"]])
-        print("****")
         self.process_roboclips(df_input.sort_values(by="RAJ2000"))
-        print(self.target_list["tmb130ss qsi690"].keys())
         self.profiles = list(self.target_list.keys())
 
     def process_roboclips(self, df_input):
@@ -108,7 +103,6 @@ class RoboClipObjects:
                 dec=row.DECJ2000 * u.deg,
                 notes=row.NOTE,
             )
-            print(row.TARGET, row.NOTE)
             self.target_list[profile][row.TARGET] = target
 
 
@@ -129,7 +123,6 @@ date_range = []
 
 
 def get_site(lat=DEFAULT_LAT, lon=DEFAULT_LON, alt=290, utc_offset=DEFAULT_UTC_OFFSET):
-    print(lat, lon, utc_offset)
     site = ObservingSite(lat, lon, alt, utc_offset=utc_offset)
     return site
 
@@ -161,7 +154,6 @@ def get_data(
     if k_ext is None:
         k_ext = DEFAULT_K_EXTINCTION
 
-    print(local_mpsas)
     # this is where we sort by transit time
     # print(sorted(target_coords.values, key=lambda x: x["alt"].argmax()))
     if value == "contrast":
@@ -685,12 +677,10 @@ app.layout = html.Div(
 
 def parse_contents(contents, filename, date):
     content_type, content_string = contents.split(",")
-    print(filename, content_type)
     decoded = base64.b64decode(content_string)
     try:
         if ".mdb" in filename:
             local_file = f"VoyRC_{uuid.uuid1()}.mdb"
-            print(local_file)
             with open(local_file, "wb") as f:
                 f.write(decoded)
             rco = RoboClipObjects(local_file)

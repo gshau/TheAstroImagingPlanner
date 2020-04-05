@@ -80,7 +80,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     df_moon = df_locs["moon"]
     df_sun = df_locs["sun"]
-    date = df_sun.index
+    # date = df_sun.index
     #     moon = get_moon(Time(date))
     phase = (distance(df_moon, df_sun, lat_key="dec", long_key="ra") + 360) % 360 - 180
     separation = distance(df_moon, df_target)
@@ -95,7 +95,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     b_sun = A0 * np.exp(df_sun["alt"]) / 1.15
 
     # Ad-hoc LP model
-    b_lp = 2000 * np.exp(-(df_target["alt"] / 20 - 1))
+    # b_lp = 2000 * np.exp(-(df_target["alt"] / 20 - 1))
 
     b_all_terms = b_moon
     b_all_terms += sbm._mpsas_to_b(mpsas)
@@ -121,9 +121,9 @@ def get_contrast(
 ):
     sky_bkg = get_sky_bkg(df_locs, target_name, mpsas, k_ext=k_ext)
 
-    vis_bw = 300
+    # vis_bw = 300
 
-    obj = 2.5 ** (-object_brightness)
+    # obj = 2.5 ** (-object_brightness)
     bkg = 2.5 ** (-sky_bkg)
     dark_bkg = 2.5 ** (-mpsas)
 

@@ -12,6 +12,7 @@ import plotly.graph_objects as go
 import warnings
 import uuid
 import os
+import datetime
 
 from datetime import datetime as dt
 from dash.dependencies import Input, Output, State
@@ -82,83 +83,10 @@ DEFAULT_MPSAS = 19.5
 DEFAULT_BANDWIDTH = 120
 DEFAULT_K_EXTINCTION = 0.2
 
+DEFAULT_TIME_RESOLUTION = 300
+
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
 
-
-# class Objects:
-#     def __init__(self):
-#         self.target_list = defaultdict(dict)
-#         self.profiles = []
-
-
-# class RoboClipObjects(Objects):
-#     def __init__(self, filename):
-#         super().__init__()
-#         self.df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
-#         print(self.df_rc)
-#         self.load_from_df(self.df_rc)
-
-#     def load_from_df(self, df_input):
-#         self.process_roboclips(df_input.sort_values(by="RAJ2000"))
-#         self.profiles = list(self.target_list.keys())
-
-#     def process_roboclips(self, df_input):
-#         self.target_list = defaultdict(dict)
-#         for row in df_input.itertuples():
-#             profile = row.GRUPPO
-#             target = Target(
-#                 row.TARGET,
-#                 ra=row.RAJ2000 * u.hourangle,
-#                 dec=row.DECJ2000 * u.deg,
-#                 notes=row.NOTE,
-#             )
-#             self.target_list[profile][row.TARGET] = target
-
-
-# class SGPSequenceObjects(Objects):
-#     def __init__(self, filenames):
-#         super().__init__()
-#         for self.filename in filenames:
-#             with open(self.filename, "r") as f:
-#                 self.data = json.load(f)
-#                 self.parse_data()
-#                 self.process_sequence()
-
-#     def parse_data(self):
-#         self.sequence = {}
-#         for sequence in self.data["arEventGroups"]:
-#             name = sequence["sName"]
-#             ref = sequence["siReference"]
-
-#             RA = ref["nRightAscension"]
-#             DEC = ref["nDeclination"]
-#             events = sequence["Events"]
-#             filters = []
-#             for event in events:
-#                 filters.append(event["sSuffix"])
-
-#             notes = " ".join(filters)
-
-#             self.sequence[name] = dict(
-#                 RAJ2000=RA, DECJ2000=DEC, NOTES=notes, filters=filters
-#             )
-
-#     def process_sequence(self):
-
-#         for name, entry in self.sequence.items():
-#             profile = ntpath.basename(self.filename)
-#             print(entry)
-#             target = Target(
-#                 #             target = dict(
-#                 name=name,
-#                 ra=entry["RAJ2000"] * u.hourangle,
-#                 dec=entry["DECJ2000"] * u.deg,
-#                 notes=" ".join(entry["filters"]),
-#             )
-#             self.target_list[profile][name] = target
-
-
-import ntpath
 
 
 class Objects:
@@ -231,7 +159,6 @@ class SGPSequenceObjects(Objects):
                     * event["nExposureTime"]
                     / 3600,
                 )
-            # notes = "<br>" + "<br>".join(filters)
             notes = note_string
             self.sequence[name] = dict(
                 RAJ2000=RA, DECJ2000=DEC, NOTE=notes, TARGET=name, GROUP=root_name
@@ -383,28 +310,30 @@ def get_data(
 
 # region ui
 
-weather_dropdown = dbc.DropdownMenu(
-    children=[
-        dbc.DropdownMenuItem(
-            "Clear Outside Report",
-            href="http://clearoutside.com/forecast/43.10/-88.40?view=current",
-            target="_blank",
-        ),
-        dbc.DropdownMenuItem(
-            "Weather",
-            href="http://forecast.weather.gov/MapClick.php?lon=-88.39866&lat=43.08719#.U1xl5F7N7wI",
-            target="_blank",
-        ),
-        dbc.DropdownMenuItem(
-            "Satellite",
-            href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
-            target="_blank",
-        ),
-    ],
-    nav=True,
-    in_navbar=True,
-    label="Weather",
-)
+# weather_dropdown = dbc.DropdownMenu(
+#     children=[
+#         dbc.DropdownMenuItem(
+#             "Clear Outside Report",
+#             id='clear_outside',
+#             href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
+#             target="_blank",
+#         ),
+#         dbc.DropdownMenuItem(
+#             "Weather",
+#             id='nws_weather',
+#             href=f"http://forecast.weather.gov/MapClick.php?lon={DEFAULT_LAT}&lat={DEFAULT_LON}#.U1xl5F7N7wI",
+#             target="_blank",
+#         ),
+#         dbc.DropdownMenuItem(
+#             "Satellite",
+#             href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
+#             target="_blank",
+#         ),
+#     ],
+#     nav=True,
+#     in_navbar=True,
+#     label="Weather",
+# )
 
 settings_dropdown = dbc.DropdownMenu(
     children=[
@@ -475,21 +404,40 @@ info_modal = html.Div(
             size="xl",
         ),
     ]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 )
 
 navbar = dbc.NavbarSimple(
+    
     children=[
         dbc.NavItem(
             dbc.NavLink(
                 "Clear Outside Report",
-                href="http://clearoutside.com/forecast/43.10/-88.40?view=current",
+                            id='clear_outside',
+                href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
                 target="_blank",
             )
         ),
         dbc.NavItem(
             dbc.NavLink(
                 "Weather",
-                href="http://forecast.weather.gov/MapClick.php?lon=-88.39866&lat=43.08719#.U1xl5F7N7wI",
+                            id='nws_weather',
+                href=f"http://forecast.weather.gov/MapClick.php?lon={DEFAULT_LON}&lat={DEFAULT_LAT}#.U1xl5F7N7wI",
                 target="_blank",
             )
         ),
@@ -515,7 +463,8 @@ banner_jumbotron = dbc.Jumbotron(
         html.H2("The AstroImaging Planner", className="display-6"),
         html.Hr(className="my-2"),
         html.P(
-            "This tool reads a Voyager RoboClip database and provides data for all targets for tonight.",
+            """This tool reads either a Voyager RoboClip target database or Sequence Generator Pro sequence file and provides data for all targets for tonight.  
+            For SGP files, the sequence progress is included in the annotated card on each target trace""",
             className="lead",
         ),
         info_modal,
@@ -726,6 +675,8 @@ weather_modal = html.Div(
             className="mr-1",
         ),
         dbc.Modal(
+
+
             [
                 dbc.ModalHeader("Weather Forecast"),
                 dbc.ModalBody(weather_graph),
@@ -864,6 +815,12 @@ def parse_contents(contents, filename, date):
     [State("upload_data", "filename"), State("upload_data", "last_modified")],
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
+    global object_data  
+    children = [object_data.df_objects.to_json(orient="table")]
+    profile = object_data.profiles[0]
+    options = [{"label": profile, "value": profile}]
+    default_option = options[0]["value"]
+
     if list_of_contents is not None:
         children = []
         options = []
@@ -873,8 +830,9 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
             children.append(object_data.df_objects.to_json(orient="table"))
             for profile in object_data.profiles:
                 options.append({"label": profile, "value": profile})
-
-        return children[0], options, options[0]["value"]
+        default_option = options[0]["value"]
+        return children[0], options, default_option
+    return children[0], options, default_option
 
 
 @app.callback(
@@ -1045,7 +1003,7 @@ def update_target_graph(
                     ]
         targets = list(set(targets_with_filter))
     site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
-    coords = get_coords(targets, date_string, site, time_resolution_in_sec=600)
+    coords = get_coords(targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION)
 
     data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
 
@@ -1085,5 +1043,5 @@ def update_target_graph(
 
 
 if __name__ == "__main__":
-    app.run_server(debug=debug_status, host="0.0.0.0")
+    app.run_server(debug=debug_status, port=80, host="0.0.0.0")
     # app.run_server(host="0.0.0.0")

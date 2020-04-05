@@ -30,7 +30,7 @@ app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
 # app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
 # app = dash.Dash(external_stylesheets=[dbc.themes.GRID])
 
-
+from flask import request
 app.title = "The AstroImaging Planner"
 
 markdown_roadmap = """
@@ -182,14 +182,10 @@ object_data = object_file_reader("./data/VoyRC_default.mdb")
 
 # df_summary = get_exposure_summary(data_dir=f"{path_to_astrobox}/data").reset_index()
 
+deploy = True
 
-debug_status = True
-
-show_todos = False
-
-
-if not debug_status:
-    show_todos = False
+show_todos = not deploy
+debug_status = not deploy
 
 date_range = []
 
@@ -374,7 +370,8 @@ roadmap_modal = html.Div(
             id="roadmap_modal",
             size="xl",
         ),
-    ]
+    ],
+    style={"display": "none" if deploy else "block"},
 )
 
 info_modal = html.Div(
@@ -403,22 +400,9 @@ info_modal = html.Div(
             id="info_modal",
             size="xl",
         ),
-    ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        
+    ],
+    style={"display": "none" if deploy else 'block'},
 
 )
 
@@ -818,7 +802,7 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
     global object_data  
     children = [object_data.df_objects.to_json(orient="table")]
     profile = object_data.profiles[0]
-    options = [{"label": profile, "value": profile}]
+    options = [{"label": profile, "value": profile} for profile in object_data.profiles]
     default_option = options[0]["value"]
 
     if list_of_contents is not None:
@@ -980,6 +964,8 @@ def update_target_graph(
     k_ext=DEFAULT_K_EXTINCTION,
     json_targets=None,
 ):
+    print('Source IP: {}'.format(request.remote_addr))
+
     if json_targets is None:
         print("json_targets is None")
         json_targets = object_data.df_objects.to_json(orient="table")
@@ -1042,6 +1028,9 @@ def update_target_graph(
     ]
 
 
+
 if __name__ == "__main__":
-    app.run_server() #(debug=debug_status, host="0.0.0.0")
-    # app.run_server(host="0.0.0.0")
+    if deploy:
+        app.run_server(host='0.0.0.0')
+    else:
+        app.run_server(debug=True, host="0.0.0.0")

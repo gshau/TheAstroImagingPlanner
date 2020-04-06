@@ -800,7 +800,7 @@ def parse_contents(contents, filename, date):
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
     global object_data  
-    children = [object_data.df_objects.to_json(orient="table")]
+    # children = [object_data.df_objects.to_json(orient="table")]
     profile = object_data.profiles[0]
     options = [{"label": profile, "value": profile} for profile in object_data.profiles]
     default_option = options[0]["value"]

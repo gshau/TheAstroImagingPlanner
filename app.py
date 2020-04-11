@@ -770,7 +770,6 @@ def parse_contents(contents, filename, date):
             with open(local_file, "wb") as f:
                 f.write(decoded)
             object_data = object_file_reader(local_file)
-            # os.remove(local_file)
             print(object_data.df_objects.head())
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
@@ -780,7 +779,6 @@ def parse_contents(contents, filename, date):
                 f.write(out_data.read())
             print("Done!")
             object_data = object_file_reader(local_file)
-            # os.remove(local_file)
             print(object_data.df_objects.head())
         else:
             return html.Div(["Unsupported file!"])

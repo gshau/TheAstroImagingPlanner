@@ -766,15 +766,17 @@ def parse_contents(contents, filename, date):
     try:
         if ".mdb" in filename:
             file_id = uuid.uuid1()
-            local_file = f"data/uploads/VoyRC_{file_id}.mdb"
+            file_root = filename.replace('.mdb', '')
+            local_file = f"./data/uploads/{file_root}_{file_id}.mdb"
             with open(local_file, "wb") as f:
                 f.write(decoded)
             object_data = object_file_reader(local_file)
             print(object_data.df_objects.head())
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
+            file_root = filename.replace('.sgf', '')
             file_id = uuid.uuid1()
-            local_file = f"data/uploads/{filename}"
+            local_file = f"./data/uploads/{file_root}_{file_id}.sgf"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             print("Done!")

@@ -767,7 +767,7 @@ def parse_contents(contents, filename, date):
         if ".mdb" in filename:
             file_id = uuid.uuid1()
             file_root = filename.replace('.mdb', '')
-            local_file = f"./data/uploads/{file_root}_{file_id}.mdb"
+            local_file = f"./data/uploads/{file_root}.mdb"
             with open(local_file, "wb") as f:
                 f.write(decoded)
             object_data = object_file_reader(local_file)
@@ -777,7 +777,7 @@ def parse_contents(contents, filename, date):
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace('.sgf', '')
             file_id = uuid.uuid1()
-            local_file = f"./data/uploads/{file_root}_{file_id}.sgf"
+            local_file = f"./data/uploads/{file_root}.sgf"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             print("Done!")

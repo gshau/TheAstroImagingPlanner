@@ -407,13 +407,14 @@ info_modal = html.Div(
 )
 
 navbar = dbc.NavbarSimple(
-    
+    id='navbar',
     children=[
         dbc.NavItem(
-            dbc.NavLink(
-                "Clear Outside Report",
+            dbc.NavLink("Clear Outside Report",
+                
                             id='clear_outside',
                 href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
+                
                 target="_blank",
             )
         ),
@@ -873,14 +874,22 @@ def update_site(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET)
 
 
 @app.callback(
-    Output("weather_graph", "children"),
+    [Output("weather_graph", "children"),
+    Output("navbar", "children")],
     [
         Input("input_lat", "value"),
         Input("input_lon", "value"),
         Input("input_utc_offset", "value"),
     ],
 )
-def update_weather_graph(lat, lon, utc_offset):
+def update_weather(lat, lon, utc_offset):
+
+    if lat is None:
+        lat = DEFAULT_LAT
+    if lon is None:
+        lon = DEFAULT_LON
+    if utc_offset is None:
+        utc_offset = DEFAULT_UTC_OFFSET
 
     site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
     print(site.lat, site.lon)
@@ -909,7 +918,7 @@ def update_weather_graph(lat, lon, utc_offset):
             )
         )
 
-    return [
+    graph_data = [
         dcc.Graph(
             config={
                 "displaylogo": False,
@@ -932,6 +941,34 @@ def update_weather_graph(lat, lon, utc_offset):
             },
         )
     ]
+
+    navbar_children = [dbc.NavItem(
+            dbc.NavLink("Clear Outside Report",
+                
+                            id='clear_outside',
+                href=f"http://clearoutside.com/forecast/{lat}/{lon}?view=current",
+                
+                target="_blank",
+            )
+        ),
+        dbc.NavItem(
+            dbc.NavLink(
+                "Weather",
+                            id='nws_weather',
+                href=f"http://forecast.weather.gov/MapClick.php?lon={lon}&lat={lat}#.U1xl5F7N7wI",
+                target="_blank",
+            )
+        ),
+        dbc.NavItem(
+            dbc.NavLink(
+                "Satellite",
+                href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
+                target="_blank",
+            )
+        ),
+        roadmap_modal,
+        ]
+    return graph_data, navbar_children
 
 
 import json

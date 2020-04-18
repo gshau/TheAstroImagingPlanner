@@ -27,7 +27,6 @@ class ObservingSite:
 
         # if type(latitude) != str or type(latitude) != str:
         #     raise Exception('Lat/Lon not string!')
-        print(latitude, longitude, utc_offset)
         self.lat = latitude
         self.lon = longitude
         if type(latitude) == str:

@@ -22,12 +22,17 @@ from astro_planner import *
 from astropy.utils.exceptions import AstropyWarning
 
 
+import logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(module)s %(message)s')
+log = logging.getLogger('app')
 warnings.simplefilter("ignore", category=AstropyWarning)
 
+# app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
+
+
 # app = dash.Dash(external_stylesheets=[dbc.themes.SLATE])
-app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
 # app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
-# app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
+app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
 # app = dash.Dash(external_stylesheets=[dbc.themes.GRID])
 
 from flask import request
@@ -149,7 +154,7 @@ class SGPSequenceObjects(Objects):
                 filters.append(event["sSuffix"])
 
                 event_data.append(event)
-                print(event_data)
+                log.info(event_data)
                 note_string += "<br> {filter} {exp}s ({ncomplete} / {ntotal}) exposure: {total_exposure:.1f}h".format(
                     filter=event["sSuffix"],
                     exp=event["nExposureTime"],
@@ -178,22 +183,12 @@ def object_file_reader(filename):
 
 
 object_data = object_file_reader("./data/VoyRC_default.mdb")
-# object_data = object_file_reader("./data/test.sgf")
-
-# df_summary = get_exposure_summary(data_dir=f"{path_to_astrobox}/data").reset_index()
-
-deploy = True
+deploy = False
 
 show_todos = not deploy
 debug_status = not deploy
 
 date_range = []
-
-
-def get_site(lat=DEFAULT_LAT, lon=DEFAULT_LON, alt=290, utc_offset=DEFAULT_UTC_OFFSET):
-    site = ObservingSite(lat, lon, alt, utc_offset=utc_offset)
-    return site
-
 
 def get_time_limits(targets, sun_alt=10):
     sun = targets["sun"]
@@ -223,7 +218,7 @@ def get_data(
         k_ext = DEFAULT_K_EXTINCTION
 
     # this is where we sort by transit time
-    # print(sorted(target_coords.values, key=lambda x: x["alt"].argmax()))
+    # log.info(sorted(target_coords.values, key=lambda x: x["alt"].argmax()))
     if value == "contrast":
         target_coords = add_contrast(
             target_coords,
@@ -303,33 +298,6 @@ def get_data(
         )
     return data
 
-
-# region ui
-
-# weather_dropdown = dbc.DropdownMenu(
-#     children=[
-#         dbc.DropdownMenuItem(
-#             "Clear Outside Report",
-#             id='clear_outside',
-#             href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
-#             target="_blank",
-#         ),
-#         dbc.DropdownMenuItem(
-#             "Weather",
-#             id='nws_weather',
-#             href=f"http://forecast.weather.gov/MapClick.php?lon={DEFAULT_LAT}&lat={DEFAULT_LON}#.U1xl5F7N7wI",
-#             target="_blank",
-#         ),
-#         dbc.DropdownMenuItem(
-#             "Satellite",
-#             href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
-#             target="_blank",
-#         ),
-#     ],
-#     nav=True,
-#     in_navbar=True,
-#     label="Weather",
-# )
 
 settings_dropdown = dbc.DropdownMenu(
     children=[
@@ -640,14 +608,6 @@ location_selection = dbc.Col(
     ),
 )
 
-
-# exposure_summary = dash_table.DataTable(
-#     id="table",
-#     columns=[{"name": i, "id": i} for i in df_summary.columns],
-#     data=df_summary.to_dict("records"),
-#     sort_action="native",
-#     # sort_mode="multi",
-# )
 weather_graph = html.Div(id="weather_graph", children=[dbc.Spinner(color="warning")])
 
 weather_modal = html.Div(
@@ -680,7 +640,6 @@ weather_modal = html.Div(
         ),
     ]
 )
-# endregion
 
 upload = dcc.Upload(
     id="upload_data",
@@ -756,6 +715,12 @@ app.layout = html.Div(
             children=object_data.df_objects.to_json(orient="table"),
             style={"display": "none"},
         ),
+        html.Div(
+            id="site_data",
+            children=[],
+            style={"display": "none"},
+        ),
+
     ]
 )
 
@@ -771,8 +736,8 @@ def parse_contents(contents, filename, date):
             with open(local_file, "wb") as f:
                 f.write(decoded)
             object_data = object_file_reader(local_file)
-            print(object_data.df_objects.head())
-            print(local_file)
+            log.info(object_data.df_objects.head())
+            log.info(local_file)
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace('.sgf', '')
@@ -780,46 +745,16 @@ def parse_contents(contents, filename, date):
             local_file = f"./data/uploads/{file_root}.sgf"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
-            print("Done!")
+            log.info("Done!")
             object_data = object_file_reader(local_file)
-            print(object_data.df_objects.head())
-            print(local_file)
+            log.info(object_data.df_objects.head())
+            log.info(local_file)
         else:
             return html.Div(["Unsupported file!"])
     except Exception as e:
-        print(e)
+        log.info(e)
         return html.Div(["There was an error processing this file."])
     return object_data
-
-
-@app.callback(
-    [
-        Output("target_data", "children"),
-        Output("profile_selection", "options"),
-        Output("profile_selection", "value"),
-    ],
-    [Input("upload_data", "contents")],
-    [State("upload_data", "filename"), State("upload_data", "last_modified")],
-)
-def update_output(list_of_contents, list_of_names, list_of_dates):
-    global object_data  
-    # children = [object_data.df_objects.to_json(orient="table")]
-    profile = object_data.profiles[0]
-    options = [{"label": profile, "value": profile} for profile in object_data.profiles]
-    default_option = options[0]["value"]
-
-    if list_of_contents is not None:
-        children = []
-        options = []
-        for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
-            object_data = parse_contents(c, n, d)
-            object_data.df_objects.to_json(orient="table")
-            children.append(object_data.df_objects.to_json(orient="table"))
-            for profile in object_data.profiles:
-                options.append({"label": profile, "value": profile})
-        default_option = options[0]["value"]
-        return children[0], options, default_option
-    return children[0], options, default_option
 
 
 @app.callback(
@@ -855,6 +790,36 @@ def toggle_info_modal(n1, n2, is_open):
     return is_open
 
 
+@app.callback(
+    [
+        Output("target_data", "children"),
+        Output("profile_selection", "options"),
+        Output("profile_selection", "value"),
+    ],
+    [Input("upload_data", "contents")],
+    [State("upload_data", "filename"), State("upload_data", "last_modified")],
+)
+def update_output(list_of_contents, list_of_names, list_of_dates):
+    global object_data  
+    # children = [object_data.df_objects.to_json(orient="table")]
+    profile = object_data.profiles[0]
+    options = [{"label": profile, "value": profile} for profile in object_data.profiles]
+    default_option = options[0]["value"]
+
+    if list_of_contents is not None:
+        children = []
+        options = []
+        for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
+            object_data = parse_contents(c, n, d)
+            object_data.df_objects.to_json(orient="table")
+            children.append(object_data.df_objects.to_json(orient="table"))
+            for profile in object_data.profiles:
+                options.append({"label": profile, "value": profile})
+        default_option = options[0]["value"]
+        return children[0], options, default_option
+    return children[0], options, default_option
+
+
 translated_filter = {
     "ha": ["ho", "sho", "hoo", "hos", "halpha", "h-alpha"],
     "oiii": ["ho", "sho", "hoo", "hos"],
@@ -864,50 +829,29 @@ translated_filter = {
 }
 
 
-def update_site(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET):
-    if lat is None:
-        lat = DEFAULT_LAT
-    if lon is None:
-        lon = DEFAULT_LON
-    if utc_offset is None:
-        utc_offset = DEFAULT_UTC_OFFSET
-    site = get_site(lat=lat, lon=lon, alt=0, utc_offset=utc_offset)
+def update_site(site_data):
+    lat = site_data.get('lat', DEFAULT_LAT)
+    lon = site_data.get('lon', DEFAULT_LON)
+    utc_offset = site_data.get('utc_offset', DEFAULT_UTC_OFFSET)
+    site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
     return site
 
 
-@app.callback(
-    [Output("weather_graph", "children"),
-    Output("navbar", "children")],
-    [
-        Input("input_lat", "value"),
-        Input("input_lon", "value"),
-        Input("input_utc_offset", "value"),
-    ],
-)
-def update_weather(lat, lon, utc_offset):
 
-    if lat is None:
-        lat = DEFAULT_LAT
-    if lon is None:
-        lon = DEFAULT_LON
-    if utc_offset is None:
-        utc_offset = DEFAULT_UTC_OFFSET
-
-    site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
-    print(site.lat, site.lon)
+def update_weather(site):
+    log.info(f'{site.lat} {site.lon}')
     try:
-        print("Trying NWS")
+        log.info("Trying NWS")
         nws_forecast = NWS_Forecast(site.lat, site.lon)
         df_weather = nws_forecast.parse_data()
     except:
-        print("Trying Dark Sky")
+        log.info("Trying Dark Sky")
         DSF_FORECAST.get_forecast_data(site.lat, site.lon)
         df_weather = DSF_FORECAST.forecast_data_to_df()["hourly"]
         df_weather = df_weather[
             df_weather.columns[df_weather.dtypes != "object"]
         ].fillna(0)
 
-    print(df_weather.index.name, date_range)
     data = []
     for col in df_weather.columns:
         data.append(
@@ -948,7 +892,7 @@ def update_weather(lat, lon, utc_offset):
             dbc.NavLink("Clear Outside Report",
                 
                             id='clear_outside',
-                href=f"http://clearoutside.com/forecast/{lat}/{lon}?view=current",
+                href=f"http://clearoutside.com/forecast/{site.lat}/{site.lon}?view=current",
                 
                 target="_blank",
             )
@@ -957,7 +901,7 @@ def update_weather(lat, lon, utc_offset):
             dbc.NavLink(
                 "Weather",
                             id='nws_weather',
-                href=f"http://forecast.weather.gov/MapClick.php?lon={lon}&lat={lat}#.U1xl5F7N7wI",
+                href=f"http://forecast.weather.gov/MapClick.php?lon={site.lon}&lat={site.lat}#.U1xl5F7N7wI",
                 target="_blank",
             )
         ),
@@ -974,6 +918,59 @@ def update_weather(lat, lon, utc_offset):
 
 
 import json
+
+
+@app.callback(
+    [
+    Output("weather_graph", "children"),
+    Output("navbar", "children"),
+    Output('site_data', 'children')],
+    [
+        Input("date_picker", "date"),
+        Input("input_lat", "value"),
+        Input("input_lon", "value"),
+        Input("input_utc_offset", "value"),
+    ],
+)
+def update_time_location_data(date_string=dt.today(),
+    lat=None,
+    lon=None,
+    utc_offset=None):
+
+    site_data = dict(date_string=date_string)#, lat=lat, lon=lon, utc_offset=utc_offset)
+    if lat:
+        site_data['lat'] = lat
+    if lon:
+        site_data['lon'] = lon
+    if utc_offset:
+        site_data['utc_offset'] = utc_offset
+    site = update_site(site_data)
+    weather_graph, navbar = update_weather(site)
+
+    return weather_graph, navbar, json.dumps(site_data)
+
+# @app.callback(
+#     Output("config_data", "children"),
+#     [
+#         Input("y_axis_type", "value"),
+#         Input("profile_selection", "value"),
+#         Input("filter_match", "value"),
+#         Input("local_mpsas", "value"),
+#         Input("k_ext", "value"),
+#         Input("target_data", "children"),
+#     ],
+# )
+# def update_config_data(
+#     value="alt",
+#     profile="tmb130ss qsi690",
+#     filters=[],
+#     local_mpsas=DEFAULT_MPSAS,
+#     k_ext=DEFAULT_K_EXTINCTION,
+#     json_targets=None,):
+#     d = dict(value=value, profile=profile, filters=filters, local_mpsas=local_mpsas, k_ext=k_ext, json_targets=json_targets)
+#     return json.dumps(d)
+
+
 
 
 @app.callback(
@@ -1003,17 +1000,17 @@ def update_target_graph(
     k_ext=DEFAULT_K_EXTINCTION,
     json_targets=None,
 ):
-    print('Source IP: {}'.format(request.remote_addr))
+    log.info('Source IP: {}'.format(request.remote_addr))
 
     if json_targets is None:
-        print("json_targets is None")
+        log.info("json_targets is None")
         json_targets = object_data.df_objects.to_json(orient="table")
     object_data.load_from_df(pd.read_json(json_targets, orient="table"))
 
     date = str(date_string.split("T")[0])
     targets = list(object_data.target_list[profile].values())
     if filters:
-        print(filters)
+        log.info(filters)
         targets_with_filter = []
         for filter in filters:
             targets_with_filter += [
@@ -1027,9 +1024,9 @@ def update_target_graph(
                         if t_filter in target.info["notes"].lower()
                     ]
         targets = list(set(targets_with_filter))
-    site = update_site(lat=lat, lon=lon, utc_offset=utc_offset)
+    site = update_site(dict(lat=lat, lon=lon, utc_offset=utc_offset))
     coords = get_coords(targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION)
-
+    print(coords)
     data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
 
     if value == "alt":

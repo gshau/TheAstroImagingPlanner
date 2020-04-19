@@ -21,21 +21,23 @@ from collections import OrderedDict, defaultdict
 from astro_planner import *
 from astropy.utils.exceptions import AstropyWarning
 
-
+import json
 import logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(module)s %(message)s')
-log = logging.getLogger('app')
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(module)s %(message)s")
+log = logging.getLogger("app")
 warnings.simplefilter("ignore", category=AstropyWarning)
 
 # app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
 
 
 # app = dash.Dash(external_stylesheets=[dbc.themes.SLATE])
-# app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
-app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
+app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
+# app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
 # app = dash.Dash(external_stylesheets=[dbc.themes.GRID])
 
 from flask import request
+
 app.title = "The AstroImaging Planner"
 
 markdown_roadmap = """
@@ -91,7 +93,6 @@ DEFAULT_K_EXTINCTION = 0.2
 DEFAULT_TIME_RESOLUTION = 300
 
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
-
 
 
 class Objects:
@@ -190,6 +191,7 @@ debug_status = not deploy
 
 date_range = []
 
+
 def get_time_limits(targets, sun_alt=10):
     sun = targets["sun"]
     # Get sun up/down
@@ -207,6 +209,7 @@ def get_data(
     filter_bandwidth=300,
     k_ext=0.2,
 ):
+    log.info("Starting get_data")
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
@@ -283,7 +286,7 @@ def get_data(
     ### need better way to line up notes with target - this is messy, and prone to mismatch
     for i_target, (color, target_name) in enumerate(zip(colors, target_names)):
         df = target_coords[target_name]
-        notes_text = targets[i_target].info["notes"]
+        # notes_text = targets[i_target].info["notes"]
         # notes_text = html.Img('<html><img src="https://www.w3schools.com/tags/smiley.gif" alt="Smiley face" width="42" height="42"></html>')
         data.append(
             dict(
@@ -292,10 +295,12 @@ def get_data(
                 mode="lines",
                 line=dict(color=color, width=3),
                 name=target_name,
-                text="Notes: {notes_text}".format(notes_text=notes_text),
+                # text="Notes: {notes_text}".format(notes_text=notes_text),
                 opacity=1,
             )
         )
+    log.info("Done get_data")
+
     return data
 
 
@@ -368,28 +373,25 @@ info_modal = html.Div(
             id="info_modal",
             size="xl",
         ),
-        
     ],
-    style={"display": "none" if deploy else 'block'},
-
+    style={"display": "none" if deploy else "block"},
 )
 
 navbar = dbc.NavbarSimple(
-    id='navbar',
+    id="navbar",
     children=[
         dbc.NavItem(
-            dbc.NavLink("Clear Outside Report",
-                
-                            id='clear_outside',
+            dbc.NavLink(
+                "Clear Outside Report",
+                id="clear_outside",
                 href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
-                
                 target="_blank",
             )
         ),
         dbc.NavItem(
             dbc.NavLink(
                 "Weather",
-                            id='nws_weather',
+                id="nws_weather",
                 href=f"http://forecast.weather.gov/MapClick.php?lon={DEFAULT_LON}&lat={DEFAULT_LAT}#.U1xl5F7N7wI",
                 target="_blank",
             )
@@ -620,8 +622,6 @@ weather_modal = html.Div(
             className="mr-1",
         ),
         dbc.Modal(
-
-
             [
                 dbc.ModalHeader("Weather Forecast"),
                 dbc.ModalBody(weather_graph),
@@ -715,12 +715,13 @@ app.layout = html.Div(
             children=object_data.df_objects.to_json(orient="table"),
             style={"display": "none"},
         ),
-        html.Div(
-            id="site_data",
-            children=[],
-            style={"display": "none"},
-        ),
-
+        html.Div(id="site_data", children=[], style={"display": "none"},),
+        # html.Div(
+        #     id="test_data",
+        #     children=[],
+        #     # style={"display": "none"},
+        # ),
+        # html.Div(id="coordinate_data", children=[], style={"display": "none"},),
     ]
 )
 
@@ -731,7 +732,7 @@ def parse_contents(contents, filename, date):
     try:
         if ".mdb" in filename:
             file_id = uuid.uuid1()
-            file_root = filename.replace('.mdb', '')
+            file_root = filename.replace(".mdb", "")
             local_file = f"./data/uploads/{file_root}.mdb"
             with open(local_file, "wb") as f:
                 f.write(decoded)
@@ -740,7 +741,7 @@ def parse_contents(contents, filename, date):
             log.info(local_file)
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
-            file_root = filename.replace('.sgf', '')
+            file_root = filename.replace(".sgf", "")
             file_id = uuid.uuid1()
             local_file = f"./data/uploads/{file_root}.sgf"
             with open(local_file, "w") as f:
@@ -800,8 +801,9 @@ def toggle_info_modal(n1, n2, is_open):
     [State("upload_data", "filename"), State("upload_data", "last_modified")],
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
-    global object_data  
+    global object_data
     # children = [object_data.df_objects.to_json(orient="table")]
+    children = [None]
     profile = object_data.profiles[0]
     options = [{"label": profile, "value": profile} for profile in object_data.profiles]
     default_option = options[0]["value"]
@@ -830,16 +832,15 @@ translated_filter = {
 
 
 def update_site(site_data):
-    lat = site_data.get('lat', DEFAULT_LAT)
-    lon = site_data.get('lon', DEFAULT_LON)
-    utc_offset = site_data.get('utc_offset', DEFAULT_UTC_OFFSET)
+    lat = site_data.get("lat", DEFAULT_LAT)
+    lon = site_data.get("lon", DEFAULT_LON)
+    utc_offset = site_data.get("utc_offset", DEFAULT_UTC_OFFSET)
     site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
     return site
 
 
-
 def update_weather(site):
-    log.info(f'{site.lat} {site.lon}')
+    log.info(f"{site.lat} {site.lon}")
     try:
         log.info("Trying NWS")
         nws_forecast = NWS_Forecast(site.lat, site.lon)
@@ -888,19 +889,19 @@ def update_weather(site):
         )
     ]
 
-    navbar_children = [dbc.NavItem(
-            dbc.NavLink("Clear Outside Report",
-                
-                            id='clear_outside',
+    navbar_children = [
+        dbc.NavItem(
+            dbc.NavLink(
+                "Clear Outside Report",
+                id="clear_outside",
                 href=f"http://clearoutside.com/forecast/{site.lat}/{site.lon}?view=current",
-                
                 target="_blank",
             )
         ),
         dbc.NavItem(
             dbc.NavLink(
                 "Weather",
-                            id='nws_weather',
+                id="nws_weather",
                 href=f"http://forecast.weather.gov/MapClick.php?lon={site.lon}&lat={site.lat}#.U1xl5F7N7wI",
                 target="_blank",
             )
@@ -913,121 +914,69 @@ def update_weather(site):
             )
         ),
         roadmap_modal,
-        ]
+    ]
     return graph_data, navbar_children
 
 
-import json
+@app.callback(
+    [Output("weather_graph", "children"), Output("navbar", "children"),],
+    [Input("site_data", "children")],
+)
+def update_weather_data(site_data):
+    site = update_site(json.loads(site_data))
+    weather_graph, navbar = update_weather(site)
+    return weather_graph, navbar
 
 
 @app.callback(
+    Output("site_data", "children"),
     [
-    Output("weather_graph", "children"),
-    Output("navbar", "children"),
-    Output('site_data', 'children')],
-    [
-        Input("date_picker", "date"),
         Input("input_lat", "value"),
         Input("input_lon", "value"),
         Input("input_utc_offset", "value"),
     ],
 )
-def update_time_location_data(date_string=dt.today(),
-    lat=None,
-    lon=None,
-    utc_offset=None):
+def update_time_location_data(lat=None, lon=None, utc_offset=None):
 
-    site_data = dict(date_string=date_string)#, lat=lat, lon=lon, utc_offset=utc_offset)
+    site_data = dict(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET)
     if lat:
-        site_data['lat'] = lat
+        site_data["lat"] = lat
     if lon:
-        site_data['lon'] = lon
+        site_data["lon"] = lon
     if utc_offset:
-        site_data['utc_offset'] = utc_offset
-    site = update_site(site_data)
-    weather_graph, navbar = update_weather(site)
-
-    return weather_graph, navbar, json.dumps(site_data)
-
-# @app.callback(
-#     Output("config_data", "children"),
-#     [
-#         Input("y_axis_type", "value"),
-#         Input("profile_selection", "value"),
-#         Input("filter_match", "value"),
-#         Input("local_mpsas", "value"),
-#         Input("k_ext", "value"),
-#         Input("target_data", "children"),
-#     ],
-# )
-# def update_config_data(
-#     value="alt",
-#     profile="tmb130ss qsi690",
-#     filters=[],
-#     local_mpsas=DEFAULT_MPSAS,
-#     k_ext=DEFAULT_K_EXTINCTION,
-#     json_targets=None,):
-#     d = dict(value=value, profile=profile, filters=filters, local_mpsas=local_mpsas, k_ext=k_ext, json_targets=json_targets)
-#     return json.dumps(d)
+        site_data["utc_offset"] = utc_offset
+    return json.dumps(site_data)
 
 
+import time
 
 
 @app.callback(
     Output("target_graph", "children"),
     [
         Input("date_picker", "date"),
-        Input("y_axis_type", "value"),
         Input("profile_selection", "value"),
-        Input("filter_match", "value"),
-        Input("input_lat", "value"),
-        Input("input_lon", "value"),
-        Input("input_utc_offset", "value"),
+        Input("site_data", "children"),
+        Input("y_axis_type", "value"),
         Input("local_mpsas", "value"),
         Input("k_ext", "value"),
-        Input("target_data", "children"),
     ],
 )
-def update_target_graph(
-    date_string=dt.today(),
-    value="alt",
-    profile="tmb130ss qsi690",
-    filters=[],
-    lat=DEFAULT_LAT,
-    lon=DEFAULT_LON,
-    utc_offset=DEFAULT_UTC_OFFSET,
-    local_mpsas=DEFAULT_MPSAS,
-    k_ext=DEFAULT_K_EXTINCTION,
-    json_targets=None,
-):
-    log.info('Source IP: {}'.format(request.remote_addr))
+def update_target_graph(date_string, profile, site_data, value, local_mpsas, k_ext):
+    log.info(f"Calling update_target_graph")
+    # object_data.load_from_df(pd.read_json(json_targets, orient="table"))
+    targets = list(object_data.target_list[profile].values())
+    site = update_site(json.loads(site_data))
+    coords = get_coords(
+        targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
+    )
 
-    if json_targets is None:
-        log.info("json_targets is None")
-        json_targets = object_data.df_objects.to_json(orient="table")
-    object_data.load_from_df(pd.read_json(json_targets, orient="table"))
+    data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
+
+    date_range = get_time_limits(coords)
 
     date = str(date_string.split("T")[0])
-    targets = list(object_data.target_list[profile].values())
-    if filters:
-        log.info(filters)
-        targets_with_filter = []
-        for filter in filters:
-            targets_with_filter += [
-                target for target in targets if filter in target.info["notes"].lower()
-            ]
-            if filter in translated_filter:
-                for t_filter in translated_filter[filter]:
-                    targets_with_filter += [
-                        target
-                        for target in targets
-                        if t_filter in target.info["notes"].lower()
-                    ]
-        targets = list(set(targets_with_filter))
-    site = update_site(dict(lat=lat, lon=lon, utc_offset=utc_offset))
-    coords = get_coords(targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION)
-    print(coords)
-    data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
+    title = "Imaging Targets on {date_string}".format(date_string=date)
 
     if value == "alt":
         y_range = [0, 90]
@@ -1036,9 +985,7 @@ def update_target_graph(
     elif value == "contrast":
         y_range = [0, 1]
 
-    date_range = get_time_limits(coords)
-
-    title = "Imaging Targets on {date_string}".format(date_string=date)
+    # return f"TARGET GRAPH {value} {profile} {local_mpsas} {k_ext}"
     return [
         dcc.Graph(
             config={
@@ -1064,9 +1011,102 @@ def update_target_graph(
     ]
 
 
+# @app.callback(
+#     Output("target_graph", "children"),
+#     [
+#         Input("date_picker", "date"),
+#         Input("y_axis_type", "value"),
+#         Input("profile_selection", "value"),
+#         Input("filter_match", "value"),
+#         Input("input_lat", "value"),
+#         Input("input_lon", "value"),
+#         Input("input_utc_offset", "value"),
+#         Input("local_mpsas", "value"),
+#         Input("k_ext", "value"),
+#         Input("target_data", "children"),
+#     ],
+# )
+# def update_target_graph(
+#     date_string=dt.today(),
+#     value="alt",
+#     profile="tmb130ss qsi690",
+#     filters=[],
+#     lat=DEFAULT_LAT,
+#     lon=DEFAULT_LON,
+#     utc_offset=DEFAULT_UTC_OFFSET,
+#     local_mpsas=DEFAULT_MPSAS,
+#     k_ext=DEFAULT_K_EXTINCTION,
+#     json_targets=None,
+# ):
+#     log.info("Source IP: {}".format(request.remote_addr))
+
+#     if json_targets is None:
+#         log.info("json_targets is None")
+#         json_targets = object_data.df_objects.to_json(orient="table")
+#     object_data.load_from_df(pd.read_json(json_targets, orient="table"))
+
+#     date = str(date_string.split("T")[0])
+
+#     targets = list(object_data.target_list[profile].values())
+#     if filters:
+#         log.info(filters)
+#         targets_with_filter = []
+#         for filter in filters:
+#             targets_with_filter += [
+#                 target for target in targets if filter in target.info["notes"].lower()
+#             ]
+#             if filter in translated_filter:
+#                 for t_filter in translated_filter[filter]:
+#                     targets_with_filter += [
+#                         target
+#                         for target in targets
+#                         if t_filter in target.info["notes"].lower()
+#                     ]
+#         targets = list(set(targets_with_filter))
+#     site = update_site(dict(lat=lat, lon=lon, utc_offset=utc_offset))
+#     coords = get_coords(
+#         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
+#     )
+#     print(coords)
+#     data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
+
+#     if value == "alt":
+#         y_range = [0, 90]
+#     elif value == "airmass":
+#         y_range = [1, 5]
+#     elif value == "contrast":
+#         y_range = [0, 1]
+
+#     date_range = get_time_limits(coords)
+
+#     title = "Imaging Targets on {date_string}".format(date_string=date)
+#     return [
+#         dcc.Graph(
+#             config={
+#                 "displaylogo": False,
+#                 "modeBarButtonsToRemove": ["pan2d", "lasso2d"],
+#             },
+#             figure={
+#                 "data": data,
+#                 "layout": dict(
+#                     xaxis={"title": "", "range": date_range},
+#                     yaxis={"title": yaxis_map[value], "range": y_range},
+#                     title=title,
+#                     margin={"l": 50, "b": 100, "t": 50, "r": 50},
+#                     legend={"x": 1, "y": 0.5},
+#                     height=600,
+#                     plot_bgcolor="#ddd",
+#                     paper_bgcolor="#fff",
+#                     hovermode="closest",
+#                     transition={"duration": 150},
+#                 ),
+#             },
+#         )
+#     ]
+
 
 if __name__ == "__main__":
     if deploy:
-        app.run_server(host='0.0.0.0')
+        app.run_server(host="0.0.0.0")
     else:
-        app.run_server(debug=True, host="0.0.0.0")
+        app.run_server(debug=True, host="localhost")

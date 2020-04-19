@@ -6,6 +6,8 @@ import dash
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
+import grasia_dash_components
+
 import pandas as pd
 import dash_table
 import plotly.graph_objects as go
@@ -13,6 +15,7 @@ import warnings
 import uuid
 import os
 import datetime
+import time
 
 from datetime import datetime as dt
 from dash.dependencies import Input, Output, State
@@ -21,6 +24,8 @@ from collections import OrderedDict, defaultdict
 from astro_planner import *
 from astropy.utils.exceptions import AstropyWarning
 
+import flask
+
 import json
 import logging
 
@@ -28,13 +33,17 @@ logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(module)s %(messag
 log = logging.getLogger("app")
 warnings.simplefilter("ignore", category=AstropyWarning)
 
-# app = dash.Dash(external_stylesheets=[dbc.themes.COSMO])
+
+server = flask.Flask(__name__)  #
+
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
 
 
 # app = dash.Dash(external_stylesheets=[dbc.themes.SLATE])
-app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
+# app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
 # app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
 # app = dash.Dash(external_stylesheets=[dbc.themes.GRID])
+
 
 from flask import request
 
@@ -61,16 +70,15 @@ markdown_roadmap = """
 - [ ] mpsas level at current location
   - [ ] read from mpsas map
   - [ ] snowpack inflation?
-- [ ] docker deploymeent
+- [x] docker deploymeent
   - [ ] darksky api key
 - [ ] add openweathermap datasource
 - [x] Organization of divs - use bootstrap columns
 - [ ] Notes search
-- [ ] Allow upload of file
+- [x] Allow upload of file
   - [x] Roboclip
-  - [ ] json
-  - [ ] astroplanner
-  - [ ] Allow upload of targets file
+  - [x] SGP
+  - [x] Allow upload of targets file
 - [x] Fix double-click zoom reset
 """
 
@@ -89,7 +97,6 @@ DEFAULT_UTC_OFFSET = -6
 DEFAULT_MPSAS = 19.5
 DEFAULT_BANDWIDTH = 120
 DEFAULT_K_EXTINCTION = 0.2
-
 DEFAULT_TIME_RESOLUTION = 300
 
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -114,7 +121,7 @@ class Objects:
 
     def load_from_df(self, df_input):
         self.df_objects = df_input
-        self.process_objects(df_input)
+        self.process_objects(self.df_objects)
         self.profiles = list(self.target_list.keys())
 
 
@@ -210,6 +217,7 @@ def get_data(
     k_ext=0.2,
 ):
     log.info("Starting get_data")
+    t0 = time.time()
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
@@ -231,7 +239,6 @@ def get_data(
             include_airmass=True,
             k_ext=k_ext,
         )
-
     moon_data = dict(
         x=target_coords["moon"].index,
         y=target_coords["moon"]["alt"],
@@ -299,7 +306,7 @@ def get_data(
                 opacity=1,
             )
         )
-    log.info("Done get_data")
+    log.info(f"Done get_data {time.time() - t0}")
 
     return data
 
@@ -454,7 +461,7 @@ yaxis_picker = dbc.Col(
             dcc.Dropdown(
                 id="y_axis_type",
                 options=[{"label": v, "value": k} for k, v in yaxis_map.items()],
-                value="alt",
+                value="contrast",
             ),
         ],
         style={"textAlign": "center"},
@@ -709,13 +716,20 @@ body = dbc.Container(
 
 app.layout = html.Div(
     [
+        # grasia_dash_components.Import(
+        #     src="https://code.jquery.com/jquery-3.3.1.min.js"
+        # ),
+        # grasia_dash_components.Import(
+        #     src="https://aladin.u-strasbg.fr/AladinLite/api/v2/latest/aladin.min.js"
+        # ),
         body,
         html.Div(
             id="target_data",
-            children=object_data.df_objects.to_json(orient="table"),
+            children=[],  # object_data.df_objects.to_json(orient="table"),
             style={"display": "none"},
         ),
         html.Div(id="site_data", children=[], style={"display": "none"},),
+        html.Div(id="aladin-lite-div", style={"width": "100%", "height": "98%"})
         # html.Div(
         #     id="test_data",
         #     children=[],
@@ -724,6 +738,13 @@ app.layout = html.Div(
         # html.Div(id="coordinate_data", children=[], style={"display": "none"},),
     ]
 )
+
+
+# app.scripts.append_script(
+#     {"external_url":
+#     ["https://code.jquery.com/jquery-1.9.1.min.js",
+#     "https://aladin.u-strasbg.fr/AladinLite/api/v2/latest/aladin.min.js"]}
+# )
 
 
 def parse_contents(contents, filename, date):
@@ -835,6 +856,7 @@ def update_site(site_data):
     lat = site_data.get("lat", DEFAULT_LAT)
     lon = site_data.get("lon", DEFAULT_LON)
     utc_offset = site_data.get("utc_offset", DEFAULT_UTC_OFFSET)
+    log.info("site_data")
     site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
     return site
 
@@ -948,7 +970,21 @@ def update_time_location_data(lat=None, lon=None, utc_offset=None):
     return json.dumps(site_data)
 
 
-import time
+def target_filter(targets, filters):
+    log.info(filters)
+    targets_with_filter = []
+    for filter in filters:
+        targets_with_filter += [
+            target for target in targets if filter in target.info["notes"].lower()
+        ]
+        if filter in translated_filter:
+            for t_filter in translated_filter[filter]:
+                targets_with_filter += [
+                    target
+                    for target in targets
+                    if t_filter in target.info["notes"].lower()
+                ]
+    return list(set(targets_with_filter))
 
 
 @app.callback(
@@ -960,20 +996,27 @@ import time
         Input("y_axis_type", "value"),
         Input("local_mpsas", "value"),
         Input("k_ext", "value"),
+        Input("filter_match", "value"),
     ],
 )
-def update_target_graph(date_string, profile, site_data, value, local_mpsas, k_ext):
+def update_target_graph(
+    date_string, profile, site_data, value, local_mpsas, k_ext, filters=[]
+):
     log.info(f"Calling update_target_graph")
-    # object_data.load_from_df(pd.read_json(json_targets, orient="table"))
     targets = list(object_data.target_list[profile].values())
     site = update_site(json.loads(site_data))
+
+    if filters:
+        targets = target_filter(targets, filters)
+
     coords = get_coords(
         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
     )
+    date_range = get_time_limits(coords)
+    log.info(coords.keys())
+    log.info(np.sum([df.shape[0] for df in coords.values()]))
 
     data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
-
-    date_range = get_time_limits(coords)
 
     date = str(date_string.split("T")[0])
     title = "Imaging Targets on {date_string}".format(date_string=date)
@@ -1009,100 +1052,6 @@ def update_target_graph(date_string, profile, site_data, value, local_mpsas, k_e
             },
         )
     ]
-
-
-# @app.callback(
-#     Output("target_graph", "children"),
-#     [
-#         Input("date_picker", "date"),
-#         Input("y_axis_type", "value"),
-#         Input("profile_selection", "value"),
-#         Input("filter_match", "value"),
-#         Input("input_lat", "value"),
-#         Input("input_lon", "value"),
-#         Input("input_utc_offset", "value"),
-#         Input("local_mpsas", "value"),
-#         Input("k_ext", "value"),
-#         Input("target_data", "children"),
-#     ],
-# )
-# def update_target_graph(
-#     date_string=dt.today(),
-#     value="alt",
-#     profile="tmb130ss qsi690",
-#     filters=[],
-#     lat=DEFAULT_LAT,
-#     lon=DEFAULT_LON,
-#     utc_offset=DEFAULT_UTC_OFFSET,
-#     local_mpsas=DEFAULT_MPSAS,
-#     k_ext=DEFAULT_K_EXTINCTION,
-#     json_targets=None,
-# ):
-#     log.info("Source IP: {}".format(request.remote_addr))
-
-#     if json_targets is None:
-#         log.info("json_targets is None")
-#         json_targets = object_data.df_objects.to_json(orient="table")
-#     object_data.load_from_df(pd.read_json(json_targets, orient="table"))
-
-#     date = str(date_string.split("T")[0])
-
-#     targets = list(object_data.target_list[profile].values())
-#     if filters:
-#         log.info(filters)
-#         targets_with_filter = []
-#         for filter in filters:
-#             targets_with_filter += [
-#                 target for target in targets if filter in target.info["notes"].lower()
-#             ]
-#             if filter in translated_filter:
-#                 for t_filter in translated_filter[filter]:
-#                     targets_with_filter += [
-#                         target
-#                         for target in targets
-#                         if t_filter in target.info["notes"].lower()
-#                     ]
-#         targets = list(set(targets_with_filter))
-#     site = update_site(dict(lat=lat, lon=lon, utc_offset=utc_offset))
-#     coords = get_coords(
-#         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
-#     )
-#     print(coords)
-#     data = get_data(coords, targets, value=value, local_mpsas=local_mpsas, k_ext=k_ext)
-
-#     if value == "alt":
-#         y_range = [0, 90]
-#     elif value == "airmass":
-#         y_range = [1, 5]
-#     elif value == "contrast":
-#         y_range = [0, 1]
-
-#     date_range = get_time_limits(coords)
-
-#     title = "Imaging Targets on {date_string}".format(date_string=date)
-#     return [
-#         dcc.Graph(
-#             config={
-#                 "displaylogo": False,
-#                 "modeBarButtonsToRemove": ["pan2d", "lasso2d"],
-#             },
-#             figure={
-#                 "data": data,
-#                 "layout": dict(
-#                     xaxis={"title": "", "range": date_range},
-#                     yaxis={"title": yaxis_map[value], "range": y_range},
-#                     title=title,
-#                     margin={"l": 50, "b": 100, "t": 50, "r": 50},
-#                     legend={"x": 1, "y": 0.5},
-#                     height=600,
-#                     plot_bgcolor="#ddd",
-#                     paper_bgcolor="#fff",
-#                     hovermode="closest",
-#                     transition={"duration": 150},
-#                 ),
-#             },
-#         )
-#     ]
 
 
 if __name__ == "__main__":

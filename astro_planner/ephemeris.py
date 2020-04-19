@@ -49,7 +49,7 @@ def get_sun_moon_loc(dates, location):
             obj = get_moon(Time(pydatetimes))
         if obj_name == "sun":
             obj = get_sun(Time(pydatetimes))
-        log.info(f"Time for {obj_name} is {time.time() - t0}")
+        # log.info(f"Time for {obj_name} is {time.time() - t0}")
         loc = obj.transform_to(frame)
         df = pd.DataFrame(
             [
@@ -68,6 +68,7 @@ def get_sun_moon_loc(dates, location):
 
 def get_coords(targets, date_string, site, time_resolution_in_sec=60):
     log.info("Starting get_coords")
+    t0 = time.time()
 
     dates = pd.date_range(
         "{} 12:00:00".format(date_string),
@@ -75,17 +76,13 @@ def get_coords(targets, date_string, site, time_resolution_in_sec=60):
         periods=24 * (60 * 60 / time_resolution_in_sec),
         tz=site.tz,
     )
-    log.info("Getting Sun/Moon")
     df_ephem = get_sun_moon_loc(dates, location=site.location)
-    log.info(".")
-    t0 = time.time()
     gtl = partial(get_target_loc, dates=dates, location=site.location)
-    with Pool(8) as pool:
+    with Pool(1) as pool:
         result = pool.map(gtl, [target.target for target in targets])
     for name, df in zip([target.name for target in targets], result):
         df_ephem[name] = df
-    log.info(f"Time elapsed: {time.time() - t0}")
 
-    log.info("Done get_coords")
+    log.info(f"Done get_coords {time.time() - t0}")
 
     return df_ephem

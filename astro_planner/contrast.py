@@ -76,12 +76,13 @@ def logistic(x, x0, tau):
 def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     df_target = df_locs[target_name]
+    time_index = df_target.index
     sbm = SkyBackgroundModel(mpsas=mpsas, k=k_ext)
 
     df_moon = df_locs["moon"]
     df_sun = df_locs["sun"]
     # date = df_sun.index
-    #     moon = get_moon(Time(date))
+    # moon = get_moon(Time(date))
     phase = (distance(df_moon, df_sun, lat_key="dec", long_key="ra") + 360) % 360 - 180
     separation = distance(df_moon, df_target)
 
@@ -103,6 +104,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     b_all_terms += b_sun
 
     sky_bkg = sbm._b_to_mpsas(b_all_terms)
+    sky_bkg.index = time_index
 
     sky_bkg[df_target["alt"] < 0] = np.nan
     sky_bkg[sky_bkg < 0] = np.nan
@@ -140,7 +142,6 @@ def get_contrast(
     if include_airmass:
         contrast_ratio *= np.exp(-k_ext * (df_locs[target_name]["airmass"]) + 0.16)
         # contrast_ratio *= np.exp(-(df_locs[target_name]["airmass"] - 1))
-
     return contrast_ratio
 
 
@@ -153,9 +154,9 @@ def add_contrast(
     k_ext=0.2,
 ):
     result = {}
-    for target in df_loc.keys():
+    for target, df in df_loc.items():
         if target in ["moon", "sun"]:
-            result[target] = df_loc[target]
+            result[target] = df
             continue
         df_contrast = get_contrast(
             df_loc,
@@ -171,4 +172,3 @@ def add_contrast(
             df0 = df0.drop("contrast", axis=1)
         result[target] = df0.join(df_contrast.to_frame("contrast"))
     return result
-

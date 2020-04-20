@@ -21,7 +21,7 @@ class NWS_Forecast:
     def parse_data(self):
         # parse location
         for loc_data in self.xmldoc.iter("location"):
-            print(loc_data)
+            pass
         location_data = [
             e.text for e in loc_data.getchildren() if "description" in e.tag
         ][0]

@@ -307,7 +307,7 @@ def get_data(
                 mode="lines",
                 line=dict(color=color, width=3),
                 name=target_name,
-                # text="Notes: {notes_text}".format(notes_text=notes_text),
+                text="Notes: {notes_text}".format(notes_text=notes_text),
                 opacity=1,
             )
         )

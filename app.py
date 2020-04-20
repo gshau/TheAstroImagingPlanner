@@ -6,7 +6,8 @@ import dash
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
-import grasia_dash_components
+
+# import grasia_dash_components
 
 import pandas as pd
 import dash_table
@@ -36,7 +37,11 @@ warnings.simplefilter("ignore", category=AstropyWarning)
 
 server = flask.Flask(__name__)  #
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
+BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cyborg/bootstrap.min.css"
+BS = dbc.themes.FLATLY
+app = dash.Dash(__name__, external_stylesheets=[BS], server=server)
+
+# app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
 
 
 # app = dash.Dash(external_stylesheets=[dbc.themes.SLATE])
@@ -442,6 +447,7 @@ date_picker = dbc.Row(
             html.Div(
                 [dcc.DatePickerSingle(id="date_picker", date=dt.now()),],
                 style={"textAlign": "center"},
+                className="dash-bootstrap",
             )
         ),
     ]
@@ -461,10 +467,11 @@ yaxis_picker = dbc.Col(
             dcc.Dropdown(
                 id="y_axis_type",
                 options=[{"label": v, "value": k} for k, v in yaxis_map.items()],
-                value="contrast",
+                value="alt",
             ),
         ],
         style={"textAlign": "center"},
+        className="dash-bootstrap",
     ),
     style={"border": "0px solid"},
 )
@@ -483,6 +490,7 @@ profile_picker = dbc.Col(
             ),
         ],
         style={"textAlign": "center"},
+        className="dash-bootstrap",
     ),
     style={"border": "0px solid"},
 )
@@ -506,7 +514,8 @@ filter_picker = dbc.Col(
                     value=["lum", "rgb", "ha"],
                     multi=True,
                 ),
-            ]
+            ],
+            className="dash-bootstrap",
         )
     ]
 )
@@ -520,7 +529,8 @@ search_notes = dbc.Col(
                 value="",
                 debounce=True,
             ),
-        ]
+        ],
+        className="dash-bootstrap",
     )
 )
 location_selection = dbc.Col(
@@ -534,11 +544,15 @@ location_selection = dbc.Col(
                                 html.Label("LATITUDE:  ", style={"textAlign": "right"},)
                             ),
                             dbc.Col(
-                                dcc.Input(
-                                    id="input_lat",
-                                    debounce=True,
-                                    placeholder=DEFAULT_LAT,
-                                    type="number",
+                                html.Div(
+                                    dcc.Input(
+                                        id="input_lat",
+                                        debounce=True,
+                                        placeholder=DEFAULT_LAT,
+                                        type="number",
+                                        className="dash-bootstrap",
+                                    ),
+                                    className="dash-bootstrap",
                                 )
                             ),
                         ]
@@ -611,7 +625,8 @@ location_selection = dbc.Col(
                             ),
                         ]
                     ),
-                ]
+                ],
+                className="dash-bootstrap",
             )
         ]
     ),
@@ -1058,4 +1073,4 @@ if __name__ == "__main__":
     if deploy:
         app.run_server(host="0.0.0.0")
     else:
-        app.run_server(debug=True, host="localhost")
+        app.run_server(debug=True, host="0.0.0.0")

@@ -15,4 +15,6 @@ WORKDIR /app
 COPY ./ ./
 
 EXPOSE 8050
-CMD ["python", "./app.py"]
+
+CMD ["gunicorn", "--workers", "4", "-b", ":8050", "app:server"]
+# CMD ["python", "./app.py"]

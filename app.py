@@ -298,7 +298,7 @@ def get_data(
     ### need better way to line up notes with target - this is messy, and prone to mismatch
     for i_target, (color, target_name) in enumerate(zip(colors, target_names)):
         df = target_coords[target_name]
-        # notes_text = targets[i_target].info["notes"]
+        notes_text = targets[i_target].info["notes"]
         # notes_text = html.Img('<html><img src="https://www.w3schools.com/tags/smiley.gif" alt="Smiley face" width="42" height="42"></html>')
         data.append(
             dict(

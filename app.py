@@ -37,18 +37,10 @@ warnings.simplefilter("ignore", category=AstropyWarning)
 
 server = flask.Flask(__name__)  #
 
-BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cyborg/bootstrap.min.css"
+BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cosmo/bootstrap.min.css"
 BS = dbc.themes.FLATLY
-app = dash.Dash(__name__, external_stylesheets=[BS], server=server)
-
-# app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
-
-
-# app = dash.Dash(external_stylesheets=[dbc.themes.SLATE])
-# app = dash.Dash(external_stylesheets=[dbc.themes.DARKLY])
-# app = dash.Dash(external_stylesheets=[dbc.themes.LUX])
-# app = dash.Dash(external_stylesheets=[dbc.themes.GRID])
-
+# app = dash.Dash(__name__, external_stylesheets=[BS], server=server)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
 
 from flask import request
 
@@ -98,14 +90,15 @@ DSF_FORECAST = DarkSky_Forecast(key="")
 
 DEFAULT_LAT = 43.37
 DEFAULT_LON = -88.37
-DEFAULT_UTC_OFFSET = -6
+DEFAULT_UTC_OFFSET = -5
 DEFAULT_MPSAS = 19.5
 DEFAULT_BANDWIDTH = 120
 DEFAULT_K_EXTINCTION = 0.2
 DEFAULT_TIME_RESOLUTION = 300
 
-date_string = datetime.datetime.now().strftime("%Y-%m-%d")
 
+date_string = datetime.datetime.now().strftime("%Y-%m-%d")
+log.info(date_string)
 
 class Objects:
     def __init__(self):
@@ -116,11 +109,14 @@ class Objects:
         self.target_list = defaultdict(dict)
         for row in df_input.itertuples():
             profile = row.GROUP
+            note = str(row.NOTE)
+            if note == 'nan':
+                note = ""
             target = Target(
                 row.TARGET,
                 ra=row.RAJ2000 * u.hourangle,
                 dec=row.DECJ2000 * u.deg,
-                notes=row.NOTE,
+                notes=note,
             )
             self.target_list[profile][row.TARGET] = target
 
@@ -299,7 +295,6 @@ def get_data(
     for i_target, (color, target_name) in enumerate(zip(colors, target_names)):
         df = target_coords[target_name]
         notes_text = targets[i_target].info["notes"]
-        # notes_text = html.Img('<html><img src="https://www.w3schools.com/tags/smiley.gif" alt="Smiley face" width="42" height="42"></html>')
         data.append(
             dict(
                 x=df.index,
@@ -989,9 +984,14 @@ def target_filter(targets, filters):
     log.info(filters)
     targets_with_filter = []
     for filter in filters:
-        targets_with_filter += [
-            target for target in targets if filter in target.info["notes"].lower()
-        ]
+        for target in targets:
+            if target.info["notes"]:
+                print(target.info["notes"])
+                if filter in target.info["notes"].lower():
+                    targets_with_filter.append(target)
+        # targets_with_filter += [
+        #     target for target in targets if filter in target.info["notes"].lower()
+        # ]
         if filter in translated_filter:
             for t_filter in translated_filter[filter]:
                 targets_with_filter += [

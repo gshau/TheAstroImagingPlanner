@@ -166,3 +166,94 @@ def get_roboclips(filename="/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC
         target_list[profile][row.TARGET] = target
 
     return target_list
+
+
+class Objects:
+    def __init__(self):
+        self.target_list = defaultdict(dict)
+        self.profiles = []
+
+    def process_objects(self, df_input):
+        self.target_list = defaultdict(dict)
+        for row in df_input.itertuples():
+            profile = row.GROUP
+            note = str(row.NOTE)
+            if note == "nan":
+                note = ""
+            target = Target(
+                row.TARGET,
+                ra=row.RAJ2000 * u.hourangle,
+                dec=row.DECJ2000 * u.deg,
+                notes=note,
+            )
+            self.target_list[profile][row.TARGET] = target
+
+    def load_from_df(self, df_input):
+        self.df_objects = df_input
+        self.process_objects(self.df_objects)
+        self.profiles = sorted(list(self.target_list.keys()))
+
+
+class RoboClipObjects(Objects):
+    def __init__(self, filename):
+        super().__init__()
+        self.df_objects = mdb.read_table(
+            filename, "RoboClip", converters_from_schema=False
+        )
+        self.df_objects.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)
+        self.load_from_df(self.df_objects)
+
+
+class SGPSequenceObjects(Objects):
+    def __init__(self, filename):
+        super().__init__()
+        for self.filename in [filename]:
+            with open(self.filename, "r") as f:
+                self.data = json.load(f)
+                self.df_objects = self.parse_data()
+                self.process_objects(self.df_objects)
+
+    def parse_data(self):
+        self.sequence = {}
+        root_name = ntpath.basename(self.filename)
+        self.profiles.append(root_name)
+        for sequence in self.data["arEventGroups"]:
+            name = sequence["sName"]
+            ref = sequence["siReference"]
+
+            RA = ref["nRightAscension"]
+            DEC = ref["nDeclination"]
+            events = sequence["Events"]
+            filters = []
+            event_data = []
+            note_string = ""
+            for event in events:
+                filters.append(event["sSuffix"])
+
+                event_data.append(event)
+                log.info(event_data)
+                note_string += "<br> {filter} {exp}s ({ncomplete} / {ntotal}) exposure: {total_exposure:.1f}h".format(
+                    filter=event["sSuffix"],
+                    exp=event["nExposureTime"],
+                    ncomplete=event["nNumComplete"],
+                    ntotal=event["nRepeat"],
+                    total_exposure=event["nNumComplete"]
+                    * event["nExposureTime"]
+                    / 3600,
+                )
+            notes = note_string
+            self.sequence[name] = dict(
+                RAJ2000=RA, DECJ2000=DEC, NOTE=notes, TARGET=name, GROUP=root_name
+            )
+        return pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
+            drop=True
+        )
+
+
+def object_file_reader(filename):
+    if ".mdb" in filename:
+        return RoboClipObjects(filename)
+    # if isinstance(filename, list):
+    #     for file in
+    elif ".sgf" in filename:
+        return SGPSequenceObjects(filename)

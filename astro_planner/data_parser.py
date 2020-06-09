@@ -16,6 +16,7 @@ DATA_DIR = "/Volumes/Users/gshau/Dropbox/AstroBox/data"
 def parse_filename(file_name):
     file_root = Path(file_name).stem
     if "_LIGHT_" in file_root:
+        file_root = file_root.replace("__BayerMatrix__", "_OSC_")
         target_name, metadata = file_root.split("_LIGHT_")
         metadata = metadata.split("_")
         elements = ["LIGHT", target_name] + metadata
@@ -56,23 +57,34 @@ def read_fits_header(fits_filename):
     return dict(hdul[0].header)
 
 
+from multiprocessing import Pool
+from functools import partial
+
+
+def _parse_file(file_name, root_key, skip_header):
+    try:
+        rel_file_path = file_name.split(root_key)[-1]
+        elements = rel_file_path.split("/")
+        el_names = ["target", "date_start", "filename"]
+
+        d_info = dict(zip(el_names, elements))
+        d_info.update(parse_filename(d_info["filename"]))
+        if not skip_header:
+            d_info.update(read_fits_header(file_name))
+        return d_info
+    except Exception as e:
+        print("Skipping {}".format(file_name))
+        raise (e)
+        pass
+
+
 def parse_filelist(file_list, root_key="data/", skip_header=True, verbose=False):
     d_list = []
-    for file_name in file_list:
-        try:
-            rel_file_path = file_name.split(root_key)[-1]
-            elements = rel_file_path.split("/")
-            el_names = ["target", "date_start", "filename"]
-
-            d_info = dict(zip(el_names, elements))
-            d_info.update(parse_filename(d_info["filename"]))
-            if not skip_header:
-                d_info.update(read_fits_header(file_name))
-            d_list.append(d_info)
-        except Exception as e:
-            print("Skipping {}".format(file_name))
-            raise (e)
-            pass
+    with Pool(8) as p:
+        d_list = p.map(
+            partial(_parse_file, root_key=root_key, skip_header=skip_header), file_list
+        )
+    # d_list = [_parse_file(file_name, root_key, skip_header) for file_name in file_list]
     logging.info("Read {} files".format(len(d_list)))
 
     return pd.DataFrame(d_list)

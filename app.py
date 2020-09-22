@@ -376,7 +376,7 @@ filter_picker = dbc.Col(
                         {"label": "OIII", "value": "oiii"},
                         {"label": "SII", "value": "sii"},
                     ],
-                    value=["lum", "rgb", "ha"],
+                    value=["ha"],
                     multi=True,
                 ),
             ],
@@ -563,7 +563,6 @@ profile_container = dbc.Container(
 )
 
 
-target_dropdown = dcc.Dropdown(id="target-dropdown",)
 rows = []
 for filter in FILTER_LIST:
 
@@ -580,7 +579,7 @@ for filter in FILTER_LIST:
 
     rows.append(row)
 target_goal_children = [
-    target_dropdown,
+    dcc.Dropdown(id="target-dropdown", multi=True),
     dbc.Container(children=rows, id="image-goal", fluid=True, style={},),
 ]
 
@@ -640,33 +639,18 @@ tabs = dbc.Tabs(
     active_tab="tab-target",
     children=[
         dbc.Tab(
-            label="Target Goals",
-            tab_id="tab-goals",
-            # tabClassName="ml-auto",
-            labelClassName="text-info",
-        ),
-        dbc.Tab(
             label="Target Review",
             tab_id="tab-target",
-            # tabClassName="ml-auto",
             labelClassName="text-primary",
-        ),
-        dbc.Tab(
-            label="Data Review",
-            tab_id="tab-data-review",
-            # tabClassName="ml-auto",
-            labelClassName="text-success",
         ),
         dbc.Tab(
             label="Sequence Constructor",
             tab_id="tab-sequence",
-            # tabClassName="ml-auto",
             labelClassName="text-warning",
         ),
         dbc.Tab(
             label="Sequence Writer",
             tab_id="tab-sequence-writer",
-            # tabClassName="ml-auto",
             labelClassName="text-danger",
         ),
     ],
@@ -691,91 +675,6 @@ goal_table = html.Div(
 )
 
 
-progress_container = dbc.Container(
-    dbc.Row(
-        [
-            dbc.Col(
-                [
-                    dbc.Container(
-                        fluid=True,
-                        style={"width": "95%"},
-                        children=[
-                            # dbc.Row(yaxis_picker, justify="around"),
-                            # html.Br(),
-                            # dbc.Row(filter_picker, justify="around"),
-                            # html.Br(),
-                            # dbc.Row(date_picker, justify="around"),
-                            # html.Br(),
-                            # dbc.Row(filter_targets_check, justify="around"),
-                            # html.Br(),
-                            # dbc.Row(location_selection, justify="around"),
-                            # html.Br(),
-                            # dbc.Row(weather_modal, justify="around"),
-                        ],
-                    )
-                ],
-                width=3,
-                style={"border": "0px solid"},
-            ),
-            dbc.Col(
-                # children=html.Div(id="progress_chart"),
-                width=9,
-                style={"height": "100vh"},
-            ),
-        ]
-    ),
-    id="tab-data-div",
-    fluid=True,
-    style={"height": "100vh"},
-)
-
-
-goal_container = dbc.Container(
-    children=[
-        dbc.Row(
-            [
-                dbc.Col(
-                    [
-                        dbc.Container(
-                            fluid=True,
-                            style={"width": "95%"},
-                            children=[
-                                dbc.Row(target_picker, justify="around"),
-                                html.Br(),
-                                goal_table,
-                                # dbc.Row(filter_selector, justify="around"),
-                                # html.Br(),
-                                # dbc.Row(subexposure_selector, justify="around"),
-                                # html.Br(),
-                                # dbc.Row(subnumber_selector, justify="around"),
-                                # html.Br(),
-                            ],
-                        )
-                    ],
-                    width=3,
-                    style={"border": "0px solid"},
-                ),
-                dbc.Col(
-                    children=[
-                        # html.Div(
-                        #     id="target_graph",
-                        #     children=[dbc.Spinner(color="primary")],
-                        # ),
-                        # html.Br(),
-                        # dbc.Row(
-                        #     html.Div(id="upload_button", children=[upload]),
-                        #     justify="center",
-                        # ),
-                    ],
-                    width=9,
-                ),
-            ]
-        ),
-    ],
-    id="tab-goal-div",
-    fluid=True,
-    style={},
-)
 
 
 body = dbc.Container(
@@ -786,9 +685,7 @@ body = dbc.Container(
         # banner_jumbotron,
         tabs,
         profile_container,
-        goal_container,
         target_container,
-        progress_container,
         dbc.Container(children=["seq-div"], id="tab-seq-div", fluid=True, style={},),
         dbc.Container(
             children=["writer-div"], id="tab-writer-div", fluid=True, style={},
@@ -802,6 +699,7 @@ app.layout = html.Div(
     [
         body,
         dcc.Store(id="store-target-data"),
+        dcc.Store(id="store-target-list"),
         dcc.Store(id="store-site-data", data={}),
         dcc.Store(id="store-goal-data", data="{}"),
         dcc.Store(id="store-progress-data", data="{}"),
@@ -811,47 +709,10 @@ app.layout = html.Div(
 )
 
 
-@app.callback(
-    [Output("targets-available", "options"), Output("targets-available", "value")],
-    [Input("profile-selection", "value")],
-)
-def get_available_targets(profile):
-    target_names = list(object_data.target_list[profile].keys())
-    print(target_names)
-    return make_options(target_names), target_names[0]
-
-
-@app.callback(
-    [Output("goal-table", "columns"), Output("goal-table", "data")],
-    [Input("profile-selection", "value"), Input("targets-available", "value")],
-)
-def get_target_goals(profile, target):
-
-    columns = ["Target"]
-    for filter in ["L", "R", "G", "B", "HA", "OIII", "SII"]:
-        columns += [f"{filter} exp (min)", f"{filter} subs"]
-
-    target_names = list(object_data.target_list[profile].keys())
-    # data = {'Target': target_names}
-    data = []
-    n_targets = len(target_names)
-    for target in target_names:
-        entry = {}
-        for column in columns:
-            if column == "Target":
-                entry[column] = target
-                continue
-            entry[column] = 0
-        data.append(entry)
-    columns_entry = [{"name": col, "id": col} for col in columns]
-    return columns_entry, data
-
 
 @app.callback(
     [
-        Output("tab-goal-div", "style"),
         Output("tab-target-div", "style"),
-        Output("tab-data-div", "style"),
         Output("tab-seq-div", "style"),
         Output("tab-writer-div", "style"),
     ],
@@ -859,12 +720,10 @@ def get_target_goals(profile, target):
 )
 def render_content(tab):
 
-    styles = [{"display": "none"}] * 5
+    styles = [{"display": "none"}] * 3
 
     tab_names = [
-        "tab-goals",
         "tab-target",
-        "tab-data-review",
         "tab-sequence",
         "tab-sequence-writer",
     ]
@@ -876,12 +735,21 @@ def render_content(tab):
 
 
 @app.callback(
-    Output("target-dropdown", "options"), [Input("profile-selection", "value"),],
+    Output("target-dropdown", "options"),
+    [Input("profile-selection", "value"), Input("store-target-list", "data"), Input("target-graph", "children"),],
 )
-def target_dropdown_setter(profile):
+def target_dropdown_setter(profile, target_list, graph):
 
     target_names = [t.name for t in object_data.target_list[profile].values()]
-    return make_options(target_names)
+
+    if target_list:
+        target_names = [name for name in target_names if name in target_list]
+
+    default_target = ""
+    if target_names:
+        default_target = target_names[0]
+
+    return make_options(target_names)#, default_target
 
 
 @app.callback(
@@ -906,7 +774,11 @@ def target_dropdown_setter(profile):
     [Input("target-dropdown", "value"),],
     [State("store-target-goals", "data")],
 )
-def target_dropdown_setter(target, target_goals):
+def target_exposure_setter(target, target_goals):
+
+    if isinstance(target, list):
+        if target:
+            target = target[0]
 
     if target in target_goals:
         goals = target_goals[target]
@@ -964,7 +836,7 @@ def update_target_goals(
     oiii_sub,
     sii_sub,
     osc_sub,
-    target,
+    targets,
     target_goals,
 ):
 
@@ -981,42 +853,22 @@ def update_target_goals(
         )
     )
     for filter in FILTER_LIST:
-        d = {filter: {"sub_exposure": int(exposures[filter]), "n_subs": int(subs[filter])}}
-        if target in target_goals:
-            target_goals[target].update(d)
-        else:
-            target_goals[target] = d
+        d = {
+            filter: {
+                "sub_exposure": int(exposures[filter]),
+                "n_subs": int(subs[filter]),
+            }
+        }
+        if targets:
+            for target in targets:
+                if target in target_goals:
+                    target_goals[target].update(d)
+                else:
+                    target_goals[target] = d
     return target_goals
 
 
 
-
-# @app.callback(
-#     [
-#         Output("tab-goal-div", "style"),
-#         Output("tab-target-div", "style"),
-#         Output("tab-data-div", "style"),
-#         Output("tab-seq-div", "style"),
-#         Output("tab-writer-div", "style"),
-#     ],
-#     [Input("tabs", "active_tab")],
-# )
-# def render_content(tab):
-
-#     styles = [{"display": "none"}] * 5
-
-#     tab_names = [
-#         "tab-goals",
-#         "tab-target",
-#         "tab-data-review",
-#         "tab-sequence",
-#         "tab-sequence-writer",
-#     ]
-
-#     indx = tab_names.index(tab)
-
-#     styles[indx] = {}
-#     return styles
 
 
 def parse_contents(contents, filename, date):
@@ -1062,20 +914,8 @@ def toggle_modal(n1, n2, is_open):
     return is_open
 
 
-# @app.callback(
-#     Output("roadmap_modal", "is_open"),
-#     [Input("open_roadmap_modal", "n_clicks"), Input("close_roadmap_modal", "n_clicks")],
-#     [State("roadmap_modal", "is_open")],
-# )
-# def toggle_roadmap_modal(n1, n2, is_open):
-#     if n1 or n2:
-#         return not is_open
-#     return is_open
-
-
 @app.callback(
     [
-        # Output("store-target-data", "data"),
         Output("profile-selection", "options"),
         Output("profile-selection", "value"),
     ],
@@ -1084,7 +924,6 @@ def toggle_modal(n1, n2, is_open):
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
     global object_data
-    # children = [object_data.df_objects.to_json(orient="table")]
     children = [None]
 
     profile = object_data.profiles[0]
@@ -1092,12 +931,10 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
     default_option = options[0]["value"]
 
     if list_of_contents is not None:
-        # children = []
         options = []
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
             object_data = parse_contents(c, n, d)
             object_data.df_objects.to_json(orient="table")
-            # children.append(object_data.df_objects.to_json(orient="table"))
             for profile in object_data.profiles:
                 options.append({"label": profile, "value": profile})
         default_option = options[0]["value"]
@@ -1125,17 +962,9 @@ def update_site(site_data):
 
 def update_weather(site):
     log.info(f"{site.lat} {site.lon}")
-    # try:
     log.info("Trying NWS")
     nws_forecast = NWS_Forecast(site.lat, site.lon)
     df_weather = nws_forecast.parse_data()
-    # except:
-    #     log.info("Trying Dark Sky")
-    #     DSF_FORECAST.get_forecast_data(site.lat, site.lon)
-    #     df_weather = DSF_FORECAST.forecast_data_to_df()["hourly"]
-    #     df_weather = df_weather[
-    #         df_weather.columns[df_weather.dtypes != "object"]
-    #     ].fillna(0)
 
     data = []
     for col in df_weather.columns:
@@ -1260,9 +1089,6 @@ def format_name(name):
         if catalog in name[: len(catalog)]:
             if f"{catalog}_" in name:
                 name = name.replace(f"{catalog}_", catalog)
-                # continue
-            # number = name.replace(catalog, "")
-            # name = f"{catalog}_{number}"
     return name
 
 
@@ -1277,32 +1103,21 @@ def get_progress(profile):
 
     optic, sensor = profile.split()
     df0 = df_files
-    # selection = (
-    #     df_files["XPIXSZ"] == config["equipment"]["sensor"][sensor]["pixel_size"]
-    # )
-    # selection &= (
-    #     df_files["FOCALLEN"] == config["equipment"]["optic"][optic]["focal_length"]
-    # )
-
-    # df0 = df_files[selection]
-
-    print(df_exposure_summary.index)
-    # print(df0['OBJECT'].unique())
-
     targets_saved = [format_name(target) for target in df_exposure_summary.index]
-    # targets_saved = df_exposure_summary.index
-
-    # targets_saved = [format_name(obj) for obj in df0["OBJECT"].unique()]
     matches = [
         target
         for target in df_exposure_summary.index
         if format_name(target) in targets_saved
     ]
-    print("matches", matches)
     return df_exposure_summary.loc[matches].to_json()
 
+
 @app.callback(
-    [Output("store-target-data", "data"), Output("store-target-metadata", "data"),],
+    [
+        Output("store-target-data", "data"),
+        Output("store-target-list", "data"),
+        Output("store-target-metadata", "data"),
+    ],
     [
         Input("date-picker", "date"),
         Input("profile-selection", "value"),
@@ -1322,7 +1137,7 @@ def store_data(
     local_mpsas,
     k_ext,
     filter_targets,
-    filters=[]
+    filters=[],
 ):
     log.info(f"Calling store_data")
     targets = list(object_data.target_list[profile].values())
@@ -1345,62 +1160,33 @@ def store_data(
         local_mpsas=local_mpsas,
         k_ext=k_ext,
         filter_targets=filter_targets,
-    )    
+    )
 
     metadata = dict(date_range=date_range, value=value)
+    filtered_targets = [d["name"] for d in data if d["name"]]
+    return data, filtered_targets, metadata
 
-    return data, metadata
 
 @app.callback(
     Output("target-graph", "children"),
     [
-        Input("date-picker", "date"),
-        Input("profile-selection", "value"),
-        Input("store-site-data", "data"),
-        Input("y-axis-type", "value"),
-        Input("local-mpsas", "value"),
-        Input("k-ext", "value"),
-        Input("filter-targets", "checked"),
+        Input("store-target-data", "data"),
+        Input("store-target-metadata", "data"),
         Input("store-progress-data", "data"),
         Input("store-target-goals", "data"),
-        Input("filter-match", "value"),
     ],
 )
 def update_target_graph(
-    date_string,
-    profile,
-    site_data,
-    value,
-    local_mpsas,
-    k_ext,
-    filter_targets,
-    progress_data,
-    target_goals,
-    filters=[],
+    data, metadata, progress_data, target_goals,
 ):
     log.info(f"Calling update_target_graph")
-    targets = list(object_data.target_list[profile].values())
-    site = update_site((site_data))
 
-    if filters:
-        targets = target_filter(targets, filters)
+    try:
+        value = metadata["value"]
+        date_range = metadata["date_range"]
+    except:
+        return []
 
-    coords = get_coords(
-        targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
-    )
-    date_range = get_time_limits(coords)
-    log.info(coords.keys())
-    log.info(np.sum([df.shape[0] for df in coords.values()]))
-
-    data = get_data(
-        coords,
-        targets,
-        value=value,
-        local_mpsas=local_mpsas,
-        k_ext=k_ext,
-        filter_targets=filter_targets,
-    )
-    print(data)
     date = str(date_string.split("T")[0])
     title = "Imaging Targets on {date_string}".format(date_string=date)
 
@@ -1454,8 +1240,6 @@ def update_target_graph(
 
     df_progress = pd.read_json(progress_data)
     df_progress.index = [format_name(t) for t in df_progress.index]
-    for d in data:
-        print("data", d["name"])
     t = [
         format_name(d["name"])
         for d in data
@@ -1463,28 +1247,26 @@ def update_target_graph(
     ]
 
     df_progress = df_progress.loc[t]
-    df_progress['status'] = 'complete'
+    df_progress["status"] = "complete"
 
     p = go.Figure()
     r = []
     for target, d in target_goals.items():
-        if target == 'null':
+        if target == "null":
             continue
         x = pd.DataFrame(d).T
-        y = (x['sub_exposure'] * x['n_subs']) / 60.
+        y = (x["sub_exposure"] * x["n_subs"]) / 60.0
         y.name = target
         r.append(y)
     df_requested = pd.DataFrame(r)
     if df_requested.shape[0] == 0:
         df_requested = pd.DataFrame(columns=FILTER_LIST)
     df_requested["status"] = "requested"
-    print(df_requested)
-    print(df_progress)
-    df_pending = np.clip(df_requested[FILTER_LIST] - df_progress[FILTER_LIST], 0, None).fillna(0)
-    df_pending['status'] = 'pending'
-
+    df_pending = np.clip(
+        df_requested[FILTER_LIST].sub(df_progress[FILTER_LIST], fill_value=0), 0, None
+    ).fillna(0)
+    df_pending["status"] = "pending"
     df_progress = pd.concat([df_progress, df_requested, df_pending])
-    print(df_progress)
     for status in ["complete", "pending"]:
         for i, filter in enumerate(list(df_progress.columns)):
             if filter == "status":

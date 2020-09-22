@@ -64,6 +64,9 @@ class Target:
         self.info[TARGET_KEY] = self.name.lower()
         self.info["notes"] = notes
 
+    def __repr__(self):
+        return f"{self.name} at RA={self.ra} DEC={self.dec}"
+
 
 def clean_subframes(subframes, n_subs_name="subs_requested"):
     return dict((k, v) for k, v in subframes.items() if v[n_subs_name] > 0)

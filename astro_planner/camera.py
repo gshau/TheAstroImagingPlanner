@@ -1,7 +1,7 @@
 import numpy as np
 
 
-FILTERS = ['L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII']
+FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII"]
 
 
 class Filter:
@@ -14,7 +14,7 @@ class Filter:
 class FilterWheel:
     def __init__(self, filters, n_pos=7, single_filter_transition_time=1):
         if len(filters) > n_pos:
-            raise Exception('Filters outnumber positions!')
+            raise Exception("Filters outnumber positions!")
         self.filters = filters
         self.n_pos = n_pos
         self.filter_pos = dict(zip(self.filters, np.arange(len(self.filters))))
@@ -28,13 +28,17 @@ class FilterWheel:
 
 
 class Sensor:
-    def __init__(self, name='template', pitch=5,
-                 pix_x=1000,
-                 pix_y=1000,
-                 read_noise=10,
-                 full_well=20000,
-                 download_time=20,
-                 filter_wheel=FilterWheel(FILTERS)):
+    def __init__(
+        self,
+        name="template",
+        pitch=5,
+        pix_x=1000,
+        pix_y=1000,
+        read_noise=10,
+        full_well=20000,
+        download_time=20,
+        filter_wheel=FilterWheel(FILTERS),
+    ):
         self.name = name
         self.pitch = pitch
         self.pix_x = pix_x

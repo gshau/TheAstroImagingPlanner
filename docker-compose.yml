@@ -1,0 +1,25 @@
+version: '3'
+services:
+    app:
+        build: .
+        ports:
+            - "8050:8050"
+        environment:
+            - DATA_PATH=/Volumes/Users/gshau/Dropbox/AstroBox/data
+            - ROBOCLIP_FILE=/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb
+            - DEFAULT_PROFILE_PATH=/Volumes/Users/gshau/Dropbox/AstroBox/Voyager Profiles"
+
+    # volumes:
+    #   - .:/code
+    # environment:
+    #   FLASK_ENV: development
+    # redis:
+    #     image: "redis:alpine"
+    # nginx: 
+    #     image: nginx:latest
+    #     container_name: nginx
+    #     volumes:
+    #         - ./nginx.conf:/etc/nginx/nginx.conf
+    #     ports:
+    #         - 8088:8050
+    #         - 443:443    

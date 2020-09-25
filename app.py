@@ -32,6 +32,7 @@ from astro_planner.contrast import add_contrast
 from astro_planner.site import ObservingSite
 from astro_planner.ephemeris import get_coords
 from astro_planner.data_parser import get_exposure_summary
+from astro_planner.data_merge import compute_ra_order
 from layout import layout, yaxis_map
 import seaborn as sns
 

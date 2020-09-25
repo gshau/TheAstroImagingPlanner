@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 from .ephemeris import get_sun, get_moon
 from astropy.time import Time
 
@@ -26,10 +25,14 @@ class SkyBackgroundModel:
         Zm = (90 - moon_alt) * RADIANS_PER_DEGREE
 
         Istar = 10 ** (-0.4 * (3.84 + 0.026 * np.abs(alpha) + 4e-9 * alpha ** 4))
-        X = lambda z: (1 - 0.96 * np.sin(z) ** 2) ** (-0.5)
-        f = lambda rho_arg: 10 ** 5.36 * (1.06 + np.cos(rho_arg) ** 2) + 10 ** (
-            6.15 - rho_arg / 40.0
-        )
+
+        def X(z):
+            return (1 - 0.96 * np.sin(z) ** 2) ** (-0.5)
+
+        def f(rho_arg):
+            return 10 ** 5.36 * (1.06 + np.cos(rho_arg) ** 2) + 10 ** (
+                6.15 - rho_arg / 40.0
+            )
 
         result = (
             f(rho)

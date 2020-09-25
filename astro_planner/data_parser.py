@@ -170,9 +170,9 @@ def filter_map(filter_in):
 
 def equinox_ccdfname_parser(string):
     try:
-        l = string.split(".")
-        r = dict(zip(["OBJECT", "IMAGETYP"], l[:2]))
-        exposure, remain = l[2].split("S", 1)
+        split_string = string.split(".")
+        r = dict(zip(["OBJECT", "IMAGETYP"], split_string[:2]))
+        exposure, remain = split_string[2].split("S", 1)
         temp, remain = remain.split("X")
         bin = remain[0]
         filter = remain[1:]
@@ -252,8 +252,7 @@ def format_date_string(x):
 def fix_date_fmt(datestring):
     if isinstance(datestring, int):
         return "1970-01-01"
-    l = datestring.split(".")
-    if len(l) > 2:
-        return ":".join(l[:2])
+    split_datestring = datestring.split(".")
+    if len(split_datestring) > 2:
+        return ":".join(split_datestring[:2])
     return datestring
-

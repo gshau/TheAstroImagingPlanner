@@ -1,19 +1,20 @@
-import numpy as np
 import pandas as pd
 import astropy.units as u
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+from astropy.coordinates import SkyCoord
 
 # from astroplan import FixedTarget
-from astropy.wcs import WCS
 from astropy.coordinates import Angle
 
-from .stf import auto_stf
-from .profile import cleanup_name
-from .data_parser import get_data_info
+# from .stf import auto_stf
+# from .profile import cleanup_name
+# from .data_parser import get_data_info
 
 from collections import defaultdict
 import pandas_access as mdb
+
+import json
+import ntpath
+from astro_planner.logger import log
 
 
 RA_KEY = "RA"
@@ -70,23 +71,6 @@ class Target:
 
 def clean_subframes(subframes, n_subs_name="subs_requested"):
     return dict((k, v) for k, v in subframes.items() if v[n_subs_name] > 0)
-
-
-# def get_roboclips(filename=ROBOCLIP_FILE):
-
-#     df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
-#     target_list = defaultdict(dict)
-#     for row in df_rc.itertuples():
-#         profile = row.GRUPPO
-#         target = Target(
-#             row.TARGET,
-#             ra=row.RAJ2000 * u.hourangle,
-#             dec=row.DECJ2000 * u.deg,
-#             notes=row.NOTE,
-#         )
-#         target_list[profile][row.TARGET] = target
-
-#     return target_list
 
 
 class Objects:

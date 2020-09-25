@@ -30,20 +30,21 @@ class FilterWheel:
 class Sensor:
     def __init__(
         self,
-        name="template",
-        pitch=5,
-        pix_x=1000,
-        pix_y=1000,
-        read_noise=10,
-        full_well=20000,
-        download_time=20,
-        filter_wheel=FilterWheel(FILTERS),
+        name,
+        pixel_size,
+        n_x,
+        n_y,
+        read_noise=None,
+        full_well=None,
+        download_time=None,
+        filter_wheel=None,
+        **kwargs,
     ):
         self.name = name
-        self.pitch = pitch
-        self.pix_x = pix_x
-        self.pix_y = pix_y
-        self.size = np.array([pix_x, pix_y]) * pitch * 1e-3
+        self.pixel_size = float(pixel_size)
+        self.n_x = int(n_x)
+        self.n_y = int(n_y)
+        self.size = np.array([self.n_x, self.n_y]) * self.pixel_size * 1e-3
 
         self.read_noise = read_noise
         self.full_well = full_well
@@ -53,3 +54,6 @@ class Sensor:
 
     def dynamic_range(self):
         return 20 * np.log10(self.full_well / self.read_noise)
+
+    def __repr__(self):
+        return f"{self.name} {self.n_x}x{self.n_y} pixels @ {self.pixel_size}um"

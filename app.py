@@ -1,7 +1,6 @@
 import base64
 import io
-
-# import ntpath
+import os
 
 import dash
 import dash_core_components as dcc
@@ -10,22 +9,30 @@ import dash_html_components as html
 
 import pandas as pd
 import numpy as np
-import dash_table
+
+# import dash_table
 import plotly.graph_objects as go
 import warnings
-import uuid
 
 # import os
 import datetime
 import time
 import yaml
 
-from datetime import datetime as dt
+# from datetime import datetime as dt
 from dash.dependencies import Input, Output, State
 
 # from plotly.subplots import make_subplots
 # from collections import OrderedDict, defaultdict
-from astro_planner import *
+# from astro_planner import *
+
+from astro_planner.weather import DarkSky_Forecast, NWS_Forecast
+from astro_planner.target import object_file_reader
+from astro_planner.contrast import add_contrast
+from astro_planner.site import ObservingSite
+from astro_planner.ephemeris import get_coords
+from astro_planner.data_parser import get_exposure_summary
+from layout import layout, yaxis_map
 import seaborn as sns
 
 from astropy.utils.exceptions import AstropyWarning
@@ -46,12 +53,7 @@ server = flask.Flask(__name__)  #
 
 BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cosmo/bootstrap.min.css"
 BS = dbc.themes.FLATLY
-# app = dash.Dash(__name__, external_stylesheets=[BS], server=server)
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
-
-# cache = Cache(
-#     app.server, config={"CACHE_TYPE": "filesystem", "CACHE_DIR": "cache-directory"}
-# )
 
 
 app.title = "The AstroImaging Planner"
@@ -61,16 +63,20 @@ with open("./config.yml", "r") as f:
     config = yaml.load(f)
 
 DSF_FORECAST = DarkSky_Forecast(key="")
-
-
-DEFAULT_LAT = 43.37
-DEFAULT_LON = -88.37
-DEFAULT_UTC_OFFSET = -5
-DEFAULT_MPSAS = 19.5
-DEFAULT_BANDWIDTH = 120
-DEFAULT_K_EXTINCTION = 0.2
-DEFAULT_TIME_RESOLUTION = 300
-
+DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
+ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "./data/VoyRC_default.mdb")
+DEFAULT_LAT = os.getenv("DEFAULT_LAT", 43.37)
+DEFAULT_LON = os.getenv("DEFAULT_LON", -88.37)
+DEFAULT_UTC_OFFSET = os.getenv("DEFAULT_UTC_OFFSET", -5)
+DEFAULT_MPSAS = os.getenv("DEFAULT_MPSAS", 19.5)
+DEFAULT_BANDWIDTH = os.getenv("DEFAULT_BANDWIDTH", 120)
+DEFAULT_K_EXTINCTION = os.getenv("DEFAULT_K_EXTINCTION", 0.2)
+DEFAULT_TIME_RESOLUTION = os.getenv("DEFAULT_TIME_RESOLUTION", 300)
+USE_CONTRAST = os.getenv("USE_CONTRAST", False)
+styles = {}
+if not USE_CONTRAST:
+    styles["k-ext"] = {"display": "none"}
+    styles["local-mpsas"] = {"display": "none"}
 
 L_FILTER = "L"
 R_FILTER = "R"
@@ -105,12 +111,20 @@ colors = {
 }
 
 
+translated_filter = {
+    "ha": ["ho", "sho", "hoo", "hos", "halpha", "h-alpha"],
+    "oiii": ["ho", "sho", "hoo", "hos"],
+    "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
+    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
+    "lum": ["luminance", "lrgb"],
+}
+
+
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
 log.info(date_string)
 
-data_dir = "/Volumes/Users/gshau/Dropbox/AstroBox/data/"
 
-object_data = object_file_reader("./data/VoyRC_default.mdb")
+object_data = object_file_reader(ROBOCLIP_FILE)
 deploy = False
 
 show_todos = not deploy
@@ -213,7 +227,7 @@ def get_data(
     if value == "contrast":
         data = [sun_up_data, sun_dn_data]
     n_targets = len(target_coords)
-    colors = sns.color_palette("colorblind", n_colors=n_targets).as_hex()
+    colors = sns.color_palette(n_colors=n_targets).as_hex()
 
     # need better way to line up notes with target - this is messy, and prone to mismatch
     for i_target, (color, target_name) in enumerate(zip(colors, target_names)):
@@ -246,629 +260,7 @@ def get_data(
     return data
 
 
-settings_dropdown = dbc.DropdownMenu(
-    children=[
-        dbc.DropdownMenuItem("", header=True),
-        dbc.DropdownMenuItem("Profiles", href="#"),
-        dbc.DropdownMenuItem("UI Theme", href="#"),
-        dbc.DropdownMenuItem("Config", href="#"),
-        dbc.DropdownMenuItem("Logout", href="#"),
-    ],
-    nav=True,
-    in_navbar=True,
-    label="Settings",
-)
-
-
-navbar = dbc.NavbarSimple(
-    id="navbar",
-    children=[
-        dbc.NavItem(
-            dbc.NavLink(
-                "Clear Outside Report",
-                id="clear-outside",
-                href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
-                target="_blank",
-            )
-        ),
-        dbc.NavItem(
-            dbc.NavLink(
-                "Weather",
-                id="nws-weather",
-                href=f"http://forecast.weather.gov/MapClick.php?lon={DEFAULT_LON}&lat={DEFAULT_LAT}#.U1xl5F7N7wI",
-                target="_blank",
-            )
-        ),
-        dbc.NavItem(
-            dbc.NavLink(
-                "Satellite",
-                href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
-                target="_blank",
-            )
-        ),
-    ],
-    brand="The AstroImaging Planner",
-    brand_href="#",
-    color="primary",
-    dark=True,
-)
-
-
-date_picker = dbc.Row(
-    [
-        dbc.Col(html.Label("DATE: ")),
-        dbc.Col(
-            html.Div(
-                [dcc.DatePickerSingle(id="date-picker", date=dt.now()),],
-                style={"textAlign": "center"},
-                className="dash-bootstrap",
-            )
-        ),
-    ]
-)
-
-yaxis_map = {
-    "alt": "Altitude",
-    "airmass": "Airmass",
-    "contrast": "Relative Contrast",
-}
-
-
-yaxis_picker = dbc.Col(
-    html.Div(
-        [
-            html.Label("Quantity to plot:"),
-            dcc.Dropdown(
-                id="y-axis-type",
-                options=[{"label": v, "value": k} for k, v in yaxis_map.items()],
-                value="alt",
-            ),
-        ],
-        style={"textAlign": "center"},
-        className="dash-bootstrap",
-    ),
-    style={"border": "0px solid"},
-)
-
-profile_picker = dbc.Col(
-    html.Div(
-        [
-            html.Label("Group (Equipment Profiles)", style={"textAlign": "center"},),
-            dcc.Dropdown(
-                id="profile-selection",
-                options=[
-                    {"label": profile, "value": profile}
-                    for profile in object_data.profiles
-                ],
-                value=object_data.profiles[0],
-            ),
-        ],
-        style={"textAlign": "center"},
-        className="dash-bootstrap",
-    ),
-    style={"border": "0px solid"},
-)
-
-
-filter_targets_check = dbc.FormGroup(
-    [
-        dbc.Checkbox(id="filter-targets", className="form-check-input", checked=True),
-        dbc.Label(
-            "Seasonal Targets",
-            html_for="standalone-checkbox",
-            className="form-check-label",
-        ),
-    ]
-)
-
-filter_picker = dbc.Col(
-    [
-        html.Div(
-            [
-                html.Label("Matching Filters in Notes", style={"textAlign": "center"},),
-                dcc.Dropdown(
-                    id="filter-match",
-                    options=[
-                        {"label": "Luminance", "value": "lum",},
-                        {"label": "RGB", "value": "rgb"},
-                        {"label": "Narrowband", "value": "nb",},
-                        {"label": "Ha", "value": "ha"},
-                        {"label": "OIII", "value": "oiii"},
-                        {"label": "SII", "value": "sii"},
-                    ],
-                    value=["ha"],
-                    multi=True,
-                ),
-            ],
-            className="dash-bootstrap",
-        )
-    ]
-)
-search_notes = dbc.Col(
-    html.Div(
-        [
-            html.Label("Search Notes:  ", style={"textAlign": "center"},),
-            dcc.Input(
-                placeholder="NOT ACTIVE: Enter a value...",
-                type="text",
-                value="",
-                debounce=True,
-            ),
-        ],
-        className="dash-bootstrap",
-    )
-)
-location_selection = dbc.Col(
-    html.Div(
-        children=[
-            dbc.Col(
-                children=[
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Label("LATITUDE:  ", style={"textAlign": "right"},)
-                            ),
-                            dbc.Col(
-                                html.Div(
-                                    dcc.Input(
-                                        id="input-lat",
-                                        debounce=True,
-                                        placeholder=DEFAULT_LAT,
-                                        type="number",
-                                        className="dash-bootstrap",
-                                    ),
-                                    className="dash-bootstrap",
-                                )
-                            ),
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Label(
-                                    "LONGITUDE:  ", style={"textAlign": "left"},
-                                ),
-                            ),
-                            dbc.Col(
-                                dcc.Input(
-                                    id="input-lon",
-                                    debounce=True,
-                                    placeholder=DEFAULT_LON,
-                                    type="number",
-                                )
-                            ),
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Label(
-                                    "UTC OFFSET:  ", style={"textAlign": "left"},
-                                ),
-                            ),
-                            dbc.Col(
-                                dcc.Input(
-                                    id="input-utc-offset",
-                                    debounce=True,
-                                    placeholder=DEFAULT_UTC_OFFSET,
-                                    type="number",
-                                ),
-                            ),
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Label(
-                                    "Local SQM (mpsas):  ", style={"textAlign": "left"},
-                                ),
-                            ),
-                            dbc.Col(
-                                dcc.Input(
-                                    id="local-mpsas",
-                                    debounce=True,
-                                    placeholder=DEFAULT_MPSAS,
-                                    type="number",
-                                ),
-                            ),
-                        ]
-                    ),
-                    dbc.Row(
-                        [
-                            dbc.Col(
-                                html.Label(
-                                    "Extinction Coeff:  ", style={"textAlign": "left"},
-                                ),
-                            ),
-                            dbc.Col(
-                                dcc.Input(
-                                    id="k-ext",
-                                    debounce=True,
-                                    placeholder=DEFAULT_K_EXTINCTION,
-                                    type="number",
-                                ),
-                            ),
-                        ]
-                    ),
-                ],
-                className="dash-bootstrap",
-            )
-        ]
-    ),
-)
-
-weather_graph = html.Div(id="weather-graph", children=[dbc.Spinner(color="warning")])
-
-weather_modal = html.Div(
-    [
-        dbc.Button(
-            "Show Weather Forecast",
-            id="open",
-            color="primary",
-            block=True,
-            className="mr-1",
-        ),
-        dbc.Modal(
-            [
-                dbc.ModalHeader("Weather Forecast"),
-                dbc.ModalBody(weather_graph),
-                dbc.ModalFooter(
-                    dbc.Button(
-                        "Close",
-                        id="close",
-                        color="danger",
-                        block=True,
-                        className="mr-1",
-                    ),
-                ),
-            ],
-            id="modal",
-            size="xl",
-        ),
-    ]
-)
-
-upload = dcc.Upload(
-    id="upload-data",
-    children=html.Div(
-        [
-            dbc.Button(
-                "Drag and drop Voyager RoboClip (.mdb) or Sequence Generator Pro (.sgf) file or click here ",
-                color="dark",
-                className="mr-1",
-            )
-        ]
-    ),
-    multiple=True,
-)
-
-profile_container = dbc.Container(
-    dbc.Row(
-        [
-            dbc.Col(
-                [
-                    dbc.Container(
-                        fluid=True,
-                        style={"width": "95%"},
-                        children=[dbc.Row(profile_picker, justify="around"), html.Br()],
-                    )
-                ],
-                width=3,
-                style={"border": "0px solid"},
-            )
-        ],
-    ),
-    fluid=True,
-    style={},
-)
-
-
-rows = []
-for filter in FILTER_LIST:
-
-    row = dbc.InputGroup(
-        [
-            dbc.InputGroupAddon(
-                filter, addon_type="prepend", style={"background-color": colors[filter]}
-            ),
-            dbc.Input(placeholder="Exposure", id=f"{filter}-exposure", value=0),
-            dbc.Input(placeholder="Subs", id=f"{filter}-sub", value=0),
-        ],
-        className="mb-3",
-    )
-
-    rows.append(row)
-target_goal_children = [
-    dcc.Dropdown(id="target-dropdown", multi=True),
-    dbc.Container(children=rows, id="image-goal", fluid=True, style={},),
-]
-
-
-target_container = dbc.Container(
-    dbc.Row(
-        [
-            dbc.Col(
-                [
-                    dbc.Container(
-                        fluid=True,
-                        style={"width": "95%"},
-                        children=[
-                            dbc.Row(yaxis_picker, justify="around"),
-                            html.Br(),
-                            dbc.Row(filter_picker, justify="around"),
-                            html.Br(),
-                            dbc.Row(date_picker, justify="around"),
-                            html.Br(),
-                            dbc.Row(filter_targets_check, justify="around"),
-                            html.Br(),
-                            dbc.Row(location_selection, justify="around"),
-                            html.Br(),
-                            dbc.Row(weather_modal, justify="around"),
-                            html.Br(),
-                            dbc.Container(target_goal_children, id="target-goals"),
-                            html.Br(),
-                        ],
-                    )
-                ],
-                width=3,
-                style={"border": "0px solid"},
-            ),
-            dbc.Col(
-                children=[
-                    dbc.Row(
-                        html.Div(id="upload-button", children=[upload]),
-                        justify="center",
-                    ),
-                    html.Div(
-                        id="target-graph", children=[dbc.Spinner(color="primary")],
-                    ),
-                    html.Br(),
-                    html.Div(id="progress-chart"),
-                ],
-                width=9,
-            ),
-        ]
-    ),
-    id="tab-target-div",
-    fluid=True,
-    style={},
-)
-
-tabs = dbc.Tabs(
-    id="tabs",
-    active_tab="tab-target",
-    children=[
-        dbc.Tab(
-            label="Target Review",
-            tab_id="tab-target",
-            labelClassName="text-primary",
-        ),
-        dbc.Tab(
-            label="Sequence Constructor",
-            tab_id="tab-sequence",
-            labelClassName="text-warning",
-        ),
-        dbc.Tab(
-            label="Sequence Writer",
-            tab_id="tab-sequence-writer",
-            labelClassName="text-danger",
-        ),
-    ],
-)
-
-target_picker = dbc.Col(
-    [
-        html.Div(
-            [
-                html.Label("Target", style={"textAlign": "center"},),
-                dcc.Dropdown(
-                    id="targets-available", options=[], value=None, multi=False,
-                ),
-            ],
-            className="dash-bootstrap",
-        )
-    ]
-)
-
-goal_table = html.Div(
-    [dash_table.DataTable(id="goal-table", columns=[], data=[], editable=True)]
-)
-
-
-
-
-body = dbc.Container(
-    fluid=True,
-    style={"width": "80%"},
-    children=[
-        navbar,
-        # banner_jumbotron,
-        tabs,
-        profile_container,
-        target_container,
-        dbc.Container(children=["seq-div"], id="tab-seq-div", fluid=True, style={},),
-        dbc.Container(
-            children=["writer-div"], id="tab-writer-div", fluid=True, style={},
-        ),
-        html.Div(id="date-range", style={"display": "none"}),
-    ],
-)
-
-
-app.layout = html.Div(
-    [
-        body,
-        dcc.Store(id="store-target-data"),
-        dcc.Store(id="store-target-list"),
-        dcc.Store(id="store-site-data", data={}),
-        dcc.Store(id="store-goal-data", data="{}"),
-        dcc.Store(id="store-progress-data", data="{}"),
-        dcc.Store(id="store-target-goals", data={}),
-        dcc.Store(id="store-target-metadata"),
-    ]
-)
-
-
-
-@app.callback(
-    [
-        Output("tab-target-div", "style"),
-        Output("tab-seq-div", "style"),
-        Output("tab-writer-div", "style"),
-    ],
-    [Input("tabs", "active_tab")],
-)
-def render_content(tab):
-
-    styles = [{"display": "none"}] * 3
-
-    tab_names = [
-        "tab-target",
-        "tab-sequence",
-        "tab-sequence-writer",
-    ]
-
-    indx = tab_names.index(tab)
-
-    styles[indx] = {}
-    return styles
-
-
-@app.callback(
-    Output("target-dropdown", "options"),
-    [Input("profile-selection", "value"), Input("store-target-list", "data"), Input("target-graph", "children"),],
-)
-def target_dropdown_setter(profile, target_list, graph):
-
-    target_names = [t.name for t in object_data.target_list[profile].values()]
-
-    if target_list:
-        target_names = [name for name in target_names if name in target_list]
-
-    default_target = ""
-    if target_names:
-        default_target = target_names[0]
-
-    return make_options(target_names)#, default_target
-
-
-@app.callback(
-    [
-        Output("L-exposure", "value"),
-        Output("R-exposure", "value"),
-        Output("G-exposure", "value"),
-        Output("B-exposure", "value"),
-        Output("Ha-exposure", "value"),
-        Output("OIII-exposure", "value"),
-        Output("SII-exposure", "value"),
-        Output("OSC-exposure", "value"),
-        Output("L-sub", "value"),
-        Output("R-sub", "value"),
-        Output("G-sub", "value"),
-        Output("B-sub", "value"),
-        Output("Ha-sub", "value"),
-        Output("OIII-sub", "value"),
-        Output("SII-sub", "value"),
-        Output("OSC-sub", "value"),
-    ],
-    [Input("target-dropdown", "value"),],
-    [State("store-target-goals", "data")],
-)
-def target_exposure_setter(target, target_goals):
-
-    if isinstance(target, list):
-        if target:
-            target = target[0]
-
-    if target in target_goals:
-        goals = target_goals[target]
-        subs = []
-        exposures = []
-        for filter in FILTER_LIST:
-            exposure = 0
-            n_sub = 0
-            if filter in goals:
-                exposure = goals[filter]["sub_exposure"]
-                n_sub = goals[filter]["n_subs"]
-            exposures.append(exposure)
-            subs.append(n_sub)
-
-        return exposures + subs
-    return [0] * len(FILTER_LIST) * 2
-
-
-@app.callback(
-    Output("store-target-goals", "data"),
-    [
-        Input("L-exposure", "value"),
-        Input("R-exposure", "value"),
-        Input("G-exposure", "value"),
-        Input("B-exposure", "value"),
-        Input("Ha-exposure", "value"),
-        Input("OIII-exposure", "value"),
-        Input("SII-exposure", "value"),
-        Input("OSC-exposure", "value"),
-        Input("L-sub", "value"),
-        Input("R-sub", "value"),
-        Input("G-sub", "value"),
-        Input("B-sub", "value"),
-        Input("Ha-sub", "value"),
-        Input("OIII-sub", "value"),
-        Input("SII-sub", "value"),
-        Input("OSC-sub", "value"),
-    ],
-    [State("target-dropdown", "value"), State("store-target-goals", "data")],
-)
-def update_target_goals(
-    l_exp,
-    r_exp,
-    g_exp,
-    b_exp,
-    ha_exp,
-    oiii_exp,
-    sii_exp,
-    osc_exp,
-    l_sub,
-    r_sub,
-    g_sub,
-    b_sub,
-    ha_sub,
-    oiii_sub,
-    sii_sub,
-    osc_sub,
-    targets,
-    target_goals,
-):
-
-    exposures = dict(
-        zip(
-            FILTER_LIST,
-            [l_exp, r_exp, g_exp, b_exp, ha_exp, oiii_exp, sii_exp, osc_exp],
-        )
-    )
-    subs = dict(
-        zip(
-            FILTER_LIST,
-            [l_sub, r_sub, g_sub, b_sub, ha_sub, oiii_sub, sii_sub, osc_sub],
-        )
-    )
-    for filter in FILTER_LIST:
-        d = {
-            filter: {
-                "sub_exposure": int(exposures[filter]),
-                "n_subs": int(subs[filter]),
-            }
-        }
-        if targets:
-            for target in targets:
-                if target in target_goals:
-                    target_goals[target].update(d)
-                else:
-                    target_goals[target] = d
-    return target_goals
-
-
-
+app.layout = layout
 
 
 def parse_contents(contents, filename, date):
@@ -876,7 +268,6 @@ def parse_contents(contents, filename, date):
     decoded = base64.b64decode(content_string)
     try:
         if ".mdb" in filename:
-            file_id = uuid.uuid1()
             file_root = filename.replace(".mdb", "")
             local_file = f"./data/uploads/{file_root}.mdb"
             with open(local_file, "wb") as f:
@@ -887,7 +278,6 @@ def parse_contents(contents, filename, date):
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace(".sgf", "")
-            file_id = uuid.uuid1()
             local_file = f"./data/uploads/{file_root}.sgf"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
@@ -915,17 +305,12 @@ def toggle_modal(n1, n2, is_open):
 
 
 @app.callback(
-    [
-        Output("profile-selection", "options"),
-        Output("profile-selection", "value"),
-    ],
+    [Output("profile-selection", "options"), Output("profile-selection", "value")],
     [Input("upload-data", "contents")],
     [State("upload-data", "filename"), State("upload-data", "last_modified")],
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
     global object_data
-    children = [None]
-
     profile = object_data.profiles[0]
     options = [{"label": profile, "value": profile} for profile in object_data.profiles]
     default_option = options[0]["value"]
@@ -940,15 +325,6 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
         default_option = options[0]["value"]
         return options, default_option
     return options, default_option
-
-
-translated_filter = {
-    "ha": ["ho", "sho", "hoo", "hos", "halpha", "h-alpha"],
-    "oiii": ["ho", "sho", "hoo", "hos"],
-    "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
-    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
-    "lum": ["luminance", "lrgb"],
-}
 
 
 def update_site(site_data):
@@ -1031,7 +407,7 @@ def update_weather(site):
 
 
 @app.callback(
-    [Output("weather-graph", "children"), Output("navbar", "children"),],
+    [Output("weather-graph", "children"), Output("navbar", "children")],
     [Input("store-site-data", "data")],
 )
 def update_weather_data(site_data):
@@ -1093,16 +469,12 @@ def format_name(name):
 
 
 @app.callback(
-    Output("store-progress-data", "data"), [Input("profile-selection", "value"),],
+    Output("store-progress-data", "data"), [Input("profile-selection", "value")],
 )
 def get_progress(profile):
     df_exposure_summary = get_exposure_summary(
-        data_dir=data_dir, filter_list=FILTER_LIST
+        data_dir=DATA_DIR, filter_list=FILTER_LIST
     )
-    df_files = get_data_info(data_dir=data_dir, skip_header=True)
-
-    optic, sensor = profile.split()
-    df0 = df_files
     targets_saved = [format_name(target) for target in df_exposure_summary.index]
     matches = [
         target
@@ -1184,7 +556,7 @@ def update_target_graph(
     try:
         value = metadata["value"]
         date_range = metadata["date_range"]
-    except:
+    except KeyError:
         return []
 
     date = str(date_string.split("T")[0])
@@ -1197,7 +569,7 @@ def update_target_graph(
     elif value == "contrast":
         y_range = [0, 1]
     target_graph = dcc.Graph(
-        config={"displaylogo": False, "modeBarButtonsToRemove": ["pan2d", "lasso2d"],},
+        config={"displaylogo": False, "modeBarButtonsToRemove": ["pan2d", "lasso2d"]},
         figure={
             "data": data,
             "layout": dict(
@@ -1216,26 +588,14 @@ def update_target_graph(
     )
 
     colors = {
-        "complete": {
-            "L": "black",
-            "R": "red",
-            "G": "green",
-            "B": "blue",
-            "Ha": "crimson",
-            "SII": "maroon",
-            "OIII": "teal",
-            "OSC": "gray",
-        },
-        "pending": {
-            "L": "rgba(0, 0, 0, 0.5)",
-            "R": "rgba(255, 0, 0, 0.5)",
-            "G": "rgba(0, 255, 0, 0.5)",
-            "B": "rgba(0, 0, 255, 0.5)",
-            "Ha": "rgba(214, 25, 55, 0.5)",
-            "SII": "rgba(116, 4, 7, 0.5)",
-            "OIII": "rgba(10, 116, 116, 0.5)",
-            "OSC": "rgba(128, 128, 128, 0.5)",
-        },
+        "L": "black",
+        "R": "red",
+        "G": "green",
+        "B": "blue",
+        "Ha": "crimson",
+        "SII": "maroon",
+        "OIII": "teal",
+        "OSC": "gray",
     }
 
     df_progress = pd.read_json(progress_data)
@@ -1247,43 +607,87 @@ def update_target_graph(
     ]
 
     df_progress = df_progress.loc[t]
-    df_progress["status"] = "complete"
 
     p = go.Figure()
-    r = []
-    for target, d in target_goals.items():
-        if target == "null":
-            continue
-        x = pd.DataFrame(d).T
-        y = (x["sub_exposure"] * x["n_subs"]) / 60.0
-        y.name = target
-        r.append(y)
-    df_requested = pd.DataFrame(r)
-    if df_requested.shape[0] == 0:
-        df_requested = pd.DataFrame(columns=FILTER_LIST)
-    df_requested["status"] = "requested"
-    df_pending = np.clip(
-        df_requested[FILTER_LIST].sub(df_progress[FILTER_LIST], fill_value=0), 0, None
-    ).fillna(0)
-    df_pending["status"] = "pending"
-    df_progress = pd.concat([df_progress, df_requested, df_pending])
-    for status in ["complete", "pending"]:
-        for i, filter in enumerate(list(df_progress.columns)):
-            if filter == "status":
-                continue
-            selection = df_progress["status"] == status
-            p.add_trace(
-                go.Bar(
-                    name=f"{filter} {status}",
-                    x=df_progress[selection].index,
-                    y=df_progress[selection][filter] / 60,
-                    marker_color=colors[status][filter],
-                )
+    for i, filter in enumerate(list(df_progress.columns)):
+        p.add_trace(
+            go.Bar(
+                name=f"{filter}",
+                x=df_progress.index,
+                y=df_progress[filter] / 60,
+                marker_color=colors[filter],
             )
+        )
 
-    p.update_layout(barmode="group", height=400, legend_orientation="h")
+    p.update_layout(barmode="group", height=400, legend_orientation="v")
     progress_graph = dcc.Graph(figure=p)
     return [target_graph, progress_graph]
+
+
+def show_progress(df, days_ago=90, targets=[], date_string="2020-09-22"):
+
+    selection = df["date"] < "1970-01-01"
+    if days_ago > 0:
+        selection |= df["date"] > str(
+            datetime.datetime.today() - datetime.timedelta(days=days_ago)
+        )
+    targets_in_last_n_days = list(df[selection]["OBJECT"].unique())
+    targets += targets_in_last_n_days
+    if targets:
+        selection |= df["OBJECT"].isin(targets)
+    df0 = df[selection]
+
+    df_summary = (
+        df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "INSTRUME"])
+        .agg({"EXPOSURE": "sum"})
+        .dropna()
+    )
+    df_summary = df_summary.unstack(1).fillna(0)["EXPOSURE"] / 3600
+    cols = ["OBJECT", "L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
+    df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
+
+    df0["ra_order"] = df0["OBJCTRA"].apply(
+        lambda ra: compute_ra_order(ra, date_string=date_string)
+    )
+
+    objects_sorted = (
+        df0.dropna()
+        .groupby("OBJECT")
+        .agg({"ra_order": "mean"})
+        .sort_values(by="ra_order")
+        .index
+    )
+
+    p = go.Figure()
+    colors = {
+        "L": "black",
+        "R": "red",
+        "G": "green",
+        "B": "blue",
+        "Ha": "crimson",
+        "SII": "maroon",
+        "OIII": "teal",
+        "OSC": "gray",
+    }
+
+    df0 = df_summary.reset_index()
+    bin = df0["XBINNING"].astype(int).astype(str)
+    fl = df0["FOCALLEN"].astype(int).astype(str)
+    df0["text"] = df0["INSTRUME"] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
+    df_summary = df0.set_index("OBJECT").loc[objects_sorted]
+    for filter in [col for col in colors if col in df_summary.columns]:
+        p.add_trace(
+            go.Bar(
+                name=f"{filter}",
+                x=df_summary.index,
+                y=df_summary[filter],
+                hovertext=df_summary["text"],
+                marker_color=colors[filter],
+            )
+        )
+    p.update_layout(barmode="group")
+    p.show()
+    return df_summary
 
 
 if __name__ == "__main__":

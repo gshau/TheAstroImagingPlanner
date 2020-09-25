@@ -72,21 +72,21 @@ def clean_subframes(subframes, n_subs_name="subs_requested"):
     return dict((k, v) for k, v in subframes.items() if v[n_subs_name] > 0)
 
 
-def get_roboclips(filename="/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb"):
+# def get_roboclips(filename=ROBOCLIP_FILE):
 
-    df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
-    target_list = defaultdict(dict)
-    for row in df_rc.itertuples():
-        profile = row.GRUPPO
-        target = Target(
-            row.TARGET,
-            ra=row.RAJ2000 * u.hourangle,
-            dec=row.DECJ2000 * u.deg,
-            notes=row.NOTE,
-        )
-        target_list[profile][row.TARGET] = target
+#     df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
+#     target_list = defaultdict(dict)
+#     for row in df_rc.itertuples():
+#         profile = row.GRUPPO
+#         target = Target(
+#             row.TARGET,
+#             ra=row.RAJ2000 * u.hourangle,
+#             dec=row.DECJ2000 * u.deg,
+#             notes=row.NOTE,
+#         )
+#         target_list[profile][row.TARGET] = target
 
-    return target_list
+#     return target_list
 
 
 class Objects:

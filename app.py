@@ -6,6 +6,7 @@ import dash
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
+import dash_table
 
 import pandas as pd
 import numpy as np
@@ -31,8 +32,12 @@ from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
 from astro_planner.site import ObservingSite
 from astro_planner.ephemeris import get_coords
-from astro_planner.data_parser import get_exposure_summary
-from astro_planner.data_merge import compute_ra_order
+from astro_planner.data_parser import get_exposure_summary, get_data_info
+from astro_planner.data_merge import (
+    compute_ra_order,
+    merge_roboclip_stored_metadata,
+    get_targets_with_status,
+)
 from layout import layout, yaxis_map
 import seaborn as sns
 
@@ -65,7 +70,9 @@ with open("./config.yml", "r") as f:
 
 DSF_FORECAST = DarkSky_Forecast(key="")
 DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
-ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "./data/VoyRC_default.mdb")
+ROBOCLIP_FILE = os.getenv(
+    "ROBOCLIP_FILE", "/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb"
+)
 DEFAULT_LAT = os.getenv("DEFAULT_LAT", 43.37)
 DEFAULT_LON = os.getenv("DEFAULT_LON", -88.37)
 DEFAULT_UTC_OFFSET = os.getenv("DEFAULT_UTC_OFFSET", -5)
@@ -119,6 +126,9 @@ translated_filter = {
     "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
     "lum": ["luminance", "lrgb"],
 }
+
+
+df_stored_data = get_data_info(data_dir=DATA_DIR)
 
 
 date_string = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -473,9 +483,7 @@ def format_name(name):
     Output("store-progress-data", "data"), [Input("profile-selection", "value")],
 )
 def get_progress(profile):
-    df_exposure_summary = get_exposure_summary(
-        data_dir=DATA_DIR, filter_list=FILTER_LIST
-    )
+    df_exposure_summary = get_exposure_summary(df_stored_data, filter_list=FILTER_LIST)
     targets_saved = [format_name(target) for target in df_exposure_summary.index]
     matches = [
         target
@@ -547,13 +555,13 @@ def store_data(
         Input("store-target-metadata", "data"),
         Input("store-progress-data", "data"),
         Input("store-target-goals", "data"),
+        Input("profile-selection", "value"),
     ],
 )
-def update_target_graph(
-    data, metadata, progress_data, target_goals,
-):
+def update_target_graph(data, metadata, progress_data, target_goals, profile):
     log.info(f"Calling update_target_graph")
-
+    if not metadata:
+        metadata = {}
     try:
         value = metadata["value"]
         date_range = metadata["date_range"]
@@ -622,10 +630,96 @@ def update_target_graph(
 
     p.update_layout(barmode="group", height=400, legend_orientation="v")
     progress_graph = dcc.Graph(figure=p)
-    return [target_graph, progress_graph]
+
+    df_combined = merge_roboclip_stored_metadata(
+        df_stored_data, object_data.df_objects, config
+    )
+
+    df_combined = df_combined[df_combined["GROUP"] == profile]
+
+    active_targets = [
+        "barnard_365",
+        "lbn_437",
+        "ldn_1247",
+        "ngc_1333",
+        "ngc_6995",
+        "ngc_3718",
+        "sh2-112",
+        "sh2-140",
+        "sh2-155",
+        "sh2-200",
+    ]
+    pending_targets = ["draco_dn_complex", "ngc_3718", "sh2-73"]
+    acquired_targets = ["ic_5070", "ngc_6946", "ngc_6946_b150", "m101", "sh2-129"]
+    df_combined.loc[df_combined.index.isin(active_targets), "status"] = "active"
+    df_combined.loc[df_combined.index.isin(pending_targets), "status"] = "pending"
+    df_combined.loc[df_combined.index.isin(acquired_targets), "status"] = "acquired"
+
+    targets = get_targets_with_status(
+        df_combined, status_list=["active", "pending", "acquired"]
+    )
+    print(targets)
+    progress_graph, df_summary = get_progress_graph(
+        df_stored_data, days_ago=0, targets=targets
+    )
+
+    df_combined = df_combined.reset_index()
+    columns = []
+    for col in df_combined.columns:
+        entry = {"name": col, "id": col, "deletable": False, "selectable": False}
+        if col == "status":
+            entry["presentation"] = "dropdown"
+            entry["editable"] = True
+        columns.append(entry)
+
+    table = html.Div(
+        [
+            dash_table.DataTable(
+                id="table-dropdown",
+                columns=columns,
+                data=df_combined.to_dict("records"),
+                editable=False,
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                selected_columns=[],
+                selected_rows=[],
+                page_action="native",
+                page_current=0,
+                page_size=20,
+                style_cell={"padding": "5px"},
+                style_as_list_view=True,
+                style_cell_conditional=[
+                    {"if": {"column_id": c}, "textAlign": "left"}
+                    for c in ["Date", "Region"]
+                ],
+                style_data_conditional=[
+                    {
+                        "if": {"row_index": "odd"},
+                        "backgroundColor": "rgb(248, 248, 248)",
+                    }
+                ],
+                style_header={
+                    "backgroundColor": "rgb(230, 230, 230)",
+                    "fontWeight": "bold",
+                },
+                dropdown={
+                    "status": {
+                        "options": [
+                            {"label": i, "value": i}
+                            for i in ["active", "pending", "closed", "acquired"]
+                        ]
+                    }
+                },
+            ),
+            html.Div(id="table-dropdown-container"),
+        ]
+    )
+
+    return [target_graph, progress_graph, table]
 
 
-def show_progress(df, days_ago=90, targets=[], date_string="2020-09-22"):
+def get_progress_graph(df, days_ago=90, targets=[], date_string="2020-09-22"):
 
     selection = df["date"] < "1970-01-01"
     if days_ago > 0:
@@ -637,6 +731,10 @@ def show_progress(df, days_ago=90, targets=[], date_string="2020-09-22"):
     if targets:
         selection |= df["OBJECT"].isin(targets)
     df0 = df[selection]
+
+    p = go.Figure()
+    if df0.shape[0] == 0:
+        return dcc.Graph(figure=p), pd.DataFrame()
 
     df_summary = (
         df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "INSTRUME"])
@@ -659,7 +757,6 @@ def show_progress(df, days_ago=90, targets=[], date_string="2020-09-22"):
         .index
     )
 
-    p = go.Figure()
     colors = {
         "L": "black",
         "R": "red",
@@ -686,9 +783,8 @@ def show_progress(df, days_ago=90, targets=[], date_string="2020-09-22"):
                 marker_color=colors[filter],
             )
         )
-    p.update_layout(barmode="group")
-    p.show()
-    return df_summary
+    p.update_layout(barmode="group", yaxis_title="Exposure Acquired (hr)")
+    return dcc.Graph(figure=p), df_summary
 
 
 if __name__ == "__main__":

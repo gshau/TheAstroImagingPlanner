@@ -120,8 +120,7 @@ def format_dates(df):
     return df
 
 
-def get_exposure_summary(data_dir=DATA_DIR, filter_list=FILTERS, time_format="minutes"):
-    df_files = get_data_info(data_dir)
+def get_exposure_summary(df_files, filter_list=FILTERS, time_format="minutes"):
     df_exposures = df_files.groupby(["OBJECT", "FILTER"]).sum()["EXPOSURE"].to_frame()
 
     df = pd.pivot(

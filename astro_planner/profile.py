@@ -3,6 +3,7 @@ import numpy as np
 from astro_planner.logger import log
 
 DEFAULT_PROFILE_PATH = os.getenv("DEFAULT_PROFILE_PATH")
+DEFAULT_DATA_PATH = os.getenv("DEFAULT_DATA_PATH")
 
 DEGREES_PER_RADIAN = 180.0 / np.pi
 ARCMIN_PER_DEGREE = 60

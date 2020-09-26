@@ -11,21 +11,14 @@ import dash_table
 import pandas as pd
 import numpy as np
 
-# import dash_table
 import plotly.graph_objects as go
 import warnings
 
-# import os
 import datetime
 import time
 import yaml
 
-# from datetime import datetime as dt
 from dash.dependencies import Input, Output, State
-
-# from plotly.subplots import make_subplots
-# from collections import OrderedDict, defaultdict
-# from astro_planner import *
 
 from astro_planner.weather import DarkSky_Forecast, NWS_Forecast
 from astro_planner.target import object_file_reader
@@ -46,8 +39,6 @@ from astropy.utils.exceptions import AstropyWarning
 import flask
 
 import logging
-
-# from flask_caching import Cache
 
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(module)s %(message)s")

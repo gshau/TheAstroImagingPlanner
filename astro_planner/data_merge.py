@@ -58,11 +58,11 @@ def add_group(equipment, df0):
     sensor_map = get_sensor_map(equipment, df0)
     optic_map = get_optic_map(equipment, df0)
     df0["group"] = (
-        df0["INSTRUME"].replace(sensor_map)
-        + " "
-        + df0["FOCALLEN"]
+        df0["FOCALLEN"]
         .map(optic_map)
         .fillna(df0["FOCALLEN"].astype(int).astype(str) + "mm")
+        + " "
+        + df0["INSTRUME"].replace(sensor_map)
     )
     return df0
 
@@ -98,24 +98,28 @@ def merge_roboclip_stored_metadata(
         df_roboclip.set_index("OBJECT"), how="outer"
     )
     df_combined.loc[df_combined["status"].isnull(), "status"] = "pending"
-    filter_cols = [col for col in df0.columns if col in FILTERS]
+
+    filter_cols = [col for col in FILTERS if col in df0.columns]
     cols = [
-        "INSTRUME",
-        "FOCALLEN",
-        "XBINNING",
         "status",
+        # "INSTRUME",
+        # "FOCALLEN",
+        "XBINNING",
         "GROUP",
-        "group",
+        # "group",
         "NOTE",
-        "IsMosaic",
-        "PixelSize",
-        "Focallen",
+        # "IsMosaic",
+        # "PixelSize",
+        # "Focallen",
         "RAJ2000",
         "DECJ2000",
     ]
     cols += filter_cols
 
-    df_combined = df_combined[cols]
+    df_combined["GROUP"] = df_combined["GROUP"].fillna(df_combined["group"])
+
+    df_combined = df_combined[cols].round(2)
+
     return df_combined
 
 

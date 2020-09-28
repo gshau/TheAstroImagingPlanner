@@ -68,13 +68,15 @@ navbar = dbc.NavbarSimple(
 
 date_picker = dbc.Row(
     [
-        dbc.Col(html.Label("DATE: ")),
         dbc.Col(
             html.Div(
-                [dcc.DatePickerSingle(id="date-picker", date=dt.now())],
+                [
+                    html.Label("DATE:   "),
+                    dcc.DatePickerSingle(id="date-picker", date=dt.now()),
+                ],
                 style={"textAlign": "center"},
                 className="dash-bootstrap",
-            )
+            ),
         ),
     ]
 )
@@ -135,9 +137,10 @@ filter_picker = dbc.Col(
                 dcc.Dropdown(
                     id="filter-match",
                     options=[
+                        {"label": "Narrowband", "value": "nb"},
+                        {"label": "Broadband", "value": "bb"},
                         {"label": "Luminance", "value": "lum"},
                         {"label": "RGB", "value": "rgb"},
-                        {"label": "Narrowband", "value": "nb"},
                         {"label": "Ha", "value": "ha"},
                         {"label": "OIII", "value": "oiii"},
                         {"label": "SII", "value": "sii"},
@@ -150,6 +153,29 @@ filter_picker = dbc.Col(
         )
     ]
 )
+
+status_picker = dbc.Col(
+    [
+        html.Div(
+            [
+                html.Label("Matching Status", style={"textAlign": "center"},),
+                dcc.Dropdown(
+                    id="status-match",
+                    options=[
+                        {"label": "Pending", "value": "pending"},
+                        {"label": "Active", "value": "active"},
+                        {"label": "Acquired", "value": "acquired"},
+                        {"label": "Closed", "value": "closed"},
+                    ],
+                    value=["pending", "active", "acquired"],
+                    multi=True,
+                ),
+            ],
+            className="dash-bootstrap",
+        )
+    ]
+)
+
 search_notes = dbc.Col(
     html.Div(
         [
@@ -330,6 +356,25 @@ profile_container = dbc.Container(
     style={},
 )
 
+# date_container = dbc.Container(
+#     dbc.Row(
+#         [
+#             dbc.Col(
+#                 [
+#                     dbc.Container(
+#                         fluid=True,
+#                         style={"width": "95%"},
+#                         children=[dbc.Row(date_picker, justify="around"), html.Br()],
+#                     )
+#                 ],
+#                 width=3,
+#                 style={"border": "0px solid"},
+#             )
+#         ],
+#     ),
+#     fluid=True,
+#     style={},
+# )
 
 target_container = dbc.Container(
     dbc.Row(
@@ -340,11 +385,15 @@ target_container = dbc.Container(
                         fluid=True,
                         style={"width": "95%"},
                         children=[
+                            dbc.Row(date_picker, justify="around"),
+                            html.Br(),
+                            dbc.Row(profile_picker, justify="around"),
+                            html.Br(),
                             dbc.Row(yaxis_picker, justify="around"),
                             html.Br(),
                             dbc.Row(filter_picker, justify="around"),
                             html.Br(),
-                            dbc.Row(date_picker, justify="around"),
+                            dbc.Row(status_picker, justify="around"),
                             html.Br(),
                             dbc.Row(filter_targets_check, justify="around"),
                             html.Br(),
@@ -352,6 +401,10 @@ target_container = dbc.Container(
                             html.Br(),
                             dbc.Row(weather_modal, justify="around"),
                             html.Br(),
+                            dbc.Row(
+                                html.Div(id="upload-button", children=[upload]),
+                                justify="around",
+                            ),
                         ],
                     )
                 ],
@@ -360,21 +413,38 @@ target_container = dbc.Container(
             ),
             dbc.Col(
                 children=[
-                    dbc.Row(
-                        html.Div(id="upload-button", children=[upload]),
-                        justify="center",
-                    ),
                     html.Div(
                         id="target-graph", children=[dbc.Spinner(color="primary")],
                     ),
                     html.Br(),
-                    html.Div(id="progress-chart"),
+                    html.Div(id="progress-graph"),
                 ],
                 width=9,
             ),
         ]
     ),
     id="tab-target-div",
+    fluid=True,
+    style={},
+)
+
+
+data_table_container = dbc.Container(
+    dbc.Row(
+        [
+            dbc.Col(
+                children=[
+                    # dbc.CardHeader("Data Table"),
+                    # dbc.CardBody([
+                    html.Div(id="data-table")
+                    # ]),
+                ],
+                width=12,
+                style={"border": "20px solid white"},
+            ),
+        ]
+    ),
+    id="tab-data-table-div",
     fluid=True,
     style={},
 )
@@ -387,14 +457,9 @@ tabs = dbc.Tabs(
             label="Target Review", tab_id="tab-target", labelClassName="text-primary",
         ),
         dbc.Tab(
-            label="Sequence Constructor",
-            tab_id="tab-sequence",
-            labelClassName="text-warning",
-        ),
-        dbc.Tab(
-            label="Sequence Writer",
-            tab_id="tab-sequence-writer",
-            labelClassName="text-danger",
+            label="Search Stored Data",
+            tab_id="tab-data-table",
+            labelClassName="text-info",
         ),
     ],
 )
@@ -406,7 +471,10 @@ body = dbc.Container(
     children=[
         navbar,
         tabs,
-        profile_container,
+        # profile_container,
+        # date_container,
+        html.Br(),
+        data_table_container,
         target_container,
         html.Div(id="date-range", style={"display": "none"}),
     ],

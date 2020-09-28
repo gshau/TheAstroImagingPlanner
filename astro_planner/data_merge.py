@@ -1,4 +1,3 @@
-import re
 import os
 import ntpath
 
@@ -6,6 +5,7 @@ import ntpath
 import datetime
 import numpy as np
 from astro_planner.data_parser import FILTERS
+from astro_planner.target import normalize_target_name
 
 # import
 
@@ -67,16 +67,6 @@ def add_group(equipment, df0):
     return df0
 
 
-def proc_target_name_from_roboclip(target):
-    target = target.lower()
-    target = target.replace("-", "_")
-    target = target.replace(" ", "_")
-    target = re.sub(r"^(?:sh2)_*", "sh2-", target)
-    for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
-        target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
-    return target
-
-
 def merge_roboclip_stored_metadata(
     df_stored_data, df_roboclip, config, default_status="closed"
 ):
@@ -93,7 +83,7 @@ def merge_roboclip_stored_metadata(
     df0["status"] = default_status
 
     df0 = add_group(config["equipment"], df0)
-    df_roboclip["OBJECT"] = df_roboclip["TARGET"].apply(proc_target_name_from_roboclip)
+    df_roboclip["OBJECT"] = df_roboclip["TARGET"].apply(normalize_target_name)
     df_combined = df0.set_index("OBJECT").join(
         df_roboclip.set_index("OBJECT"), how="outer"
     )
@@ -101,14 +91,14 @@ def merge_roboclip_stored_metadata(
 
     filter_cols = [col for col in FILTERS if col in df0.columns]
     cols = [
+        "TARGET",
         "status",
-        # "INSTRUME",
-        # "FOCALLEN",
+        "INSTRUME",
+        "FOCALLEN",
         "XBINNING",
         "GROUP",
         # "group",
         "NOTE",
-        # "IsMosaic",
         # "PixelSize",
         # "Focallen",
         "RAJ2000",
@@ -124,5 +114,7 @@ def merge_roboclip_stored_metadata(
 
 
 def get_targets_with_status(df_combined, status_list=["closed"]):
-    targets = list(set(df_combined[df_combined["status"].isin(status_list)].index))
-    return targets
+    targets = df_combined.index
+    if status_list:
+        targets = df_combined[df_combined["status"].isin(status_list)].index
+    return list(set(targets))

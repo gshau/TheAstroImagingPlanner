@@ -1,3 +1,6 @@
+import re
+
+
 import pandas as pd
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -73,6 +76,16 @@ def clean_subframes(subframes, n_subs_name="subs_requested"):
     return dict((k, v) for k, v in subframes.items() if v[n_subs_name] > 0)
 
 
+def normalize_target_name(target):
+    target = target.lower()
+    target = target.replace("-", "_")
+    target = target.replace(" ", "_")
+    target = re.sub(r"^(?:sh2)_*", "sh2-", target)
+    for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
+        target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
+    return target
+
+
 class Objects:
     def __init__(self):
         self.target_list = defaultdict(dict)
@@ -85,13 +98,14 @@ class Objects:
             note = str(row.NOTE)
             if note == "nan":
                 note = ""
+            target_name = normalize_target_name(row.TARGET)
             target = Target(
-                row.TARGET,
+                target_name,
                 ra=row.RAJ2000 * u.hourangle,
                 dec=row.DECJ2000 * u.deg,
                 notes=note,
             )
-            self.target_list[profile][row.TARGET] = target
+            self.target_list[profile][target_name] = target
 
     def load_from_df(self, df_input):
         self.df_objects = df_input

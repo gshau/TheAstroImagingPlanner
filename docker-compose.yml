@@ -3,11 +3,14 @@ services:
     app:
         build: .
         ports:
-            - "8050:8050"
+            - 8050:8050
         environment:
-            - DATA_PATH=/Volumes/Users/gshau/Dropbox/AstroBox/data
-            - ROBOCLIP_FILE=/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb
-            - DEFAULT_PROFILE_PATH=/Volumes/Users/gshau/Dropbox/AstroBox/Voyager Profiles"
+            - DATA_DIR=/data
+            - ROBOCLIP_FILE=/roboclip/VoyRC.mdb
+        volumes:
+            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data
+            - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip
+            # - DEFAULT_PROFILE_PATH="/Volumes/Users/gshau/Dropbox/AstroBox/Voyager Profiles"
 
     # volumes:
     #   - .:/code

@@ -356,25 +356,6 @@ profile_container = dbc.Container(
     style={},
 )
 
-# date_container = dbc.Container(
-#     dbc.Row(
-#         [
-#             dbc.Col(
-#                 [
-#                     dbc.Container(
-#                         fluid=True,
-#                         style={"width": "95%"},
-#                         children=[dbc.Row(date_picker, justify="around"), html.Br()],
-#                     )
-#                 ],
-#                 width=3,
-#                 style={"border": "0px solid"},
-#             )
-#         ],
-#     ),
-#     fluid=True,
-#     style={},
-# )
 
 target_container = dbc.Container(
     dbc.Row(
@@ -449,12 +430,70 @@ data_table_container = dbc.Container(
     style={},
 )
 
+target_picker = dbc.Col(
+    [
+        html.Div(
+            [
+                html.Label("Matching Targets", style={"textAlign": "center"},),
+                dcc.Dropdown(id="target-match", options=[], value=[], multi=True,),
+            ],
+            className="dash-bootstrap",
+        )
+    ]
+)
+
+
+target_status_selector = dbc.Col(
+    [
+        html.Div(
+            [
+                dcc.RadioItems(
+                    options=[
+                        {"label": "Active", "value": "active"},
+                        {"label": "Acquired", "value": "acquired"},
+                        {"label": "Pending", "value": "pending"},
+                        {"label": "Closed", "value": "closed"},
+                    ],
+                    labelStyle={"display": "block"},
+                    id="target-status-selector",
+                )
+            ],
+            className="dash-bootstrap",
+        )
+    ]
+)
+
+
+target_status_container = dbc.Container(
+    dbc.Row(
+        [
+            dbc.Col(
+                children=[target_picker], width=3, style={"border": "20px solid white"},
+            ),
+            dbc.Col(
+                children=[target_status_selector],
+                width=2,
+                style={"border": "20px solid white"},
+            ),
+        ]
+    ),
+    id="tab-target-status-div",
+    fluid=True,
+    style={},
+)
+
+
 tabs = dbc.Tabs(
     id="tabs",
     active_tab="tab-target",
     children=[
         dbc.Tab(
             label="Target Review", tab_id="tab-target", labelClassName="text-primary",
+        ),
+        dbc.Tab(
+            label="Change Target Status",
+            tab_id="tab-target-status",
+            labelClassName="text-warning",
         ),
         dbc.Tab(
             label="Search Stored Data",
@@ -476,6 +515,7 @@ body = dbc.Container(
         html.Br(),
         data_table_container,
         target_container,
+        target_status_container,
         html.Div(id="date-range", style={"display": "none"}),
     ],
 )
@@ -490,5 +530,6 @@ layout = html.Div(
         dcc.Store(id="store-progress-data", data="{}"),
         dcc.Store(id="store-target-goals", data={}),
         dcc.Store(id="store-target-metadata"),
+        dcc.Store(id="store-target-status"),
     ]
 )

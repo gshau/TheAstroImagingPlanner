@@ -223,7 +223,6 @@ def clean_file_list(df):
             "OBJCTALT",
         ]
     ]
-
     sel = ~df0["OBJECT"].isnull()
     df0.loc[sel, "OBJECT"] = df0.loc[sel, "OBJECT"].apply(format_name)
     df0["INSTRUME"] = df0["INSTRUME"].replace(

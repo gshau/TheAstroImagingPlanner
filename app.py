@@ -52,6 +52,7 @@ BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cosmo/bootstrap.min.cs
 BS = dbc.themes.FLATLY
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
 
+VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 app.title = "The AstroImaging Planner"
 
@@ -128,11 +129,11 @@ def dump_target_status_to_file(df_combined, filename="./conf/target_status.yml")
         target_status[group] = status_series.to_dict()
     with open(filename, "w") as f:
         yaml.dump(target_status, f)
+    df_target_status = target_status_to_df(target_status)
+    return df_target_status
 
 
-def load_target_status_from_file(filename="./conf/target_status.yml"):
-    with open(filename, "r") as f:
-        target_status = yaml.load(f, Loader=yaml.BaseLoader)
+def target_status_to_df(target_status):
     records = []
     for profile in target_status:
         for target in target_status[profile]:
@@ -141,8 +142,15 @@ def load_target_status_from_file(filename="./conf/target_status.yml"):
                     OBJECT=target, GROUP=profile, status=target_status[profile][target]
                 )
             )
+    df_target_status = pd.DataFrame(records)
+    return df_target_status
 
-    return pd.DataFrame(records)
+
+def load_target_status_from_file(filename="./conf/target_status.yml"):
+    with open(filename, "r") as f:
+        target_status = yaml.load(f, Loader=yaml.BaseLoader)
+    df_target_status = target_status_to_df(target_status)
+    return df_target_status
 
 
 def set_target_status(df_combined, df_target_status):
@@ -152,6 +160,14 @@ def set_target_status(df_combined, df_target_status):
         df_combined.reset_index().set_index(["OBJECT", "GROUP"]).index.map(status_map)
     )
     return df_combined
+
+
+def update_target_with_status(target_name, status, df_combined):
+
+    if status in VALID_STATUS:
+        df_combined.loc[target_name, "status"] = status
+    df_target_status = dump_target_status_to_file(df_combined)
+    return df_combined, df_target_status
 
 
 df_stored_data = get_data_info(data_dir=DATA_DIR)
@@ -168,12 +184,18 @@ df_combined = merge_roboclip_stored_metadata(
     df_stored_data, object_data.df_objects, config
 )
 
-target_status = load_target_status_from_file()
-df_combined = set_target_status(df_combined, target_status)
+df_target_status = load_target_status_from_file()
+df_combined = set_target_status(df_combined, df_target_status)
+
+if df_combined["status"].isnull().sum() > 0:
+    df_combined["status"] = df_combined["status"].fillna("pending")
+    dump_target_status_to_file(df_combined)
 
 
-deploy = False
-debug_status = not deploy
+df_combined, df_target_status = update_target_with_status(
+    "ic_2118", "closed", df_combined
+)
+
 
 date_range = []
 
@@ -353,7 +375,7 @@ def parse_contents(contents, filename, date):
     [Input("open", "n_clicks"), Input("close", "n_clicks")],
     [State("modal", "is_open")],
 )
-def toggle_modal(n1, n2, is_open):
+def toggle_modal_callback(n1, n2, is_open):
     if n1 or n2:
         return not is_open
     return is_open
@@ -364,7 +386,7 @@ def toggle_modal(n1, n2, is_open):
     [Input("upload-data", "contents")],
     [State("upload-data", "filename"), State("upload-data", "last_modified")],
 )
-def update_output(list_of_contents, list_of_names, list_of_dates):
+def update_output_callback(list_of_contents, list_of_names, list_of_dates):
     global object_data
     profile = object_data.profiles[0]
     options = [{"label": profile, "value": profile} for profile in object_data.profiles]
@@ -464,7 +486,7 @@ def update_weather(site):
     [Output("weather-graph", "children"), Output("navbar", "children")],
     [Input("store-site-data", "data")],
 )
-def update_weather_data(site_data):
+def update_weather_data_callback(site_data):
     site = update_site((site_data))
     weather_graph, navbar = update_weather(site)
     return weather_graph, navbar
@@ -478,7 +500,7 @@ def update_weather_data(site_data):
         Input("input-utc-offset", "value"),
     ],
 )
-def update_time_location_data(lat=None, lon=None, utc_offset=None):
+def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
 
     site_data = dict(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET)
     if lat:
@@ -488,6 +510,53 @@ def update_time_location_data(lat=None, lon=None, utc_offset=None):
     if utc_offset:
         site_data["utc_offset"] = utc_offset
     return site_data
+
+
+@app.callback(
+    [Output("target-match", "options"), Output("target-match", "value"),],
+    [Input("profile-selection", "value")],
+    [State("status-match", "value")],
+)
+def update_target_for_status_callback(profile, status_match):
+    df_combined_group = df_combined[df_combined["GROUP"] == profile]
+    targets = df_combined_group.index.values
+    return make_options(targets), ""
+
+
+@app.callback(
+    Output("target-status-selector", "value"), [Input("target-match", "value")]
+)
+def update_radio_status_for_targets_callback(targets):
+    global df_target_status
+    status_set = set()
+    print(df_target_status)
+    status = df_target_status.set_index("OBJECT")
+    log.info(df_target_status)
+    for target in targets:
+        log.info(f"Target: {target}")
+        status_values = [status.loc[target, "status"]]
+        log.info(f"Target: {status_values}")
+        status_set = status_set.union(set(status_values))
+    log.info(f"Target: {status_set}")
+    if len(status_set) == 1:
+        return list(status_set)[0]
+    else:
+        return ""
+
+
+@app.callback(
+    Output("store-target-status", "data"),
+    [Input("target-status-selector", "value")],
+    [State("target-match", "value")],
+)
+def update_target_with_status_callback(status, targets):
+    global df_combined
+    global df_target_status
+    for target in targets:
+        df_combined, df_target_status = update_target_with_status(
+            target, status, df_combined
+        )
+    return ""
 
 
 def target_filter(targets, filters):
@@ -523,16 +592,21 @@ def format_name(name):
 
 
 @app.callback(
-    [Output("tab-target-div", "style"), Output("tab-data-table-div", "style")],
+    [
+        Output("tab-target-div", "style"),
+        Output("tab-data-table-div", "style"),
+        Output("tab-target-status-div", "style"),
+    ],
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
 
-    styles = [{"display": "none"}] * 2
+    styles = [{"display": "none"}] * 3
 
     tab_names = [
         "tab-target",
         "tab-data-table",
+        "tab-target-status",
     ]
 
     indx = tab_names.index(tab)
@@ -628,10 +702,11 @@ def store_data(
         Input("store-target-goals", "data"),
         Input("profile-selection", "value"),
         Input("status-match", "value"),
+        Input("date-picker", "date"),
     ],
 )
 def update_target_graph(
-    data, metadata, progress_data, target_goals, profile, status_list
+    data, metadata, progress_data, target_goals, profile, status_list, date
 ):
     log.info(f"Calling update_target_graph")
     if not metadata:
@@ -642,8 +717,10 @@ def update_target_graph(
     except KeyError:
         return None, None, None
 
-    date = str(date_string.split("T")[0])
-    title = "Imaging Targets on {date_string}".format(date_string=date)
+    date_string = str(date.split("T")[0])
+    title = "Imaging Targets <br> For Night of {date_string}".format(
+        date_string=date_string
+    )
 
     if value == "alt":
         y_range = [0, 90]
@@ -673,8 +750,8 @@ def update_target_graph(
 
     df_combined_group = df_combined[df_combined["GROUP"] == profile]
 
-    target_status = load_target_status_from_file()
-    df_combined_group = set_target_status(df_combined_group, target_status)
+    df_target_status = load_target_status_from_file()
+    df_combined_group = set_target_status(df_combined_group, df_target_status)
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
     progress_graph, df_summary = get_progress_graph(
         df_stored_data, days_ago=0, targets=targets
@@ -686,12 +763,14 @@ def update_target_graph(
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
 
+    data = df_combined.reset_index().to_dict("records")
+
     table = html.Div(
         [
             dash_table.DataTable(
                 id="table-dropdown",
                 columns=columns,
-                data=df_combined.to_dict("records"),
+                data=data,
                 editable=False,
                 filter_action="native",
                 sort_action="native",
@@ -717,8 +796,7 @@ def update_target_graph(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
-            ),
-            html.Div(id="table-dropdown-container"),
+            )
         ]
     )
 
@@ -796,7 +874,4 @@ def get_progress_graph(df, days_ago=90, targets=[], date_string="2020-09-22"):
 
 
 if __name__ == "__main__":
-    if deploy:
-        app.run_server(host="0.0.0.0")
-    else:
-        app.run_server(debug=True, host="0.0.0.0")
+    app.run_server(debug=True, host="0.0.0.0")

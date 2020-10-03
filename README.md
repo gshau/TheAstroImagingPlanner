@@ -2,8 +2,10 @@
 
 
 ## Wishlist:
-- [ ] Fix docker deploymeent
+- [ ] Fix docker deployment
 - [ ] Profile editor
+  - [ ] Sensors
+  - [ ] Optics
 - [ ] Aladin target view
 - [ ] user-controlled
   - [ ] priority
@@ -13,9 +15,10 @@
   - [ ] read from mpsas map
   - [ ] snowpack inflation?
 - [ ] add openweathermap datasource
-- [ ] Notes search
-
-- [ ] show all targets vs. show active targets
 - [ ] alpha reduced on inactive targets
 - [ ] show color-coded blocks of when filters are used
 
+
+- [ ] Seasonal targets to filter acquired data chart
+- [ ] Unified dataframe for all targets
+  - [ ] Use this dataframe to get coordinates

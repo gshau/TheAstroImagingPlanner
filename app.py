@@ -25,13 +25,17 @@ from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
 from astro_planner.site import ObservingSite
 from astro_planner.ephemeris import get_coords
-from astro_planner.data_parser import get_exposure_summary, get_data_info
+from astro_planner.data_parser import get_data_info
 from astro_planner.data_merge import (
     compute_ra_order,
     merge_roboclip_stored_metadata,
     get_targets_with_status,
+    dump_target_status_to_file,
+    load_target_status_from_file,
+    set_target_status,
+    update_target_with_status,
 )
-from layout import layout, yaxis_map
+from layout import serve_layout, yaxis_map
 import seaborn as sns
 
 from astropy.utils.exceptions import AstropyWarning
@@ -51,8 +55,6 @@ server = flask.Flask(__name__)  #
 BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cosmo/bootstrap.min.css"
 BS = dbc.themes.FLATLY
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
-
-VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 app.title = "The AstroImaging Planner"
 
@@ -78,6 +80,7 @@ if not USE_CONTRAST:
     styles["k-ext"] = {"display": "none"}
     styles["local-mpsas"] = {"display": "none"}
 
+
 L_FILTER = "L"
 R_FILTER = "R"
 G_FILTER = "G"
@@ -99,19 +102,19 @@ FILTER_LIST = [
     BAYER,
 ]
 
-colors = {
-    "L": "black",
-    "R": "red",
-    "G": "green",
-    "B": "blue",
-    "Ha": "crimson",
-    "SII": "maroon",
-    "OIII": "teal",
-    "OSC": "gray",
+COLORS = {
+    L_FILTER: "black",
+    R_FILTER: "red",
+    G_FILTER: "green",
+    B_FILTER: "blue",
+    HA_FILTER: "crimson",
+    SII_FILTER: "maroon",
+    OIII_FILTER: "teal",
+    BAYER: "gray",
 }
 
 
-translated_filter = {
+TRANSLATED_FILTERS = {
     "ha": ["ho", "sho", "hoo", "hos", "halpha", "h-alpha"],
     "oiii": ["ho", "sho", "hoo", "hos"],
     "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
@@ -121,83 +124,47 @@ translated_filter = {
 }
 
 
-def dump_target_status_to_file(df_combined, filename="./conf/target_status.yml"):
-    target_status = {}
-    groups = df_combined["GROUP"].unique()
-    for group in groups:
-        status_series = df_combined[df_combined["GROUP"] == group]["status"]
-        target_status[group] = status_series.to_dict()
-    with open(filename, "w") as f:
-        yaml.dump(target_status, f)
-    df_target_status = target_status_to_df(target_status)
-    return df_target_status
+## load main data
+# df_stored_data = get_data_info(data_dir=DATA_DIR)
+# object_data = object_file_reader(ROBOCLIP_FILE)
 
 
-def target_status_to_df(target_status):
-    records = []
-    for profile in target_status:
-        for target in target_status[profile]:
-            records.append(
-                dict(
-                    OBJECT=target, GROUP=profile, status=target_status[profile][target]
-                )
-            )
-    df_target_status = pd.DataFrame(records)
-    return df_target_status
+# df_combined = merge_roboclip_stored_metadata(
+#     df_stored_data, object_data.df_objects, config
+# )
+
+# df_target_status = load_target_status_from_file()
+# df_combined = set_target_status(df_combined, df_target_status)
+# if df_combined["status"].isnull().sum() > 0:
+#     df_combined["status"] = df_combined["status"].fillna("pending")
+#     dump_target_status_to_file(df_combined)
+
+object_data = None
+df_combined = None
+df_target_status = None
+df_stored_data = None
 
 
-def load_target_status_from_file(filename="./conf/target_status.yml"):
-    with open(filename, "r") as f:
-        target_status = yaml.load(f, Loader=yaml.BaseLoader)
-    df_target_status = target_status_to_df(target_status)
-    return df_target_status
+def update_data():
+    global object_data
+    global df_combined
+    global df_target_status
+    global df_stored_data
+    df_stored_data = get_data_info(data_dir=DATA_DIR)
+    object_data = object_file_reader(ROBOCLIP_FILE)
 
-
-def set_target_status(df_combined, df_target_status):
-
-    status_map = df_target_status.set_index(["OBJECT", "GROUP"]).to_dict()["status"]
-    df_combined["status"] = (
-        df_combined.reset_index().set_index(["OBJECT", "GROUP"]).index.map(status_map)
+    df_combined = merge_roboclip_stored_metadata(
+        df_stored_data, object_data.df_objects, config
     )
-    return df_combined
+
+    df_target_status = load_target_status_from_file()
+    df_combined = set_target_status(df_combined, df_target_status)
+    if df_combined["status"].isnull().sum() > 0:
+        df_combined["status"] = df_combined["status"].fillna("pending")
+        dump_target_status_to_file(df_combined)
 
 
-def update_target_with_status(target_name, status, df_combined):
-
-    if status in VALID_STATUS:
-        df_combined.loc[target_name, "status"] = status
-    df_target_status = dump_target_status_to_file(df_combined)
-    return df_combined, df_target_status
-
-
-df_stored_data = get_data_info(data_dir=DATA_DIR)
-
-
-date_string = datetime.datetime.now().strftime("%Y-%m-%d")
-log.info(date_string)
-
-
-object_data = object_file_reader(ROBOCLIP_FILE)
-
-
-df_combined = merge_roboclip_stored_metadata(
-    df_stored_data, object_data.df_objects, config
-)
-
-df_target_status = load_target_status_from_file()
-df_combined = set_target_status(df_combined, df_target_status)
-
-if df_combined["status"].isnull().sum() > 0:
-    df_combined["status"] = df_combined["status"].fillna("pending")
-    dump_target_status_to_file(df_combined)
-
-
-df_combined, df_target_status = update_target_with_status(
-    "ic_2118", "closed", df_combined
-)
-
-
-date_range = []
+update_data()
 
 
 def make_options(elements):
@@ -235,8 +202,6 @@ def get_data(
     if k_ext is None:
         k_ext = DEFAULT_K_EXTINCTION
 
-    # this is where we sort by transit time
-    # log.info(sorted(target_coords.values, key=lambda x: x["alt"].argmax()))
     if value == "contrast":
         target_coords = add_contrast(
             target_coords,
@@ -337,7 +302,18 @@ def get_data(
     return data
 
 
-app.layout = layout
+app.layout = serve_layout
+
+
+@app.callback(
+    Output("modal", "is_open"),
+    [Input("open", "n_clicks"), Input("close", "n_clicks")],
+    [State("modal", "is_open")],
+)
+def toggle_modal_callback(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
 
 
 def parse_contents(contents, filename, date):
@@ -368,17 +344,6 @@ def parse_contents(contents, filename, date):
         log.info(e)
         return html.Div(["There was an error processing this file."])
     return object_data
-
-
-@app.callback(
-    Output("modal", "is_open"),
-    [Input("open", "n_clicks"), Input("close", "n_clicks")],
-    [State("modal", "is_open")],
-)
-def toggle_modal_callback(n1, n2, is_open):
-    if n1 or n2:
-        return not is_open
-    return is_open
 
 
 @app.callback(
@@ -442,7 +407,7 @@ def update_weather(site):
                     title=df_weather.index.name,
                     margin={"l": 50, "b": 100, "t": 50, "r": 50},
                     legend={"x": 1, "y": 0.5},
-                    xaxis={"range": date_range},
+                    # xaxis={"range": date_range},
                     yaxis={"range": [0, 100]},
                     height=600,
                     plot_bgcolor="#ddd",
@@ -513,7 +478,16 @@ def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
 
 
 @app.callback(
-    [Output("target-match", "options"), Output("target-match", "value"),],
+    Output("store-placeholder", "data"), [Input("update-data", "n_clicks")],
+)
+def update_data_callback(n_click):
+    if n_click != 0:
+        update_data()
+    return ""
+
+
+@app.callback(
+    [Output("target-match", "options"), Output("target-match", "value")],
     [Input("profile-selection", "value")],
     [State("status-match", "value")],
 )
@@ -524,9 +498,11 @@ def update_target_for_status_callback(profile, status_match):
 
 
 @app.callback(
-    Output("target-status-selector", "value"), [Input("target-match", "value")]
+    Output("target-status-selector", "value"),
+    [Input("target-match", "value")],
+    [State("store-target-status", "data")],
 )
-def update_radio_status_for_targets_callback(targets):
+def update_radio_status_for_targets_callback(targets, target_status_store):
     global df_target_status
     status_set = set()
     print(df_target_status)
@@ -547,16 +523,14 @@ def update_radio_status_for_targets_callback(targets):
 @app.callback(
     Output("store-target-status", "data"),
     [Input("target-status-selector", "value")],
-    [State("target-match", "value")],
+    [State("target-match", "value"), State("store-target-status", "data")],
 )
-def update_target_with_status_callback(status, targets):
+def update_target_with_status_callback(status, targets, target_status_store):
     global df_combined
-    global df_target_status
-    for target in targets:
-        df_combined, df_target_status = update_target_with_status(
-            target, status, df_combined
-        )
-    return ""
+    df_combined, df_target_status = update_target_with_status(
+        targets, status, df_combined
+    )
+    return ""  # df_target_status  # .to_dict()
 
 
 def target_filter(targets, filters):
@@ -567,8 +541,8 @@ def target_filter(targets, filters):
             if target.info["notes"]:
                 if filter in target.info["notes"].lower():
                     targets_with_filter.append(target)
-        if filter.lower() in translated_filter:
-            for t_filter in translated_filter[filter.lower()]:
+        if filter.lower() in TRANSLATED_FILTERS:
+            for t_filter in TRANSLATED_FILTERS[filter.lower()]:
                 targets_with_filter += [
                     target
                     for target in targets
@@ -592,41 +566,22 @@ def format_name(name):
 
 
 @app.callback(
-    [
-        Output("tab-target-div", "style"),
-        Output("tab-data-table-div", "style"),
-        Output("tab-target-status-div", "style"),
-    ],
+    [Output("tab-target-div", "style"), Output("tab-data-table-div", "style"),],
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
 
-    styles = [{"display": "none"}] * 3
+    styles = [{"display": "none"}] * 2
 
     tab_names = [
         "tab-target",
         "tab-data-table",
-        "tab-target-status",
     ]
 
     indx = tab_names.index(tab)
 
     styles[indx] = {}
     return styles
-
-
-@app.callback(
-    Output("store-progress-data", "data"), [Input("profile-selection", "value")],
-)
-def get_progress(profile):
-    df_exposure_summary = get_exposure_summary(df_stored_data, filter_list=FILTER_LIST)
-    targets_saved = [format_name(target) for target in df_exposure_summary.index]
-    matches = [
-        target
-        for target in df_exposure_summary.index
-        if format_name(target) in targets_saved
-    ]
-    return df_exposure_summary.loc[matches].to_json()
 
 
 @app.callback(
@@ -639,6 +594,7 @@ def get_progress(profile):
         Input("date-picker", "date"),
         Input("profile-selection", "value"),
         Input("store-site-data", "data"),
+        Input("store-target-status", "data"),
         Input("y-axis-type", "value"),
         Input("local-mpsas", "value"),
         Input("k-ext", "value"),
@@ -651,6 +607,7 @@ def store_data(
     date_string,
     profile,
     site_data,
+    target_status_store,
     value,
     local_mpsas,
     k_ext,
@@ -658,6 +615,7 @@ def store_data(
     status_matches,
     filters=[],
 ):
+    global df_combined, object_data
     log.info(f"Calling store_data")
     targets = list(object_data.target_list[profile].values())
     site = update_site((site_data))
@@ -696,17 +654,17 @@ def store_data(
         Output("data-table", "children"),
     ],
     [
+        Input("date-picker", "date"),
         Input("store-target-data", "data"),
         Input("store-target-metadata", "data"),
         Input("store-progress-data", "data"),
         Input("store-target-goals", "data"),
         Input("profile-selection", "value"),
         Input("status-match", "value"),
-        Input("date-picker", "date"),
     ],
 )
 def update_target_graph(
-    data, metadata, progress_data, target_goals, profile, status_list, date
+    date, target_data, metadata, progress_data, target_goals, profile, status_list,
 ):
     log.info(f"Calling update_target_graph")
     if not metadata:
@@ -732,7 +690,7 @@ def update_target_graph(
     target_graph = dcc.Graph(
         config={"displaylogo": False, "modeBarButtonsToRemove": ["pan2d", "lasso2d"]},
         figure={
-            "data": data,
+            "data": target_data,
             "layout": dict(
                 xaxis={"title": "", "range": date_range},
                 yaxis={"title": yaxis_map[value], "range": y_range},
@@ -754,7 +712,7 @@ def update_target_graph(
     df_combined_group = set_target_status(df_combined_group, df_target_status)
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
     progress_graph, df_summary = get_progress_graph(
-        df_stored_data, days_ago=0, targets=targets
+        df_stored_data, date_string=date_string, days_ago=0, targets=targets
     )
 
     df_combined_group = df_combined_group.reset_index()
@@ -779,7 +737,7 @@ def update_target_graph(
                 selected_rows=[],
                 page_action="native",
                 page_current=0,
-                page_size=20,
+                page_size=50,
                 style_cell={"padding": "5px"},
                 style_as_list_view=True,
                 style_cell_conditional=[
@@ -803,7 +761,7 @@ def update_target_graph(
     return target_graph, progress_graph, table
 
 
-def get_progress_graph(df, days_ago=90, targets=[], date_string="2020-09-22"):
+def get_progress_graph(df, date_string, days_ago=90, targets=[]):
 
     selection = df["date"] < "1970-01-01"
     if days_ago > 0:
@@ -841,30 +799,19 @@ def get_progress_graph(df, days_ago=90, targets=[], date_string="2020-09-22"):
         .index
     )
 
-    colors = {
-        "L": "black",
-        "R": "red",
-        "G": "green",
-        "B": "blue",
-        "Ha": "crimson",
-        "SII": "maroon",
-        "OIII": "teal",
-        "OSC": "gray",
-    }
-
     df0 = df_summary.reset_index()
     bin = df0["XBINNING"].astype(int).astype(str)
     fl = df0["FOCALLEN"].astype(int).astype(str)
     df0["text"] = df0["INSTRUME"] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
     df_summary = df0.set_index("OBJECT").loc[objects_sorted]
-    for filter in [col for col in colors if col in df_summary.columns]:
+    for filter in [col for col in COLORS if col in df_summary.columns]:
         p.add_trace(
             go.Bar(
                 name=f"{filter}",
                 x=df_summary.index,
                 y=df_summary[filter],
                 hovertext=df_summary["text"],
-                marker_color=colors[filter],
+                marker_color=COLORS[filter],
             )
         )
     p.update_layout(

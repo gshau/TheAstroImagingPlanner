@@ -1,11 +1,14 @@
 import os
 import ntpath
-
+import yaml
 
 import datetime
 import numpy as np
+import pandas as pd
 from astro_planner.data_parser import FILTERS
 from astro_planner.target import normalize_target_name
+
+VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 # import
 
@@ -97,10 +100,7 @@ def merge_roboclip_stored_metadata(
         "FOCALLEN",
         "XBINNING",
         "GROUP",
-        # "group",
         "NOTE",
-        # "PixelSize",
-        # "Focallen",
         "RAJ2000",
         "DECJ2000",
     ]
@@ -118,3 +118,53 @@ def get_targets_with_status(df_combined, status_list=["closed"]):
     if status_list:
         targets = df_combined[df_combined["status"].isin(status_list)].index
     return list(set(targets))
+
+
+def dump_target_status_to_file(df_combined, filename="./conf/target_status.yml"):
+    target_status = {}
+    groups = df_combined["GROUP"].unique()
+    for group in groups:
+        status_series = df_combined[df_combined["GROUP"] == group]["status"]
+        target_status[group] = status_series.to_dict()
+    with open(filename, "w") as f:
+        yaml.dump(target_status, f)
+    df_target_status = target_status_to_df(target_status)
+    return df_target_status
+
+
+def target_status_to_df(target_status):
+    records = []
+    for profile in target_status:
+        for target in target_status[profile]:
+            records.append(
+                dict(
+                    OBJECT=target, GROUP=profile, status=target_status[profile][target]
+                )
+            )
+    df_target_status = pd.DataFrame(records)
+    return df_target_status
+
+
+def load_target_status_from_file(filename="./conf/target_status.yml"):
+    with open(filename, "r") as f:
+        target_status = yaml.load(f, Loader=yaml.BaseLoader)
+    df_target_status = target_status_to_df(target_status)
+    return df_target_status
+
+
+def set_target_status(df_combined, df_target_status):
+
+    status_map = df_target_status.set_index(["OBJECT", "GROUP"]).to_dict()["status"]
+    df_combined["status"] = (
+        df_combined.reset_index().set_index(["OBJECT", "GROUP"]).index.map(status_map)
+    )
+    return df_combined
+
+
+def update_targets_with_status(target_names, status, df_combined):
+
+    if status in VALID_STATUS:
+        for target_name in target_names:
+            df_combined.loc[target_name, "status"] = status
+    df_target_status = dump_target_status_to_file(df_combined)
+    return df_combined, df_target_status

@@ -1,20 +1,18 @@
 import numpy as np
-import astropy.units as u
-import seaborn as sns
 from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+from astropy.coordinates import AltAz
 from astropy.coordinates import get_sun, get_moon
 import pandas as pd
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
 
 from astropy.utils import iers
+from multiprocessing import Pool
+from functools import partial
+
+import time
+from astro_planner.logger import log
+
 
 iers.conf.auto_download = False
-import logging
-
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(module)s %(message)s")
-log = logging.getLogger("app")
 
 
 def dates_to_strings(dates):
@@ -33,18 +31,11 @@ def get_target_loc(target, dates, location):
     return df
 
 
-from multiprocessing import Pool
-from functools import partial
-
-import time
-
-
 def get_sun_moon_loc(dates, location):
     pydatetimes = dates.to_pydatetime()
     frame = AltAz(obstime=Time(pydatetimes), location=location)
     result = {}
     for obj_name in ["sun", "moon"]:
-        t0 = time.time()
         if obj_name == "moon":
             obj = get_moon(Time(pydatetimes))
         if obj_name == "sun":

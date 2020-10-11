@@ -30,4 +30,3 @@ seaborn==0.10.0
 six==1.14.0
 Werkzeug==1.0.0
 gunicorn
-# grasia-dash-components

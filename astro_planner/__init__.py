@@ -11,5 +11,6 @@ from .profile import *
 from .camera import *
 from .telescope import *
 from .voyager_sequence import *
+from .data_merge import *
 
 # from .viewer import *

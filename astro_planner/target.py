@@ -1,19 +1,23 @@
-import numpy as np
+import re
+
+
 import pandas as pd
 import astropy.units as u
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+from astropy.coordinates import SkyCoord
 
 # from astroplan import FixedTarget
-from astropy.wcs import WCS
 from astropy.coordinates import Angle
 
-from .stf import auto_stf
-from .profile import cleanup_name
-from .data_parser import get_data_info
+# from .stf import auto_stf
+# from .profile import cleanup_name
+# from .data_parser import get_data_info
 
 from collections import defaultdict
 import pandas_access as mdb
+
+import json
+import ntpath
+from astro_planner.logger import log
 
 
 RA_KEY = "RA"
@@ -72,21 +76,14 @@ def clean_subframes(subframes, n_subs_name="subs_requested"):
     return dict((k, v) for k, v in subframes.items() if v[n_subs_name] > 0)
 
 
-def get_roboclips(filename="/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb"):
-
-    df_rc = mdb.read_table(filename, "RoboClip", converters_from_schema=False)
-    target_list = defaultdict(dict)
-    for row in df_rc.itertuples():
-        profile = row.GRUPPO
-        target = Target(
-            row.TARGET,
-            ra=row.RAJ2000 * u.hourangle,
-            dec=row.DECJ2000 * u.deg,
-            notes=row.NOTE,
-        )
-        target_list[profile][row.TARGET] = target
-
-    return target_list
+def normalize_target_name(target):
+    target = target.lower()
+    target = target.replace("-", "_")
+    target = target.replace(" ", "_")
+    target = re.sub(r"^(?:sh2)_*", "sh2-", target)
+    for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
+        target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
+    return target
 
 
 class Objects:
@@ -101,13 +98,14 @@ class Objects:
             note = str(row.NOTE)
             if note == "nan":
                 note = ""
+            target_name = normalize_target_name(row.TARGET)
             target = Target(
-                row.TARGET,
+                target_name,
                 ra=row.RAJ2000 * u.hourangle,
                 dec=row.DECJ2000 * u.deg,
                 notes=note,
             )
-            self.target_list[profile][row.TARGET] = target
+            self.target_list[profile][target_name] = target
 
     def load_from_df(self, df_input):
         self.df_objects = df_input

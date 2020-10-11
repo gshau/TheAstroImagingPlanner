@@ -4,4 +4,3 @@ class Telescope:
         self.aperture = aperture
         self.focal_length = focal_length
         self.focal_ratio = focal_length / aperture
-

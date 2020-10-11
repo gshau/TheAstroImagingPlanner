@@ -1,0 +1,12 @@
+version: '3'
+services:
+    app:
+        build: .
+        ports:
+            - 8050:8050
+        environment:
+            - DATA_DIR=/data
+            - ROBOCLIP_FILE=/roboclip/VoyRC.mdb
+        volumes:
+            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data
+            - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip

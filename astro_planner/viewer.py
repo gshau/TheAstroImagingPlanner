@@ -1,12 +1,8 @@
 import numpy as np
-import pandas as pd
 import astropy.units as u
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz
+from astropy.coordinates import SkyCoord
 
-# from astroplan import FixedTarget
 from astropy.wcs import WCS
-from astropy.coordinates import Angle
 from .stf import auto_stf
 
 

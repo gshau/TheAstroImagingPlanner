@@ -181,7 +181,9 @@ def serve_layout():
         [
             html.Div(
                 [
-                    html.Label("Selected Status", style={"textAlign": "center"},),
+                    html.Label(
+                        "Selected Target Status", style={"textAlign": "center"},
+                    ),
                     dcc.Dropdown(
                         id="status-match",
                         options=[

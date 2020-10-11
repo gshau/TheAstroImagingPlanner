@@ -68,13 +68,10 @@ equipment:
     borg55fl:
       aperture: 55
       focal_length: 200
-    ap130gtx:
-      aperture: 130
-      focal_length: 590
     rasa8:
       aperture: 200
       focal_length: 400
-    ap130gtx:
+    ap130:
       aperture: 130
       focal_length: 585
     rokinon135:

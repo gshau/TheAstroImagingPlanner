@@ -1,21 +1,28 @@
+ap130 asi6200mm:
+  abell_85: pending
 ap92 asi6200mm:
   draco_dn_complex: pending
   ic_2118: pending
   ic_443: closed
   iris_wide: closed
-  lbn_437: active
+  lbn_437: acquired
   lbn_603: acquired
+  ldn_1577: pending
   ldn_884: closed
   ldn_909: closed
   m100_region: closed
+  m31: active
+  m78_barnard_loop: active
   m81_region: closed
   m8_m20: pending
   ngc_1333: active
+  ngc_1499: active
   ngc_6823: closed
   ngc_6946_b150: acquired
   ngc_7635: pending
+  sh2-119: pending
   sh2-129: acquired
-  sh2-140: active
+  sh2-140: acquired
   sh2-73: pending
   snr_g206.9+2.3: pending
   snr_g65.3+5.7: pending
@@ -26,9 +33,11 @@ ap92 qhy16200:
   ic_1805: closed
   ngc_2264: closed
   sh2-157: active
-borg55fl asi071:
+borg55fl asi2600mc:
+  heart_soul_wide: closed
+  ic_1396: closed
   ic_5146_wide: pending
-  m16_m17_m24: closed
+  m16_m17_m24: pending
   m42_horsehead: pending
   m8: pending
   m8_m20: closed
@@ -40,7 +49,7 @@ ontc1010 qsi690:
   abell_39: closed
   abell_61: closed
   abell_72: pending
-  barnard_365: active
+  barnard_365: acquired
   coma_cluster: pending
   draco_trio: closed
   ic_342: pending
@@ -49,7 +58,7 @@ ontc1010 qsi690:
   jones_emberson_1: pending
   kohoutek_1_16: pending
   lbn_438: pending
-  m1: pending
+  m1: active
   m100: pending
   m101: acquired
   m104: pending
@@ -67,6 +76,7 @@ ontc1010 qsi690:
   mwp1: pending
   ngc_134: pending
   ngc_1579: pending
+  ngc_2238: pending
   ngc_2359: pending
   ngc_2403: pending
   ngc_2841: pending
@@ -77,18 +87,19 @@ ontc1010 qsi690:
   ngc_660: pending
   ngc_6946: acquired
   ngc_6960_lower: pending
-  ngc_6995: active
+  ngc_6995: acquired
   ngc_7008: closed
   ngc_7217: pending
   ngc_7293: pending
   ngc_7331: closed
-  ngc_7635: pending
+  ngc_7635: active
   pickering_triangle: closed
   pn_g149.4_09.2: pending
   sh2-106: pending
-  sh2-112: active
-  sh2-155: active
-  sh2-188: pending
+  sh2-112: acquired
+  sh2-155: acquired
+  sh2-174: pending
+  sh2-188: active
   sh2-200: closed
   sh2-207: pending
   sh2-261: closed

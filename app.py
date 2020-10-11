@@ -33,7 +33,7 @@ from astro_planner.data_merge import (
     dump_target_status_to_file,
     load_target_status_from_file,
     set_target_status,
-    update_target_with_status,
+    update_targets_with_status,
 )
 from layout import serve_layout, yaxis_map
 import seaborn as sns
@@ -443,6 +443,13 @@ def update_weather(site):
                 target="_blank",
             )
         ),
+        dbc.NavItem(
+            dbc.NavLink(
+                "Smoke Forecast",
+                href="https://rapidrefresh.noaa.gov/hrrr/HRRRsmoke/",
+                target="_blank",
+            )
+        ),
     ]
     return graph_data, navbar_children
 
@@ -527,7 +534,7 @@ def update_radio_status_for_targets_callback(targets, target_status_store):
 )
 def update_target_with_status_callback(status, targets, target_status_store):
     global df_combined
-    df_combined, df_target_status = update_target_with_status(
+    df_combined, df_target_status = update_targets_with_status(
         targets, status, df_combined
     )
     return ""  # df_target_status  # .to_dict()

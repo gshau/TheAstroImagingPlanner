@@ -58,7 +58,6 @@ def get_sun_moon_loc(dates, location):
 
 def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
     log.info("Starting get_coords")
-    t0 = time.time()
 
     dates = pd.date_range(
         "{} 12:00:00".format(date_string),

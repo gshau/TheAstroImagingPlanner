@@ -155,7 +155,7 @@ def load_target_status_from_file(filename="./conf/target_status.yml"):
 def set_target_status(df_combined, df_target_status):
 
     status_map = df_target_status.set_index(["OBJECT", "GROUP"]).to_dict()["status"]
-    df_combined["status"] = (
+    df_combined.loc[:, "status"] = (
         df_combined.reset_index().set_index(["OBJECT", "GROUP"]).index.map(status_map)
     )
     return df_combined

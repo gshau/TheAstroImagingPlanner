@@ -15,7 +15,6 @@ import plotly.graph_objects as go
 import warnings
 
 import datetime
-import time
 import yaml
 
 from dash.dependencies import Input, Output, State
@@ -178,7 +177,6 @@ def get_data(
     filter_targets=True,
 ):
     log.info("Starting get_data")
-    t0 = time.time()
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
@@ -585,7 +583,6 @@ def render_content(tab):
     ],
     [
         Input("date-picker", "date"),
-        Input("profile-selection", "value"),
         Input("store-site-data", "data"),
         Input("store-target-status", "data"),
         Input("y-axis-type", "value"),
@@ -595,10 +592,10 @@ def render_content(tab):
         Input("status-match", "value"),
         Input("filter-match", "value"),
     ],
+    [State("profile-selection", "value")],
 )
 def store_data(
     date_string,
-    profile,
     site_data,
     target_status_store,
     value,
@@ -606,7 +603,8 @@ def store_data(
     k_ext,
     filter_targets,
     status_matches,
-    filters=[],
+    filters,
+    profile,
 ):
     global df_combined, object_data
     log.info(f"Calling store_data")
@@ -647,17 +645,19 @@ def store_data(
         Output("data-table", "children"),
     ],
     [
-        Input("date-picker", "date"),
         Input("store-target-data", "data"),
-        Input("store-target-metadata", "data"),
         Input("store-progress-data", "data"),
         Input("store-target-goals", "data"),
-        Input("profile-selection", "value"),
-        Input("status-match", "value"),
+    ],
+    [
+        State("store-target-metadata", "data"),
+        State("profile-selection", "value"),
+        State("status-match", "value"),
+        State("date-picker", "date"),
     ],
 )
 def update_target_graph(
-    date, target_data, metadata, progress_data, target_goals, profile, status_list,
+    target_data, progress_data, target_goals, metadata, profile, status_list, date
 ):
     log.info(f"Calling update_target_graph")
     if not metadata:

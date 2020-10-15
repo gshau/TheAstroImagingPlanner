@@ -2,12 +2,6 @@ import numpy as np
 from .ephemeris import get_sun, get_moon
 from astropy.time import Time
 
-from astroplan.moon import moon_illumination
-
-
-def moon_phase(date_string):
-    return moon_illumination(Time(date_string))
-
 
 RADIANS_PER_DEGREE = np.pi / 180.0
 

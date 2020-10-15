@@ -117,6 +117,7 @@ COLORS = {
 TRANSLATED_FILTERS = {
     "ha": ["ho", "sho", "hoo", "hos", "halpha", "h-alpha"],
     "oiii": ["ho", "sho", "hoo", "hos"],
+    "sii": ["sho", "hos"],
     "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
     "bb": ["luminance", "lrgb"],
     "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
@@ -283,7 +284,6 @@ def get_data(
                     opacity=1,
                 )
             )
-        log.info(f"Done get_data {time.time() - t0}")
 
     return data
 

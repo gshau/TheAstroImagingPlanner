@@ -40,7 +40,6 @@ def get_sun_moon_loc(dates, location):
             obj = get_moon(Time(pydatetimes))
         if obj_name == "sun":
             obj = get_sun(Time(pydatetimes))
-        # log.info(f"Time for {obj_name} is {time.time() - t0}")
         loc = obj.transform_to(frame)
         df = pd.DataFrame(
             [
@@ -73,7 +72,5 @@ def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
         result = pool.map(gtl, [target.target for target in targets])
     for name, df in zip([target.name for target in targets], result):
         df_ephem[name] = df
-
-    log.info(f"Done get_coords {time.time() - t0}")
 
     return df_ephem

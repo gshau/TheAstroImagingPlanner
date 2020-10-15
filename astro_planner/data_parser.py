@@ -103,7 +103,7 @@ def get_data_info(data_dir=DATA_DIR):
 
 
 def format_dates(df):
-    df["date"] = df["DATE-OBS"].apply(format_date_string)
+    df.loc[:, "date"] = df["DATE-OBS"].apply(format_date_string)
     sel = ~df["DATE-OBS"].isnull()
     df.loc[sel, "date"] = pd.to_datetime(
         df.loc[sel, "DATE-OBS"].apply(fix_date_fmt)
@@ -216,7 +216,7 @@ def clean_file_list(df):
     ]
     sel = ~df0["OBJECT"].isnull()
     df0.loc[sel, "OBJECT"] = df0.loc[sel, "OBJECT"].apply(format_name)
-    df0["INSTRUME"] = df0["INSTRUME"].replace(
+    df0.loc[:, "INSTRUME"] = df0.loc[:, "INSTRUME"].replace(
         (
             {
                 "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8",

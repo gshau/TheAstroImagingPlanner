@@ -5,7 +5,8 @@ from .weather import *
 from .contrast import *
 
 from .data_parser import *
-from .goals import *
+
+# from .goals import *
 
 from .profile import *
 from .camera import *

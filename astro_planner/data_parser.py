@@ -1,3 +1,4 @@
+import os
 import logging
 import datetime
 import glob
@@ -10,11 +11,9 @@ from pathlib import Path
 
 from astro_planner.profile import cleanup_name
 
+DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
 
 FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
-
-
-DATA_DIR = "/Volumes/Users/gshau/Dropbox/AstroBox/data"
 
 
 def parse_filename(file_name):
@@ -72,14 +71,6 @@ def _parse_file(file_name, root_key):
 
 def parse_filelist(file_list, root_key="data/", verbose=False):
     d_list = []
-    # with Pool(8) as p:
-    #     d_list = p.map(
-    #         partial(_parse_file, root_key=root_key, skip_header=skip_header), file_list
-    #     )
-    #     for file_name in file_list:
-    #         result = _parse_file(file_name, root_key)
-    #         if result:
-    #             df_list.append(result)
     d_list = [_parse_file(file_name, root_key) for file_name in file_list]
     d_list = [d for d in d_list if d]
     logging.info("Read {} files".format(len(d_list)))

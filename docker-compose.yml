@@ -8,5 +8,6 @@ services:
             - DATA_DIR=/data
             - ROBOCLIP_FILE=/roboclip/VoyRC.mdb
         volumes:
+            - /Volumes/Users/gshau/Dropbox/AstroBox/config:/app/config
             - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data
             - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip

@@ -57,7 +57,7 @@ def get_sun_moon_loc(dates, location):
     return result
 
 
-def get_coords(targets, date_string, site, time_resolution_in_sec=60):
+def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
     log.info("Starting get_coords")
     t0 = time.time()
 

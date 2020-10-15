@@ -161,10 +161,13 @@ def set_target_status(df_combined, df_target_status):
     return df_combined
 
 
-def update_targets_with_status(target_names, status, df_combined):
+def update_targets_with_status(target_names, status, df_combined, profile):
 
     if status in VALID_STATUS:
         for target_name in target_names:
-            df_combined.loc[target_name, "status"] = status
+            df_combined.loc[
+                (df_combined.index == target_name) & (df_combined["GROUP"] == profile),
+                "status",
+            ] = status
     df_target_status = dump_target_status_to_file(df_combined)
     return df_combined, df_target_status

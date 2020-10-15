@@ -24,7 +24,7 @@ from astro_planner.weather import DarkSky_Forecast, NWS_Forecast
 from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
 from astro_planner.site import ObservingSite
-from astro_planner.ephemeris import get_coords
+from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import get_data_info
 from astro_planner.data_merge import (
     compute_ra_order,
@@ -124,21 +124,7 @@ TRANSLATED_FILTERS = {
 }
 
 
-## load main data
-# df_stored_data = get_data_info(data_dir=DATA_DIR)
-# object_data = object_file_reader(ROBOCLIP_FILE)
-
-
-# df_combined = merge_roboclip_stored_metadata(
-#     df_stored_data, object_data.df_objects, config
-# )
-
-# df_target_status = load_target_status_from_file()
-# df_combined = set_target_status(df_combined, df_target_status)
-# if df_combined["status"].isnull().sum() > 0:
-#     df_combined["status"] = df_combined["status"].fillna("pending")
-#     dump_target_status_to_file(df_combined)
-
+# load main data
 object_data = None
 df_combined = None
 df_target_status = None
@@ -302,9 +288,11 @@ def get_data(
     return data
 
 
+# Set layout
 app.layout = serve_layout
 
 
+# Callbacks
 @app.callback(
     Output("modal", "is_open"),
     [Input("open", "n_clicks"), Input("close", "n_clicks")],
@@ -326,22 +314,22 @@ def parse_contents(contents, filename, date):
             with open(local_file, "wb") as f:
                 f.write(decoded)
             object_data = object_file_reader(local_file)
-            log.info(object_data.df_objects.head())
-            log.info(local_file)
+            log.debug(object_data.df_objects.head())
+            log.debug(local_file)
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace(".sgf", "")
             local_file = f"./data/uploads/{file_root}.sgf"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
-            log.info("Done!")
+            log.debug("Done!")
             object_data = object_file_reader(local_file)
-            log.info(object_data.df_objects.head())
-            log.info(local_file)
+            log.debug(object_data.df_objects.head())
+            log.debug(local_file)
         else:
             return html.Div(["Unsupported file!"])
     except Exception as e:
-        log.info(e)
+        log.warning(e)
         return html.Div(["There was an error processing this file."])
     return object_data
 
@@ -372,13 +360,12 @@ def update_site(site_data):
     lat = site_data.get("lat", DEFAULT_LAT)
     lon = site_data.get("lon", DEFAULT_LON)
     utc_offset = site_data.get("utc_offset", DEFAULT_UTC_OFFSET)
-    log.info("site_data")
+    log.info("Updating Site Data")
     site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
     return site
 
 
 def update_weather(site):
-    log.info(f"{site.lat} {site.lon}")
     log.info("Trying NWS")
     nws_forecast = NWS_Forecast(site.lat, site.lon)
     df_weather = nws_forecast.parse_data()
@@ -407,7 +394,6 @@ def update_weather(site):
                     title=df_weather.index.name,
                     margin={"l": 50, "b": 100, "t": 50, "r": 50},
                     legend={"x": 1, "y": 0.5},
-                    # xaxis={"range": date_range},
                     yaxis={"range": [0, 100]},
                     height=600,
                     plot_bgcolor="#ddd",
@@ -507,41 +493,41 @@ def update_target_for_status_callback(profile, status_match):
 @app.callback(
     Output("target-status-selector", "value"),
     [Input("target-match", "value")],
-    [State("store-target-status", "data")],
+    [State("store-target-status", "data"), State("profile-selection", "value")],
 )
-def update_radio_status_for_targets_callback(targets, target_status_store):
+def update_radio_status_for_targets_callback(targets, target_status_store, profile):
     global df_target_status
     status_set = set()
-    print(df_target_status)
-    status = df_target_status.set_index("OBJECT")
-    log.info(df_target_status)
+    status = df_target_status.set_index(["OBJECT", "GROUP"])
     for target in targets:
-        log.info(f"Target: {target}")
-        status_values = [status.loc[target, "status"]]
-        log.info(f"Target: {status_values}")
+        status_values = [status.loc[target].loc[profile]["status"]]
         status_set = status_set.union(set(status_values))
-    log.info(f"Target: {status_set}")
     if len(status_set) == 1:
+        log.info(f"Fetching targets: {targets} with status of {status_set}")
         return list(status_set)[0]
     else:
+        log.info(f"Conflict fetching targets: {targets} with status of {status_set}")
         return ""
 
 
 @app.callback(
     Output("store-target-status", "data"),
     [Input("target-status-selector", "value")],
-    [State("target-match", "value"), State("store-target-status", "data")],
+    [
+        State("target-match", "value"),
+        State("store-target-status", "data"),
+        State("profile-selection", "value"),
+    ],
 )
-def update_target_with_status_callback(status, targets, target_status_store):
+def update_target_with_status_callback(status, targets, target_status_store, profile):
     global df_combined
     df_combined, df_target_status = update_targets_with_status(
-        targets, status, df_combined
+        targets, status, df_combined, profile
     )
     return ""  # df_target_status  # .to_dict()
 
 
 def target_filter(targets, filters):
-    log.info(filters)
     targets_with_filter = []
     for filter in filters:
         for target in targets:
@@ -573,7 +559,7 @@ def format_name(name):
 
 
 @app.callback(
-    [Output("tab-target-div", "style"), Output("tab-data-table-div", "style"),],
+    [Output("tab-target-div", "style"), Output("tab-data-table-div", "style")],
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
@@ -634,7 +620,7 @@ def store_data(
         matching_targets = df_combined[df_combined["status"].isin(status_matches)].index
         targets = [target for target in targets if target.name in matching_targets]
 
-    coords = get_coords(
+    coords = get_coordinates(
         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
     )
     date_range = get_time_limits(coords)

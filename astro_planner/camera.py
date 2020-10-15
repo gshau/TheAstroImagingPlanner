@@ -1,9 +1,6 @@
 import numpy as np
 
 
-FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII"]
-
-
 class Filter:
     def __init__(self, name, filter_type=None, bandwidth=None):
         self.name = name

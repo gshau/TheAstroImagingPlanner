@@ -24,9 +24,9 @@ class Profile:
         self.telescope = telescope
 
     def summary(self):
-        print(self.name)
-        print("Pixel scale:   {:.2f}".format(self.pixel_scale()))
-        print("Field of view: {:.1f} x {:.1f}".format(*list(self.fov())))
+        log.info(self.name)
+        log.info("Pixel scale:   {:.2f}".format(self.pixel_scale()))
+        log.info("Field of view: {:.1f} x {:.1f}".format(*list(self.fov())))
 
     def pixel_scale(self):
         return self.sensor.pitch * 206.3 / self.telescope.focal_length

@@ -213,7 +213,8 @@ def clean_file_list(df):
             "AIRMASS",
             "OBJCTALT",
         ]
-    ]
+    ].reset_index(drop=True)
+
     sel = ~df0["OBJECT"].isnull()
     df0.loc[sel, "OBJECT"] = df0.loc[sel, "OBJECT"].apply(format_name)
     df0.loc[:, "INSTRUME"] = df0.loc[:, "INSTRUME"].replace(

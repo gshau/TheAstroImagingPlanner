@@ -79,7 +79,7 @@ def _parse_file(file_name, root_key):
 def parse_filelist(file_list, root_key="data/", verbose=False):
     d_list = []
     log.info("Reading stored fits files")
-    for file_name in tqdm(file_list[:100]):
+    for file_name in tqdm(file_list):
         d_list.append(_parse_file(file_name, root_key))
     d_list = [d for d in d_list if d]
     logging.info("Read {} files".format(len(d_list)))

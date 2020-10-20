@@ -23,7 +23,7 @@ from scipy.interpolate import interp1d
 from astro_planner.weather import DarkSky_Forecast, NWS_Forecast
 from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
-from astro_planner.site import ObservingSite
+from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import get_data_info
 from astro_planner.data_merge import (
@@ -42,11 +42,8 @@ from astropy.utils.exceptions import AstropyWarning
 
 import flask
 
-import logging
+from astro_planner.logger import log
 
-
-logging.basicConfig(level=logging.DEBUG, format="%(asctime)s %(module)s %(message)s")
-log = logging.getLogger("app")
 warnings.simplefilter("ignore", category=AstropyWarning)
 
 
@@ -343,7 +340,7 @@ def get_data(
     return data
 
 
-def parse_contents(contents, filename, date):
+def parse_loaded_contents(contents, filename, date):
     content_type, content_string = contents.split(",")
     decoded = base64.b64decode(content_string)
     try:
@@ -371,15 +368,6 @@ def parse_contents(contents, filename, date):
         log.warning(e)
         return html.Div(["There was an error processing this file."])
     return object_data
-
-
-def update_site(site_data):
-    lat = site_data.get("lat", DEFAULT_LAT)
-    lon = site_data.get("lon", DEFAULT_LON)
-    utc_offset = site_data.get("utc_offset", DEFAULT_UTC_OFFSET)
-    log.debug("Updating Site Data")
-    site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
-    return site
 
 
 def update_weather(site):
@@ -447,20 +435,6 @@ def target_filter(targets, filters):
                     if t_filter.lower() in target.info["notes"].lower()
                 ]
     return list(set(targets_with_filter))
-
-
-def format_name(name):
-    name = name.lower()
-    name = name.replace(" ", "_")
-    if "sh2" not in name:
-        name = name.replace("-", "_")
-    catalogs = ["m", "ngc", "abell", "ic", "vdb", "ldn"]
-
-    for catalog in catalogs:
-        if catalog in name[: len(catalog)]:
-            if f"{catalog}_" in name:
-                name = name.replace(f"{catalog}_", catalog)
-    return name
 
 
 def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
@@ -554,7 +528,7 @@ def update_output_callback(list_of_contents, list_of_names, list_of_dates):
     if list_of_contents is not None:
         options = []
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
-            object_data = parse_contents(c, n, d)
+            object_data = parse_loaded_contents(c, n, d)
             for profile in object_data.profiles:
                 options.append({"label": profile, "value": profile})
         default_option = options[0]["value"]
@@ -571,7 +545,12 @@ def update_output_callback(list_of_contents, list_of_names, list_of_dates):
     [Input("store-site-data", "data")],
 )
 def update_weather_data_callback(site_data):
-    site = update_site((site_data))
+    site = update_site(
+        site_data,
+        default_lat=DEFAULT_LAT,
+        default_lon=DEFAULT_LON,
+        default_utc_offset=DEFAULT_UTC_OFFSET,
+    )
     weather_graph, clear_outside_link, nws_link = update_weather(site)
     return weather_graph, clear_outside_link, nws_link
 
@@ -706,7 +685,12 @@ def store_data(
     global df_combined, object_data
     log.debug(f"Calling store_data")
     targets = list(object_data.target_list[profile].values())
-    site = update_site((site_data))
+    site = update_site(
+        site_data,
+        default_lat=DEFAULT_LAT,
+        default_lon=DEFAULT_LON,
+        default_utc_offset=DEFAULT_UTC_OFFSET,
+    )
 
     if filters:
         targets = target_filter(targets, filters)

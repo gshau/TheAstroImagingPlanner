@@ -1,9 +1,17 @@
 import numpy as np
 import astropy.units as u
 from astropy.coordinates import EarthLocation
-
-import logging
 from astropy.time import TimezoneInfo  # Specifies a timezone
+from .logger import log
+
+
+def update_site(site_data, default_lat, default_lon, default_utc_offset):
+    lat = site_data.get("lat", default_lat)
+    lon = site_data.get("lon", default_lon)
+    utc_offset = site_data.get("utc_offset", default_utc_offset)
+    log.debug("Updating Site Data")
+    site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
+    return site
 
 
 def parse_latlon_string(string, with_hour=False):
@@ -11,7 +19,7 @@ def parse_latlon_string(string, with_hour=False):
         array = string.split()
         if len(array) >= 1:
             if len(array) == 1:
-                logging.warning("Only first triad given")
+                log.warning("Only first triad given")
             result = np.float(array[0])
         if len(array) >= 2:
             result += np.float(array[1]) / 60

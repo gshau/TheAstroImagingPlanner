@@ -8,7 +8,6 @@ from astropy.utils import iers
 from multiprocessing import Pool
 from functools import partial
 
-import time
 from .logger import log
 
 

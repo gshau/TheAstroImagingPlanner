@@ -1,4 +1,4 @@
-# TheAstroImagingPlanner
+# The AstroImaging Planner
 
 ## Introduction
 The goal of this dashboard project is to offer the ability to view at a glance the planning and progress of astronomical targets for imaging.  There are two main components to the dashboard:

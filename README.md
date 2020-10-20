@@ -65,6 +65,11 @@ services:
 ```
 The directory structure after the defined data path is assumed to be of the form provided by Voyager if the date is specified as a subdirectory for each target, more explicitly, it is of the form: `{target_name}/{date}/{fits_files}`.  This default can be altered to accommodate other scenarios by editing the `fits_file_patterns` entry in `config.yml`
 
+To start the app, run:
+```
+docker-compose up
+```
+
 ## Configuration
 The config file `conf/config.yml` contains the configuration.  Example configuration:
 

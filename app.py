@@ -50,7 +50,7 @@ log = logging.getLogger("app")
 warnings.simplefilter("ignore", category=AstropyWarning)
 
 
-server = flask.Flask(__name__)  #
+server = flask.Flask(__name__)
 
 BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cosmo/bootstrap.min.css"
 BS = dbc.themes.FLATLY
@@ -61,6 +61,7 @@ app.title = "The AstroImaging Planner"
 
 with open("./conf/config.yml", "r") as f:
     CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
+HORIZON_DATA = CONFIG.get("horizon_data", {})
 
 with open("./conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.load(f, Loader=yaml.BaseLoader)
@@ -161,25 +162,35 @@ update_data()
 def load_custom_horizon_function(
     horizon_file, sep=" ", header=3,
 ):
+    flat_horizon_alt = HORIZON_DATA.get("flat_horizon_alt", 0)
+    flat_horizon = interp1d([0, 360], [flat_horizon_alt, flat_horizon_alt])
     if not horizon_file:
-        flat_horizon_alt = CONFIG.get("flat_horizon_alt", 0)
-        flat_horizon = interp1d([0, 360], [flat_horizon_alt, flat_horizon_alt])
         return flat_horizon
-    df_horizon = pd.read_csv(horizon_file, sep=sep, header=header)
-    df_horizon.columns = ["az", "alt"]
-    df_horizon = df_horizon.append(
-        pd.Series(dict(az=360, alt=df_horizon.iloc[-1]["alt"])), ignore_index=True
-    )
-    df_horizon = df_horizon.append(
-        pd.Series(dict(az=0, alt=df_horizon.iloc[0]["alt"])), ignore_index=True
-    )
-    df_horizon = df_horizon.drop_duplicates(["az"])
-    df_horizon = df_horizon.sort_values(by="az")
-    f_horizon = interp1d(df_horizon["az"], df_horizon["alt"])
+    try:
+        df_horizon = pd.read_csv(horizon_file, sep=sep, header=header)
+        df_horizon.columns = ["az", "alt"]
+        df_horizon = df_horizon.append(
+            pd.Series(dict(az=360, alt=df_horizon.iloc[-1]["alt"])), ignore_index=True
+        )
+        df_horizon = df_horizon.append(
+            pd.Series(dict(az=0, alt=df_horizon.iloc[0]["alt"])), ignore_index=True
+        )
+        df_horizon = df_horizon.drop_duplicates(["az"])
+        df_horizon = df_horizon.sort_values(by="az")
+        f_horizon = interp1d(df_horizon["az"], df_horizon["alt"])
+    except:
+        log.warning(
+            f"Issue with setting custom horizon from file: {horizon_file}, using flat horizon at {flat_horizon_alt} degrees"
+        )
+        return flat_horizon
     return f_horizon
 
 
-f_horizon = load_custom_horizon_function(horizon_file=CONFIG.get("horizon_file", ""))
+f_horizon = load_custom_horizon_function(
+    horizon_file=HORIZON_DATA.get("horizon_file", ""),
+    sep=HORIZON_DATA.get("alt_az_seperator", " "),
+    header=HORIZON_DATA.get("header_size", 3),
+)
 
 
 def make_options(elements):
@@ -332,22 +343,6 @@ def get_data(
     return data
 
 
-# Set layout
-app.layout = serve_layout
-
-
-# Callbacks
-@app.callback(
-    Output("modal", "is_open"),
-    [Input("open", "n_clicks"), Input("close", "n_clicks")],
-    [State("modal", "is_open")],
-)
-def toggle_modal_callback(n1, n2, is_open):
-    if n1 or n2:
-        return not is_open
-    return is_open
-
-
 def parse_contents(contents, filename, date):
     content_type, content_string = contents.split(",")
     decoded = base64.b64decode(content_string)
@@ -376,28 +371,6 @@ def parse_contents(contents, filename, date):
         log.warning(e)
         return html.Div(["There was an error processing this file."])
     return object_data
-
-
-@app.callback(
-    [Output("profile-selection", "options"), Output("profile-selection", "value")],
-    [Input("upload-data", "contents")],
-    [State("upload-data", "filename"), State("upload-data", "last_modified")],
-)
-def update_output_callback(list_of_contents, list_of_names, list_of_dates):
-    global object_data
-    profile = object_data.profiles[0]
-    options = [{"label": profile, "value": profile} for profile in object_data.profiles]
-    default_option = options[0]["value"]
-
-    if list_of_contents is not None:
-        options = []
-        for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
-            object_data = parse_contents(c, n, d)
-            for profile in object_data.profiles:
-                options.append({"label": profile, "value": profile})
-        default_option = options[0]["value"]
-        return options, default_option
-    return options, default_option
 
 
 def update_site(site_data):
@@ -457,6 +430,136 @@ def update_weather(site):
     )
 
     return graph_data, clear_outside_link[0], nws_link[0]
+
+
+def target_filter(targets, filters):
+    targets_with_filter = []
+    for filter in filters:
+        for target in targets:
+            if target.info["notes"]:
+                if filter in target.info["notes"].lower():
+                    targets_with_filter.append(target)
+        if filter.lower() in TRANSLATED_FILTERS:
+            for t_filter in TRANSLATED_FILTERS[filter.lower()]:
+                targets_with_filter += [
+                    target
+                    for target in targets
+                    if t_filter.lower() in target.info["notes"].lower()
+                ]
+    return list(set(targets_with_filter))
+
+
+def format_name(name):
+    name = name.lower()
+    name = name.replace(" ", "_")
+    if "sh2" not in name:
+        name = name.replace("-", "_")
+    catalogs = ["m", "ngc", "abell", "ic", "vdb", "ldn"]
+
+    for catalog in catalogs:
+        if catalog in name[: len(catalog)]:
+            if f"{catalog}_" in name:
+                name = name.replace(f"{catalog}_", catalog)
+    return name
+
+
+def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
+
+    selection = df["date"] < "1970-01-01"
+    if days_ago > 0:
+        selection |= df["date"] > str(
+            datetime.datetime.today() - datetime.timedelta(days=days_ago)
+        )
+    targets_in_last_n_days = list(df[selection]["OBJECT"].unique())
+    targets += targets_in_last_n_days
+    if targets:
+        selection |= df["OBJECT"].isin(targets)
+    df0 = df[selection].reset_index()
+
+    p = go.Figure()
+    if df0.shape[0] == 0:
+        return dcc.Graph(figure=p), pd.DataFrame()
+
+    df_summary = (
+        df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "INSTRUME"])
+        .agg({"EXPOSURE": "sum"})
+        .dropna()
+    )
+    df_summary = df_summary.unstack(1).fillna(0)["EXPOSURE"] / 3600
+    cols = ["OBJECT", "L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
+    df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
+
+    df0["ra_order"] = df0["OBJCTRA"].apply(
+        lambda ra: compute_ra_order(ra, date_string=date_string)
+    )
+
+    objects_sorted = (
+        df0.dropna()
+        .groupby("OBJECT")
+        .agg({"ra_order": "mean"})
+        .sort_values(by="ra_order")
+        .index
+    )
+
+    df0 = df_summary.reset_index()
+    bin = df0["XBINNING"].astype(int).astype(str)
+    fl = df0["FOCALLEN"].astype(int).astype(str)
+    df0["text"] = df0["INSTRUME"] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
+    df_summary = df0.set_index("OBJECT").loc[objects_sorted]
+    for filter in [col for col in COLORS if col in df_summary.columns]:
+        p.add_trace(
+            go.Bar(
+                name=f"{filter}",
+                x=df_summary.index,
+                y=df_summary[filter],
+                hovertext=df_summary["text"],
+                marker_color=COLORS[filter],
+            )
+        )
+    p.update_layout(
+        barmode=CONFIG.get("progress_mode", "group"),
+        yaxis_title="Total Exposure (hr)",
+        title="Acquired Data",
+    )
+    return dcc.Graph(figure=p), df_summary
+
+
+# Set layout
+app.layout = serve_layout
+
+
+# Callbacks
+@app.callback(
+    Output("modal", "is_open"),
+    [Input("open", "n_clicks"), Input("close", "n_clicks")],
+    [State("modal", "is_open")],
+)
+def toggle_modal_callback(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
+
+@app.callback(
+    [Output("profile-selection", "options"), Output("profile-selection", "value")],
+    [Input("upload-data", "contents")],
+    [State("upload-data", "filename"), State("upload-data", "last_modified")],
+)
+def update_output_callback(list_of_contents, list_of_names, list_of_dates):
+    global object_data
+    profile = object_data.profiles[0]
+    options = [{"label": profile, "value": profile} for profile in object_data.profiles]
+    default_option = options[0]["value"]
+
+    if list_of_contents is not None:
+        options = []
+        for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
+            object_data = parse_contents(c, n, d)
+            for profile in object_data.profiles:
+                options.append({"label": profile, "value": profile})
+        default_option = options[0]["value"]
+        return options, default_option
+    return options, default_option
 
 
 @app.callback(
@@ -548,37 +651,6 @@ def update_target_with_status_callback(status, targets, target_status_store, pro
         targets, status, df_combined, profile
     )
     return ""  # df_target_status  # .to_dict()
-
-
-def target_filter(targets, filters):
-    targets_with_filter = []
-    for filter in filters:
-        for target in targets:
-            if target.info["notes"]:
-                if filter in target.info["notes"].lower():
-                    targets_with_filter.append(target)
-        if filter.lower() in TRANSLATED_FILTERS:
-            for t_filter in TRANSLATED_FILTERS[filter.lower()]:
-                targets_with_filter += [
-                    target
-                    for target in targets
-                    if t_filter.lower() in target.info["notes"].lower()
-                ]
-    return list(set(targets_with_filter))
-
-
-def format_name(name):
-    name = name.lower()
-    name = name.replace(" ", "_")
-    if "sh2" not in name:
-        name = name.replace("-", "_")
-    catalogs = ["m", "ngc", "abell", "ic", "vdb", "ldn"]
-
-    for catalog in catalogs:
-        if catalog in name[: len(catalog)]:
-            if f"{catalog}_" in name:
-                name = name.replace(f"{catalog}_", catalog)
-    return name
 
 
 @app.callback(
@@ -783,67 +855,6 @@ def update_target_graph(
     )
 
     return target_graph, progress_graph, table
-
-
-def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
-
-    selection = df["date"] < "1970-01-01"
-    if days_ago > 0:
-        selection |= df["date"] > str(
-            datetime.datetime.today() - datetime.timedelta(days=days_ago)
-        )
-    targets_in_last_n_days = list(df[selection]["OBJECT"].unique())
-    targets += targets_in_last_n_days
-    if targets:
-        selection |= df["OBJECT"].isin(targets)
-    df0 = df[selection].reset_index()
-
-    p = go.Figure()
-    if df0.shape[0] == 0:
-        return dcc.Graph(figure=p), pd.DataFrame()
-
-    df_summary = (
-        df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "INSTRUME"])
-        .agg({"EXPOSURE": "sum"})
-        .dropna()
-    )
-    df_summary = df_summary.unstack(1).fillna(0)["EXPOSURE"] / 3600
-    cols = ["OBJECT", "L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
-    df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
-
-    df0["ra_order"] = df0["OBJCTRA"].apply(
-        lambda ra: compute_ra_order(ra, date_string=date_string)
-    )
-
-    objects_sorted = (
-        df0.dropna()
-        .groupby("OBJECT")
-        .agg({"ra_order": "mean"})
-        .sort_values(by="ra_order")
-        .index
-    )
-
-    df0 = df_summary.reset_index()
-    bin = df0["XBINNING"].astype(int).astype(str)
-    fl = df0["FOCALLEN"].astype(int).astype(str)
-    df0["text"] = df0["INSTRUME"] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
-    df_summary = df0.set_index("OBJECT").loc[objects_sorted]
-    for filter in [col for col in COLORS if col in df_summary.columns]:
-        p.add_trace(
-            go.Bar(
-                name=f"{filter}",
-                x=df_summary.index,
-                y=df_summary[filter],
-                hovertext=df_summary["text"],
-                marker_color=COLORS[filter],
-            )
-        )
-    p.update_layout(
-        barmode=CONFIG.get("progress_mode", "group"),
-        yaxis_title="Total Exposure (hr)",
-        title="Acquired Data",
-    )
-    return dcc.Graph(figure=p), df_summary
 
 
 if __name__ == "__main__":

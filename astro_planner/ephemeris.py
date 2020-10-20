@@ -9,7 +9,7 @@ from multiprocessing import Pool
 from functools import partial
 
 import time
-from astro_planner.logger import log
+from .logger import log
 
 
 iers.conf.auto_download = False
@@ -57,7 +57,7 @@ def get_sun_moon_loc(dates, location):
 
 
 def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
-    log.info("Starting get_coords")
+    log.debug("Starting get_coords")
 
     dates = pd.date_range(
         "{} 12:00:00".format(date_string),

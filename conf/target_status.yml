@@ -18,7 +18,7 @@ ap92 asi6200mm:
   ngc_1333: active
   ngc_1499: active
   ngc_6823: closed
-  ngc_6946_b150: acquired
+  ngc_6946_b150: closed
   ngc_7635: pending
   sh2-119: pending
   sh2-129: acquired
@@ -57,7 +57,7 @@ ontc1010 qsi690:
   ic_5146: closed
   jones_emberson_1: pending
   kohoutek_1_16: pending
-  lbn_438: pending
+  lbn_438: active
   m1: active
   m100: pending
   m101: acquired
@@ -75,7 +75,7 @@ ontc1010 qsi690:
   medusa_nebula: closed
   mwp1: pending
   ngc_134: pending
-  ngc_1579: pending
+  ngc_1579: active
   ngc_2238: pending
   ngc_2359: pending
   ngc_2403: pending
@@ -84,8 +84,8 @@ ontc1010 qsi690:
   ngc_4038: pending
   ngc_4236: pending
   ngc_4725: pending
-  ngc_660: pending
-  ngc_6946: acquired
+  ngc_660: active
+  ngc_6946: closed
   ngc_6960_lower: pending
   ngc_6995: acquired
   ngc_7008: closed
@@ -112,7 +112,7 @@ ontc1010 qsi690:
   vdb_141: closed
   vdb_142: closed
 rasa8 asi2600mc:
-  ldn_1247: pending
+  ldn_1247: active
 tmb130ss qhy16200:
   dwb111: closed
   ic_1318: closed

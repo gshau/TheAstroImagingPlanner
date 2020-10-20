@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from astro_planner.logger import log
+from .logger import log
 
 DEFAULT_PROFILE_PATH = os.getenv("DEFAULT_PROFILE_PATH")
 DEFAULT_DATA_PATH = os.getenv("DEFAULT_DATA_PATH")

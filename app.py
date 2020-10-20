@@ -19,6 +19,7 @@ import yaml
 
 from dash.dependencies import Input, Output, State
 
+from scipy.interpolate import interp1d
 from astro_planner.weather import DarkSky_Forecast, NWS_Forecast
 from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
@@ -59,7 +60,11 @@ app.title = "The AstroImaging Planner"
 
 
 with open("./conf/config.yml", "r") as f:
-    config = yaml.load(f, Loader=yaml.BaseLoader)
+    CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
+
+with open("./conf/equipment.yml", "r") as f:
+    EQUIPMENT = yaml.load(f, Loader=yaml.BaseLoader)
+
 
 DSF_FORECAST = DarkSky_Forecast(key="")
 DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
@@ -140,7 +145,7 @@ def update_data():
     object_data = object_file_reader(ROBOCLIP_FILE)
 
     df_combined = merge_roboclip_stored_metadata(
-        df_stored_data, object_data.df_objects, config
+        df_stored_data, object_data.df_objects, EQUIPMENT
     )
 
     df_target_status = load_target_status_from_file()
@@ -151,6 +156,30 @@ def update_data():
 
 
 update_data()
+
+
+def load_custom_horizon_function(
+    horizon_file, sep=" ", header=3,
+):
+    if not horizon_file:
+        flat_horizon_alt = CONFIG.get("flat_horizon_alt", 0)
+        flat_horizon = interp1d([0, 360], [flat_horizon_alt, flat_horizon_alt])
+        return flat_horizon
+    df_horizon = pd.read_csv(horizon_file, sep=sep, header=header)
+    df_horizon.columns = ["az", "alt"]
+    df_horizon = df_horizon.append(
+        pd.Series(dict(az=360, alt=df_horizon.iloc[-1]["alt"])), ignore_index=True
+    )
+    df_horizon = df_horizon.append(
+        pd.Series(dict(az=0, alt=df_horizon.iloc[0]["alt"])), ignore_index=True
+    )
+    df_horizon = df_horizon.drop_duplicates(["az"])
+    df_horizon = df_horizon.sort_values(by="az")
+    f_horizon = interp1d(df_horizon["az"], df_horizon["alt"])
+    return f_horizon
+
+
+f_horizon = load_custom_horizon_function(horizon_file=CONFIG.get("horizon_file", ""))
 
 
 def make_options(elements):
@@ -176,7 +205,7 @@ def get_data(
     k_ext=0.2,
     filter_targets=True,
 ):
-    log.info("Starting get_data")
+    log.debug("Starting get_data")
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
@@ -271,17 +300,34 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             notes_text = df_combined.loc[target_name, "NOTE"]
-            data.append(
-                dict(
-                    x=df.index,
-                    y=df[value],
-                    mode="lines",
-                    line=dict(color=color, width=3),
-                    name=target_name,
-                    text="Notes: {notes_text}".format(notes_text=notes_text),
-                    opacity=1,
+
+            for horizon_status in ["above", "below"]:
+                df0 = df.copy()
+                above_horizon = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
+                in_legend = True
+                opacity = 1
+                width = 3
+                if horizon_status == "below":
+                    above_horizon = df["alt"] > -90
+                    in_legend = False
+                    opacity = 0.15
+                    width = 1
+
+                df0.loc[~above_horizon, value] = np.nan
+                data.append(
+                    dict(
+                        x=df0.index,
+                        y=df0[value],
+                        mode="lines",
+                        line=dict(color=color, width=width),
+                        showlegend=in_legend,
+                        name=target_name,
+                        connectgaps=False,
+                        legend_group=target_name,
+                        text="Notes: {notes_text}".format(notes_text=notes_text),
+                        opacity=opacity,
+                    )
                 )
-            )
 
     return data
 
@@ -358,13 +404,13 @@ def update_site(site_data):
     lat = site_data.get("lat", DEFAULT_LAT)
     lon = site_data.get("lon", DEFAULT_LON)
     utc_offset = site_data.get("utc_offset", DEFAULT_UTC_OFFSET)
-    log.info("Updating Site Data")
+    log.debug("Updating Site Data")
     site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
     return site
 
 
 def update_weather(site):
-    log.info("Trying NWS")
+    log.debug("Trying NWS")
     nws_forecast = NWS_Forecast(site.lat, site.lon)
     df_weather = nws_forecast.parse_data()
 
@@ -403,49 +449,28 @@ def update_weather(site):
         )
     ]
 
-    navbar_children = [
-        dbc.NavItem(
-            dbc.NavLink(
-                "Clear Outside Report",
-                id="clear-outside",
-                href=f"http://clearoutside.com/forecast/{site.lat}/{site.lon}?view=current",
-                target="_blank",
-            )
-        ),
-        dbc.NavItem(
-            dbc.NavLink(
-                "Weather",
-                id="nws-weather",
-                href=f"http://forecast.weather.gov/MapClick.php?lon={site.lon}&lat={site.lat}#.U1xl5F7N7wI",
-                target="_blank",
-            )
-        ),
-        dbc.NavItem(
-            dbc.NavLink(
-                "Satellite",
-                href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
-                target="_blank",
-            )
-        ),
-        dbc.NavItem(
-            dbc.NavLink(
-                "Smoke Forecast",
-                href="https://rapidrefresh.noaa.gov/hrrr/HRRRsmoke/",
-                target="_blank",
-            )
-        ),
-    ]
-    return graph_data, navbar_children
+    clear_outside_link = (
+        f"http://clearoutside.com/forecast/{site.lat}/{site.lon}?view=current",
+    )
+    nws_link = (
+        f"http://forecast.weather.gov/MapClick.php?lon={site.lon}&lat={site.lat}#.U1xl5F7N7wI",
+    )
+
+    return graph_data, clear_outside_link[0], nws_link[0]
 
 
 @app.callback(
-    [Output("weather-graph", "children"), Output("navbar", "children")],
+    [
+        Output("weather-graph", "children"),
+        Output("clear-outside", "href"),
+        Output("nws-weather", "href"),
+    ],
     [Input("store-site-data", "data")],
 )
 def update_weather_data_callback(site_data):
     site = update_site((site_data))
-    weather_graph, navbar = update_weather(site)
-    return weather_graph, navbar
+    weather_graph, clear_outside_link, nws_link = update_weather(site)
+    return weather_graph, clear_outside_link, nws_link
 
 
 @app.callback(
@@ -501,10 +526,10 @@ def update_radio_status_for_targets_callback(targets, target_status_store, profi
         status_values = [status.loc[target].loc[profile]["status"]]
         status_set = status_set.union(set(status_values))
     if len(status_set) == 1:
-        log.info(f"Fetching targets: {targets} with status of {status_set}")
+        log.debug(f"Fetching targets: {targets} with status of {status_set}")
         return list(status_set)[0]
     else:
-        log.info(f"Conflict fetching targets: {targets} with status of {status_set}")
+        log.debug(f"Conflict fetching targets: {targets} with status of {status_set}")
         return ""
 
 
@@ -607,7 +632,7 @@ def store_data(
     profile,
 ):
     global df_combined, object_data
-    log.info(f"Calling store_data")
+    log.debug(f"Calling store_data")
     targets = list(object_data.target_list[profile].values())
     site = update_site((site_data))
 
@@ -659,7 +684,7 @@ def store_data(
 def update_target_graph(
     target_data, progress_data, target_goals, metadata, profile, status_list, date
 ):
-    log.info(f"Calling update_target_graph")
+    log.debug(f"Calling update_target_graph")
     if not metadata:
         metadata = {}
     try:
@@ -704,8 +729,14 @@ def update_target_graph(
     df_target_status = load_target_status_from_file()
     df_combined_group = set_target_status(df_combined_group, df_target_status)
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
+    progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
+
     progress_graph, df_summary = get_progress_graph(
-        df_stored_data, date_string=date_string, days_ago=0, targets=targets
+        df_stored_data,
+        date_string=date_string,
+        profile=profile,
+        days_ago=progress_days_ago,
+        targets=targets,
     )
 
     df_combined_group = df_combined_group.reset_index()
@@ -754,7 +785,7 @@ def update_target_graph(
     return target_graph, progress_graph, table
 
 
-def get_progress_graph(df, date_string, days_ago=90, targets=[]):
+def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
 
     selection = df["date"] < "1970-01-01"
     if days_ago > 0:
@@ -808,7 +839,9 @@ def get_progress_graph(df, date_string, days_ago=90, targets=[]):
             )
         )
     p.update_layout(
-        barmode="group", yaxis_title="Total Exposure (hr)", title="Acquired Data"
+        barmode=CONFIG.get("progress_mode", "group"),
+        yaxis_title="Total Exposure (hr)",
+        title="Acquired Data",
     )
     return dcc.Graph(figure=p), df_summary
 

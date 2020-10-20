@@ -2,18 +2,25 @@ import os
 import logging
 import datetime
 import glob
+import yaml
 
 from astropy.io import fits
 from functools import lru_cache
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from tqdm import tqdm
 
-from astro_planner.profile import cleanup_name
+from .logger import log
+
+from .profile import cleanup_name
 
 DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
 
 FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
+
+with open("./conf/config.yml", "r") as f:
+    CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
 
 
 def parse_filename(file_name):
@@ -71,7 +78,9 @@ def _parse_file(file_name, root_key):
 
 def parse_filelist(file_list, root_key="data/", verbose=False):
     d_list = []
-    d_list = [_parse_file(file_name, root_key) for file_name in file_list]
+    log.info("Reading stored fits files")
+    for file_name in tqdm(file_list[:100]):
+        d_list.append(_parse_file(file_name, root_key))
     d_list = [d for d in d_list if d]
     logging.info("Read {} files".format(len(d_list)))
 
@@ -79,11 +88,11 @@ def parse_filelist(file_list, root_key="data/", verbose=False):
 
 
 def get_file_list(data_dir=DATA_DIR):
+    file_list = []
+    if "fits_file_patterns" in CONFIG:
+        for file_pattern in CONFIG["fits_file_patterns"]:
+            file_list += list(glob.iglob(f"{data_dir}{file_pattern}"))
 
-    file_list = list(glob.iglob(f"{data_dir}/*/*/*.[fF][iI][tT]"))
-    file_list += list(glob.iglob(f"{data_dir}/*/*/*.[fF][iI][tT]s"))
-    file_list += list(glob.iglob(f"{data_dir}/*/*/Lights/*.[fF][iI][tT]"))
-    file_list += list(glob.iglob(f"{data_dir}/*/*/Lights/*.[fF][iI][tT][s]"))
     return tuple(file_list)
 
 
@@ -96,10 +105,12 @@ def _get_data_info(file_list):
 
 def get_data_info(data_dir=DATA_DIR):
     file_list = get_file_list(data_dir)
-    df_files = _get_data_info(file_list)
-    df_files = clean_file_list(df_files)
-    df_files = format_dates(df_files)
-    return df_files
+    if file_list:
+        df_files = _get_data_info(file_list)
+        df_files = clean_file_list(df_files)
+        df_files = format_dates(df_files)
+        return df_files
+    return pd.DataFrame()
 
 
 def format_dates(df):

@@ -17,7 +17,7 @@ import pandas_access as mdb
 
 import json
 import ntpath
-from astro_planner.logger import log
+from .logger import log
 
 
 RA_KEY = "RA"

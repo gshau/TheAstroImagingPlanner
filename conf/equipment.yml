@@ -1,0 +1,79 @@
+equipment:
+  sensors:
+    qhy16200:
+      type: 'mono'
+      pixel_size: 6
+      n_x: 4500
+      n_y: 3600
+      filters:
+        - 'L'
+        - 'R'
+        - 'G'
+        - 'B'
+        - 'Ha'
+        - 'OIII'
+        - 'SII'
+    qsi690:
+      type: 'mono'
+      pixel_size: 3.69
+      n_x: 3388
+      n_y: 2712
+      filters:
+        - 'L'
+        - 'R'
+        - 'G'
+        - 'B'
+        - 'Ha'
+        - 'OIII'
+        - 'SII'
+    asi071:
+      type: 'osc'
+      pixel_size: 4.78
+      n_x: 4944
+      n_y: 3284
+    asi6200mm:
+      type: 'mono'
+      pixel_size: 3.76
+      n_x: 9576
+      n_y: 6388
+      filters:
+        - 'L'
+        - 'R'
+        - 'G'
+        - 'B'
+        - 'Ha'
+        - 'OIII'
+        - 'SII'
+    asi2600mc:
+      type: 'osc'
+      pixel_size: 3.76
+      n_x: 6248
+      n_y: 4176
+  optics:
+    ap92:
+      aperture: 92
+      focal_length: 489
+    tmb130ss:
+      aperture: 130
+      focal_length: 650
+    tmb130ss_f5.6:
+      aperture: 130
+      focal_length: 728
+    ontc1010:
+      aperture: 254
+      focal_length: 1150
+    redcat51:
+      aperture: 51
+      focal_length: 250
+    borg55fl:
+      aperture: 55
+      focal_length: 200
+    rasa8:
+      aperture: 200
+      focal_length: 400
+    ap130:
+      aperture: 130
+      focal_length: 585
+    rokinon135:
+      aperture: 62.5
+      focal_length: 135

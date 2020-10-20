@@ -32,6 +32,15 @@ def serve_layout():
         children=[
             dbc.NavItem(
                 dbc.NavLink(
+                    "Project Repository",
+                    id="github-link",
+                    href="https://github.com/gshau/AstroPlanner/",
+                    className="fa-github",
+                    target="_blank",
+                )
+            ),
+            dbc.NavItem(
+                dbc.NavLink(
                     "Clear Outside Report",
                     id="clear-outside",
                     href=f"http://clearoutside.com/forecast/{DEFAULT_LAT}/{DEFAULT_LON}?view=current",
@@ -49,13 +58,14 @@ def serve_layout():
             dbc.NavItem(
                 dbc.NavLink(
                     "Satellite",
+                    id="goes-satellite",
                     href="https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=12",
                     target="_blank",
                 )
             ),
         ],
         brand="The AstroImaging Planner",
-        brand_href="#",
+        brand_href="https://github.com/gshau/AstroPlanner/",
         color="primary",
         dark=True,
     )
@@ -192,7 +202,7 @@ def serve_layout():
                             {"label": "Acquired", "value": "acquired"},
                             {"label": "Closed", "value": "closed"},
                         ],
-                        value=["pending", "active", "acquired"],
+                        value=["pending", "active"],
                         multi=True,
                     ),
                 ],

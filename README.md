@@ -29,11 +29,11 @@ I’ve added an option of tracking the target’s status as well. Currently, the
 These status fields can be filtered as well for the two charts on the right.
 
 ### Weather
-There’s also various weather tools like the local forecast using clearoutside, NWS, and GOES satellite links and more relevant lately - a smoke forecast.
+There’s also various weather tools like the local forecast using clearoutside, NWS, and GOES satellite links and more relevant lately - an HRRR smoke forecast.
 
 
 ### Stored Data View
-I also have another tab which shows the targets with gear I want to use to capture it, the target status (pending/active/acquired/closed), and the exposure summaries. Here’s a view of that:
+There is currently a second tab which shows the targets with gear I'd want to use to capture it, the target status (pending/active/acquired/closed), and the exposure summaries. Here’s a view of that:
 ![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_stored_data_view.png)
 
 

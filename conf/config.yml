@@ -5,6 +5,13 @@ fits_file_patterns:
   - "/*/*/Lights/*.[fF][iI][tT]"
   - "/*/*/Lights/*.[fF][iI][tT][s]"
 
+# Default target status when initially parsing data
+default_target_status: 'active'
+
+# Inactive profiles to hide from the UI
+inactive_profiles:
+  - ap130 asi6200mm
+
 # target progress display mode - stack or group
 progress_mode: 'group'
 

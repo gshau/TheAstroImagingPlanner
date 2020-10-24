@@ -23,3 +23,7 @@ horizon_data:
   horizon_file: "data/custom_horizon.txt"
   alt_az_seperator: " "
   header_length: 3
+
+# Webserver settings
+localhost_only: "False"
+debug: "True"

@@ -1,6 +1,7 @@
 import base64
 import io
 import os
+import distutils
 
 import dash
 import dash_core_components as dcc
@@ -327,17 +328,17 @@ def get_data(
 
             for horizon_status in ["above", "below"]:
                 df0 = df.copy()
-                above_horizon = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
+                show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
                 in_legend = True
                 opacity = 1
                 width = 3
                 if horizon_status == "below":
-                    above_horizon = df["alt"] > -90
+                    show_trace = df["alt"] > -90
                     in_legend = False
                     opacity = 0.15
                     width = 1
 
-                df0.loc[~above_horizon, value] = np.nan
+                df0.loc[~show_trace, value] = np.nan
                 data.append(
                     dict(
                         x=df0.index,
@@ -886,4 +887,9 @@ def update_target_graph(
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True, host="0.0.0.0")
+    localhost_only = distutils.util.strtobool(CONFIG.get("localhost_only", "True"))
+    debug = distutils.util.strtobool(CONFIG.get("debug", "False"))
+    host = "0.0.0.0"
+    if localhost_only:
+        host = "localhost"
+    app.run_server(debug=debug, host=host)

@@ -29,10 +29,6 @@ ap92 asi6200mm:
   vdb_152: closed
   vdb_16: pending
   veil_nebula: closed
-ap92 qhy16200:
-  ic_1805: closed
-  ngc_2264: closed
-  sh2-157: active
 borg55fl asi2600mc:
   heart_soul_wide: closed
   ic_1396: closed
@@ -97,7 +93,7 @@ ontc1010 qsi690:
   pn_g149.4_09.2: pending
   pn_g_076.3+14.1: pending
   sh2-106: pending
-  sh2-112: acquired
+  sh2-112: closed
   sh2-155: acquired
   sh2-174: pending
   sh2-188: active
@@ -114,19 +110,4 @@ ontc1010 qsi690:
 rasa8 asi2600mc:
   ldn_1247: active
 tmb130ss qhy16200:
-  dwb111: closed
-  ic_1318: closed
-  lbn_442: closed
-  ldn_673: closed
-  m39: closed
-  m_13: closed
   sh2-132: closed
-  wr_134: closed
-tmb130ss qsi690:
-  ic_1848: closed
-  ic_417: closed
-  ic_63: closed
-  m33: closed
-tmb130ss_f5.6 qhy16200:
-  m_3: closed
-  m_65: closed

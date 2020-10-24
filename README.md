@@ -147,7 +147,7 @@ There's an option to allow for a custom horizon, where if the target falls below
   - [x] Alpha reduced on inaccessible targets
 - [x] Target status to filter acquired data chart
 - [x] Internal: Unified dataframe for all targets
-- [ ] Add dark sky duration
+- [x] Add dark sky duration
 - [ ] Automatic grading of images
 - [ ] Revised contrast calculations for narrowband/broadband filters
 - [ ] mpsas level at current location for contrast

@@ -145,12 +145,13 @@ There's an option to allow for a custom horizon, where if the target falls below
 # Wishlist:
 - [x] Custom horizon
   - [x] Alpha reduced on inaccessible targets
-- [x] Seasonal targets to filter acquired data chart
+- [x] Target status to filter acquired data chart
 - [x] Internal: Unified dataframe for all targets
+- [ ] Add dark sky duration
+- [ ] Automatic grading of images
 - [ ] Revised contrast calculations for narrowband/broadband filters
 - [ ] mpsas level at current location for contrast
-- [ ] Automatic grading of images
-- [ ] User-controlled
+- [ ] Target selection via user-controlled:
   - [ ] priority
   - [ ] filter goals
   - [ ] exposure totals and progress

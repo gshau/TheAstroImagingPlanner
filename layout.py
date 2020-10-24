@@ -108,6 +108,7 @@ def serve_layout():
                 html.Div(
                     [
                         html.Label("DATE:   "),
+                        html.Br(),
                         dcc.DatePickerSingle(id="date-picker", date=dt.now()),
                     ],
                     style={"textAlign": "center"},
@@ -491,6 +492,7 @@ def serve_layout():
             dcc.Store(id="store-target-metadata"),
             dcc.Store(id="store-target-status"),
             dcc.Store(id="store-placeholder"),
+            dcc.Store(id="dark-sky-duration"),
         ]
     )
     return layout

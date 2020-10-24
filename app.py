@@ -139,17 +139,25 @@ def update_data():
     global df_combined
     global df_target_status
     global df_stored_data
+
+    log.info("Updating Data")
+
     df_stored_data = get_data_info(data_dir=DATA_DIR)
     object_data = object_file_reader(ROBOCLIP_FILE)
 
+    default_status = CONFIG.get("default_target_status", "")
+
     df_combined = merge_roboclip_stored_metadata(
-        df_stored_data, object_data.df_objects, EQUIPMENT
+        df_stored_data,
+        object_data.df_objects,
+        EQUIPMENT,
+        default_status=default_status,
     )
 
     df_target_status = load_target_status_from_file()
     df_combined = set_target_status(df_combined, df_target_status)
     if df_combined["status"].isnull().sum() > 0:
-        df_combined["status"] = df_combined["status"].fillna("pending")
+        df_combined["status"] = df_combined["status"].fillna(default_status)
         dump_target_status_to_file(df_combined)
 
 
@@ -260,6 +268,14 @@ def get_data(
         0
     ]
 
+    log.info(f"Sun down: {sun.index[sun_dn]}")
+    log.info(f"Sun up: {sun.index[sun_up]}")
+
+    duraion_sun_down = sun.index[sun_up] - sun.index[sun_dn]
+    duraion_sun_down_hrs = duraion_sun_down.total_seconds() / 3600.0
+
+    log.info(f"Sun down duration: {duraion_sun_down_hrs:.2f} hours")
+
     sun_up_data = dict(
         x=[sun.index[sun_up], sun.index[sun_up], sun.index[-1], sun.index[-1]],
         y=[0, 90, 90, 0],
@@ -337,7 +353,7 @@ def get_data(
                     )
                 )
 
-    return data
+    return data, duraion_sun_down_hrs
 
 
 def parse_loaded_contents(contents, filename, date):
@@ -522,7 +538,14 @@ def toggle_modal_callback(n1, n2, is_open):
 def update_output_callback(list_of_contents, list_of_names, list_of_dates):
     global object_data
     profile = object_data.profiles[0]
-    options = [{"label": profile, "value": profile} for profile in object_data.profiles]
+
+    inactive_profiles = CONFIG.get("inactive_profiles", [])
+
+    options = [
+        {"label": profile, "value": profile}
+        for profile in object_data.profiles
+        if profile not in inactive_profiles
+    ]
     default_option = options[0]["value"]
 
     if list_of_contents is not None:
@@ -530,7 +553,8 @@ def update_output_callback(list_of_contents, list_of_names, list_of_dates):
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
             object_data = parse_loaded_contents(c, n, d)
             for profile in object_data.profiles:
-                options.append({"label": profile, "value": profile})
+                if profile in inactive_profiles:
+                    options.append({"label": profile, "value": profile})
         default_option = options[0]["value"]
         return options, default_option
     return options, default_option
@@ -579,6 +603,7 @@ def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
     Output("store-placeholder", "data"), [Input("update-data", "n_clicks")],
 )
 def update_data_callback(n_click):
+    log.info(n_click)
     if n_click != 0:
         update_data()
     return ""
@@ -626,10 +651,11 @@ def update_radio_status_for_targets_callback(targets, target_status_store, profi
 )
 def update_target_with_status_callback(status, targets, target_status_store, profile):
     global df_combined
+    global df_target_status
     df_combined, df_target_status = update_targets_with_status(
         targets, status, df_combined, profile
     )
-    return ""  # df_target_status  # .to_dict()
+    return ""
 
 
 @app.callback(
@@ -656,6 +682,7 @@ def render_content(tab):
         Output("store-target-data", "data"),
         Output("store-target-list", "data"),
         Output("store-target-metadata", "data"),
+        Output("dark-sky-duration", "data"),
     ],
     [
         Input("date-picker", "date"),
@@ -702,9 +729,9 @@ def store_data(
     coords = get_coordinates(
         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
     )
-    date_range = get_time_limits(coords)
+    sun_down_range = get_time_limits(coords)
 
-    data = get_data(
+    data, duration_sun_down_hrs = get_data(
         coords,
         targets,
         df_combined,
@@ -714,9 +741,14 @@ def store_data(
         filter_targets=filter_targets,
     )
 
-    metadata = dict(date_range=date_range, value=value)
+    dark_sky_duration_text = (
+        f"Length of sky darkness: {duration_sun_down_hrs:.1f} hours"
+    )
+
+    metadata = dict(date_range=sun_down_range, value=value)
     filtered_targets = [d["name"] for d in data if d["name"]]
-    return data, filtered_targets, metadata
+
+    return data, filtered_targets, metadata, dark_sky_duration_text
 
 
 @app.callback(
@@ -732,14 +764,27 @@ def store_data(
     ],
     [
         State("store-target-metadata", "data"),
+        State("dark-sky-duration", "data"),
         State("profile-selection", "value"),
         State("status-match", "value"),
         State("date-picker", "date"),
     ],
 )
 def update_target_graph(
-    target_data, progress_data, target_goals, metadata, profile, status_list, date
+    target_data,
+    progress_data,
+    target_goals,
+    metadata,
+    dark_sky_duration,
+    profile,
+    status_list,
+    date,
 ):
+    global df_target_status
+    global df_combined
+
+    update_data()
+
     log.debug(f"Calling update_target_graph")
     if not metadata:
         metadata = {}
@@ -750,8 +795,8 @@ def update_target_graph(
         return None, None, None
 
     date_string = str(date.split("T")[0])
-    title = "Imaging Targets <br> For Night of {date_string}".format(
-        date_string=date_string
+    title = "Imaging Targets For Night of {date_string} <br> {dark_sky_duration}".format(
+        date_string=date_string, dark_sky_duration=dark_sky_duration
     )
 
     if value == "alt":
@@ -782,7 +827,6 @@ def update_target_graph(
 
     df_combined_group = df_combined[df_combined["GROUP"] == profile]
 
-    df_target_status = load_target_status_from_file()
     df_combined_group = set_target_status(df_combined_group, df_target_status)
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))

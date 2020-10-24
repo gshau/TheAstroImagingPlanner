@@ -148,13 +148,17 @@ def target_status_to_df(target_status):
 def load_target_status_from_file(filename="./conf/target_status.yml"):
     with open(filename, "r") as f:
         target_status = yaml.load(f, Loader=yaml.BaseLoader)
-    df_target_status = target_status_to_df(target_status)
+    df_target_status = pd.DataFrame()
+    if target_status:
+        df_target_status = target_status_to_df(target_status)
     return df_target_status
 
 
 def set_target_status(df_combined, df_target_status):
 
-    status_map = df_target_status.set_index(["OBJECT", "GROUP"]).to_dict()["status"]
+    status_map = {}
+    if df_target_status.shape[0] > 0:
+        status_map = df_target_status.set_index(["OBJECT", "GROUP"]).to_dict()["status"]
     dfc = df_combined.reset_index()
     dfc.loc[:, "status"] = dfc.set_index(["OBJECT", "GROUP"]).index.map(status_map)
     return dfc.set_index("OBJECT")

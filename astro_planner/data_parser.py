@@ -1,5 +1,4 @@
 import os
-import logging
 import datetime
 import glob
 import yaml
@@ -73,7 +72,7 @@ def _parse_file(file_name, root_key):
         d_info["filename"] = file_name
         return d_info
     except Exception:
-        logging.info("Skipping {}".format(file_name), exc_info=True)
+        log.info("Skipping {}".format(file_name), exc_info=True)
 
 
 def parse_filelist(file_list, root_key="data/", verbose=False):
@@ -82,7 +81,7 @@ def parse_filelist(file_list, root_key="data/", verbose=False):
     for file_name in tqdm(file_list):
         d_list.append(_parse_file(file_name, root_key))
     d_list = [d for d in d_list if d]
-    logging.info("Read {} files".format(len(d_list)))
+    log.info("Read {} files".format(len(d_list)))
 
     return d_list
 
@@ -187,7 +186,7 @@ def equinox_ccdfname_parser(string):
         )
         r.update({"FILTER": filter_map(filter)})
     except:
-        logging.warning(f"Error with {string}", exc_info=True)
+        log.warning(f"Error with {string}", exc_info=True)
         pass
     return r
 

@@ -1,7 +1,7 @@
 import base64
 import io
 import os
-import distutils
+from distutils.util import strtobool
 
 import dash
 import dash_core_components as dcc
@@ -21,7 +21,7 @@ import yaml
 from dash.dependencies import Input, Output, State
 
 from scipy.interpolate import interp1d
-from astro_planner.weather import DarkSky_Forecast, NWS_Forecast
+from astro_planner.weather import NWS_Forecast
 from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site
@@ -58,25 +58,27 @@ app.title = "The AstroImaging Planner"
 
 
 with open("./conf/config.yml", "r") as f:
-    CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
+    CONFIG = yaml.safe_load(f)
 HORIZON_DATA = CONFIG.get("horizon_data", {})
 
 with open("./conf/equipment.yml", "r") as f:
-    EQUIPMENT = yaml.load(f, Loader=yaml.BaseLoader)
+    EQUIPMENT = yaml.safe_load(f)
 
 
-DSF_FORECAST = DarkSky_Forecast(key="")
 DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
 ROBOCLIP_FILE = os.getenv(
     "ROBOCLIP_FILE", "/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb"
 )
-DEFAULT_LAT = os.getenv("DEFAULT_LAT", 43.37)
-DEFAULT_LON = os.getenv("DEFAULT_LON", -88.37)
-DEFAULT_UTC_OFFSET = os.getenv("DEFAULT_UTC_OFFSET", -5)
-DEFAULT_MPSAS = os.getenv("DEFAULT_MPSAS", 19.5)
-DEFAULT_BANDWIDTH = os.getenv("DEFAULT_BANDWIDTH", 120)
-DEFAULT_K_EXTINCTION = os.getenv("DEFAULT_K_EXTINCTION", 0.2)
-DEFAULT_TIME_RESOLUTION = os.getenv("DEFAULT_TIME_RESOLUTION", 300)
+
+DEFAULT_LAT = CONFIG.get("lat", 43.37)
+DEFAULT_LON = CONFIG.get("lon", -88.37)
+DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", -5)
+DEFAULT_MPSAS = CONFIG.get("mpsas", 20.1)
+DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
+DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
+DEFAULT_TIME_RESOLUTION = CONFIG.get("time_resolution", 300)
+
+
 USE_CONTRAST = os.getenv("USE_CONTRAST", False)
 styles = {}
 if not USE_CONTRAST:
@@ -887,8 +889,8 @@ def update_target_graph(
 
 
 if __name__ == "__main__":
-    localhost_only = distutils.util.strtobool(CONFIG.get("localhost_only", "True"))
-    debug = distutils.util.strtobool(CONFIG.get("debug", "False"))
+    localhost_only = strtobool(CONFIG.get("localhost_only", "True"))
+    debug = strtobool(CONFIG.get("debug", "False"))
     host = "0.0.0.0"
     if localhost_only:
         host = "localhost"

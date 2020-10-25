@@ -63,6 +63,14 @@ def serve_layout():
                     target="_blank",
                 )
             ),
+            dbc.NavItem(
+                dbc.NavLink(
+                    "Smoke Forecast",
+                    id="smoke-forecast",
+                    href="https://rapidrefresh.noaa.gov/hrrr/HRRRsmoke/",
+                    target="_blank",
+                )
+            ),
         ],
         brand="The AstroImaging Planner",
         brand_href="https://github.com/gshau/AstroPlanner/",

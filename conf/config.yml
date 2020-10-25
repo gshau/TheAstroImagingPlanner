@@ -27,3 +27,12 @@ horizon_data:
 # Webserver settings
 localhost_only: "False"
 debug: "True"
+
+# Default location settings
+lat: 43.37
+lon: -88.37
+utc_offset: -5
+mpsas: 20.1
+bandwidth: 120
+k_extinction: 0.2
+time_resolution: 300

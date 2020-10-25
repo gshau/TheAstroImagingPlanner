@@ -91,4 +91,3 @@ class DarkSky_Forecast:
                 df.index.name = f"DarkSky forecast for {self.lat} {self.lon}"
                 df_forecast_data[timeframe] = df
         return df_forecast_data
-

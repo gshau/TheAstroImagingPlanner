@@ -1,7 +1,5 @@
 import numpy as np
 from .ephemeris import get_sun, get_moon
-from astropy.time import Time
-
 
 RADIANS_PER_DEGREE = np.pi / 180.0
 

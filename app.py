@@ -64,11 +64,8 @@ HORIZON_DATA = CONFIG.get("horizon_data", {})
 with open("./conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
 
-
-DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
-ROBOCLIP_FILE = os.getenv(
-    "ROBOCLIP_FILE", "/Volumes/Users/gshau/Dropbox/AstroBox/roboclip/VoyRC.mdb"
-)
+DATA_DIR = os.getenv("DATA_DIR", "/data")
+ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
 DEFAULT_LON = CONFIG.get("lon", -88.37)

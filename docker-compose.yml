@@ -1,9 +1,11 @@
 version: '3'
 services:
     app:
-        build: .
+        # build: .  
+        image: gshau/astroimaging-planner:latest
         ports:
             - 8050:8050
         volumes:
+            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
             - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
             - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro

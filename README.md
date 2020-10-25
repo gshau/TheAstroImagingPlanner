@@ -49,23 +49,21 @@ This dashboard is built using `python` and `dash`, among other libraries.  To si
 version: '3'
 services:
     app:
-        build: .
+        # build: . 
+        image: gshau/astroimaging-planner:latest
         ports:
-            - 8050:8050   # port where this webserver will run
-        environment:  # changes here not likely needed
-            - DATA_DIR=/data
-            - ROBOCLIP_FILE=/roboclip/VoyRC.mdb
-        volumes:  
-            # no change needed:
-            - /Volumes/Users/gshau/Dropbox/AstroBox/config:/app/config  
+            - 8050:8050
+        volumes:
+            # path to the config files - tailor this path to your circumstances
+            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
             # your data path - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data  
+            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
             # your roboclip path - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip 
+            - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro
 ```
 The directory structure after the defined data path is assumed to be of the form provided by Voyager if the date is specified as a subdirectory for each target, more explicitly, it is of the form: `{target_name}/{date}/{fits_files}`.  This default can be altered to accommodate other scenarios by editing the `fits_file_patterns` entry in `config.yml`
 
-To start the app, run:
+To start the app, run the following, it will download the docker image, `gshau/astroimaging-planner`, from the docker repository.  It's about 1GB in size.
 ```
 docker-compose up
 ```

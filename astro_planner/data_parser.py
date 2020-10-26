@@ -10,6 +10,9 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
+from multiprocessing import Pool
+from functools import partial
+
 from .logger import log
 
 from .profile import cleanup_name
@@ -75,11 +78,24 @@ def _parse_file(file_name, root_key):
         log.info("Skipping {}".format(file_name), exc_info=True)
 
 
-def parse_filelist(file_list, root_key="data/", verbose=False):
+def parse_filelist(file_list, root_key="data/", n_threads=4):
     d_list = []
     log.info("Reading stored fits files")
-    for file_name in tqdm(file_list):
-        d_list.append(_parse_file(file_name, root_key))
+    n_files = len(file_list)
+    multithread_fits_read = False
+    if n_threads > 1:
+        multithread_fits_read = True
+    if multithread_fits_read:
+        with Pool(n_threads) as p:
+            d_list = list(
+                tqdm(
+                    p.imap(partial(_parse_file, root_key=root_key), file_list),
+                    total=n_files,
+                )
+            )
+    else:
+        for file_name in tqdm(file_list):
+            d_list.append(_parse_file(file_name, root_key))
     d_list = [d for d in d_list if d]
     log.info("Read {} files".format(len(d_list)))
 

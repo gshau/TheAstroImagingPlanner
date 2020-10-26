@@ -39,9 +39,6 @@ class SkyBackgroundModel:
         moon = get_moon(time)
         return sun.separation(moon).degree
 
-    #     def sky_brightness(self, target, ):
-    #         return -2.5 * np.log10((self._bmoon(x, 30, 60, 40) + self._mpsas_to_b(self.mpsas)) / self._mpsas_to_b(self.mpsas)) + self.mpsas
-
     def _b_to_mpsas(self, b):
         return (20.7233 - np.log(b / 34.08)) / 0.92104
 

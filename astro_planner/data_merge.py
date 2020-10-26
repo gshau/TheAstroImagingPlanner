@@ -10,16 +10,14 @@ from astro_planner.target import normalize_target_name
 
 VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
-# import
-
 
 def get_filename_root(filename):
     filename_root = os.path.splitext(ntpath.basename(filename))[0]
     return filename_root
 
 
-def approx_ra_hr_noon(date="2020-03-21"):
-    d1 = datetime.datetime.strptime("2020-03-21", "%Y-%m-%d")
+def approx_ra_hr_noon(date):
+    d1 = datetime.datetime.strptime("2021-03-21", "%Y-%m-%d")
     d2 = datetime.datetime.strptime(date, "%Y-%m-%d")
     days_diff = (d2 - d1).total_seconds() / (3600 * 24)
     hour_diff = np.round(days_diff / 365.25 * 24) % 24

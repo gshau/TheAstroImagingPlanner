@@ -33,8 +33,6 @@ def parse_latlon_string(string, with_hour=False):
 class ObservingSite:
     def __init__(self, latitude, longitude, altitude, utc_offset=-6):
 
-        # if type(latitude) != str or type(latitude) != str:
-        #     raise Exception('Lat/Lon not string!')
         self.lat = latitude
         self.lon = longitude
         if type(latitude) == str:

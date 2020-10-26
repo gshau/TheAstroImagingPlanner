@@ -5,12 +5,7 @@ import pandas as pd
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 
-# from astroplan import FixedTarget
 from astropy.coordinates import Angle
-
-# from .stf import auto_stf
-# from .profile import cleanup_name
-# from .data_parser import get_data_info
 
 from collections import defaultdict
 import pandas_access as mdb
@@ -172,7 +167,5 @@ class SGPSequenceObjects(Objects):
 def object_file_reader(filename):
     if ".mdb" in filename:
         return RoboClipObjects(filename)
-    # if isinstance(filename, list):
-    #     for file in
     elif ".sgf" in filename:
         return SGPSequenceObjects(filename)

@@ -10,7 +10,7 @@ class SkyBackgroundModel:
         self.k = k
 
     def _bmoon(self, phase, separation, moon_alt, sky_alt, aod=0):
-        #     http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
+        # From http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
         alpha = phase
         rho = separation * RADIANS_PER_DEGREE
         Z = (90 - sky_alt) * RADIANS_PER_DEGREE
@@ -73,8 +73,6 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     df_moon = df_locs["moon"]
     df_sun = df_locs["sun"]
-    # date = df_sun.index
-    # moon = get_moon(Time(date))
     phase = (distance(df_moon, df_sun, lat_key="dec", long_key="ra") + 360) % 360 - 180
     separation = distance(df_moon, df_target)
 

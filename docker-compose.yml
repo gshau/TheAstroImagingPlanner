@@ -1,11 +1,14 @@
 version: '3'
 services:
     app:
-        # build: .  
-        image: gshau/astroimaging-planner:latest
+        # build: .  # uncomment this line to build locally from source
+        image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
         ports:
             - 8050:8050
         volumes:
+            # path to the config files - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
+            # your DATA_DIR, everything after this path is of the format {target_name}/*/{fits_file} - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
+            # your roboclip path - tailor this path to your circumstances, typically set as `C:\Users\UserName\Documents\Voyager\Data` in Windows
             - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro

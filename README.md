@@ -44,6 +44,20 @@ See below for the wishlist of things I'd like to implement for the future.
 
 
 # Getting up and running
+
+## Prerequisites:
+You can build your own docker image from these files by using `docker-compose up`, which may take some time.  This can be done by editing the `docker-compose.yml` file as noted in the file.  Alternatively, by default, you can pull down the latest image from docker hub with:
+```
+docker pull gshau/astroimaging-planner:latest
+```
+
+### Necessary components:
+- Voyager Roboclip database file
+- Config files from the `conf` directory
+- Data files of the format `{data_dir}/{target_name}/*/{fits_files}`, where `data_dir` is specified in the volume mappings
+
+## Additional info
+
 This dashboard is built using `python` and `dash`, among other libraries.  To simplify starting it up, `docker` is utilized.  To get up and running, `docker` must be installed on your system.  Configure the `docker-compose.yml` file
 ```
 version: '3'
@@ -56,12 +70,12 @@ services:
         volumes:
             # path to the config files - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
-            # your data path - tailor this path to your circumstances
+            # your DATA_DIR - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
             # your roboclip path - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro
 ```
-The directory structure after the defined data path is assumed to be of the form provided by Voyager if the date is specified as a subdirectory for each target, more explicitly, it is of the form: `{target_name}/{date}/{fits_files}`.  This default can be altered to accommodate other scenarios by editing the `fits_file_patterns` entry in `config.yml`
+The directory structure after the defined data path is assumed to be of the form provided by Voyager if the date is specified as a subdirectory for each target, more explicitly, it is of the form: `{target_name}/*/{fits_files}`.  This default can be altered to accommodate other scenarios by editing the `fits_file_patterns` entry in `config.yml`
 
 To start the app, run the following, it will download the docker image, `gshau/astroimaging-planner`, from the docker repository.  It's about 1GB in size.
 ```

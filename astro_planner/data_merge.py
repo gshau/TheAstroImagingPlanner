@@ -5,7 +5,14 @@ import yaml
 import datetime
 import numpy as np
 import pandas as pd
-from astro_planner.data_parser import FILTERS
+from astro_planner.data_parser import (
+    FILTERS,
+    INSTRUMENT_COL,
+    EXPOSURE_COL,
+    FOCALLENGTH_COL,
+    BINNING_COL,
+    FITS_DF_COL_MAP,
+)
 from astro_planner.target import normalize_target_name
 
 VALID_STATUS = ["pending", "active", "acquired", "closed"]
@@ -40,7 +47,7 @@ def compute_ra_order(ra_string, date_string):
 def get_sensor_map(equipment, df0):
     sensor_map = {}
     for sensor_name in equipment["sensors"]:
-        for instrument in df0["INSTRUME"].unique():
+        for instrument in df0[INSTRUMENT_COL].unique():
             if sensor_name.lower() in instrument.lower():
                 sensor_map[instrument] = sensor_name
     return sensor_map
@@ -49,7 +56,7 @@ def get_sensor_map(equipment, df0):
 def get_optic_map(equipment, df0):
     optic_map = {}
     for optic_name in equipment["optics"]:
-        for fl in df0["FOCALLEN"].unique():
+        for fl in df0[FOCALLENGTH_COL].unique():
             if np.abs(int(equipment["optics"][optic_name]["focal_length"]) - fl) < 2:
                 optic_map[fl] = optic_name
     return optic_map
@@ -59,11 +66,11 @@ def add_group(equipment, df0):
     sensor_map = get_sensor_map(equipment, df0)
     optic_map = get_optic_map(equipment, df0)
     df0["group"] = (
-        df0["FOCALLEN"]
+        df0[FOCALLENGTH_COL]
         .map(optic_map)
-        .fillna(df0["FOCALLEN"].astype(int).astype(str) + "mm")
+        .fillna(df0[FOCALLENGTH_COL].astype(int).astype(str) + "mm")
         + " "
-        + df0["INSTRUME"].replace(sensor_map)
+        + df0[INSTRUMENT_COL].replace(sensor_map)
     )
     return df0
 
@@ -72,13 +79,14 @@ def merge_roboclip_stored_metadata(
     df_stored_data, df_roboclip, config, default_status="closed"
 ):
 
+    df_stored_data = df_stored_data.rename(FITS_DF_COL_MAP, axis=1)
     df0 = (
         df_stored_data[df_stored_data["date"] > "2000-01-01"]
-        .groupby(["OBJECT", "INSTRUME", "FOCALLEN", "XBINNING", "FILTER"])
-        .agg({"EXPOSURE": "sum"})
+        .groupby(["OBJECT", INSTRUMENT_COL, FOCALLENGTH_COL, BINNING_COL, "FILTER"])
+        .agg({EXPOSURE_COL: "sum"})
         / 3600
     )
-    df0 = df0["EXPOSURE"].unstack(4).fillna(0).reset_index()
+    df0 = df0[EXPOSURE_COL].unstack(4).fillna(0).reset_index()
 
     # set status
     df0["status"] = default_status
@@ -94,9 +102,9 @@ def merge_roboclip_stored_metadata(
     cols = [
         "TARGET",
         "status",
-        "INSTRUME",
-        "FOCALLEN",
-        "XBINNING",
+        INSTRUMENT_COL,
+        FOCALLENGTH_COL,
+        BINNING_COL,
         "GROUP",
         "NOTE",
         "RAJ2000",

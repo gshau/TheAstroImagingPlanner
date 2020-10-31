@@ -36,3 +36,26 @@ mpsas: 20.1
 bandwidth: 120
 k_extinction: 0.2
 time_resolution: 300
+
+# Specify fits header entries
+fits_header_map:
+  exposure: 
+    - EXPTIME
+    - EXPOSURE
+  target_name: 
+    - TARGET
+  instrument: 
+    - INSTRUME
+  focal_length: 
+    - FOCALLEN
+  binning: 
+    - XBINNING
+  pixel_size:
+    - XPIXSIZ
+
+sensor_map:
+  'null': null
+  "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8"
+  "QHYCCD-Cameras-Capture": "QHY16200A"
+  "AltaF-8300D2": "Alta_Camera_8300"
+

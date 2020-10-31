@@ -6,7 +6,6 @@ import yaml
 from astropy.io import fits
 from functools import lru_cache
 import pandas as pd
-import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 
@@ -23,6 +22,30 @@ FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
 
 with open("./conf/config.yml", "r") as f:
     CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
+
+SENSOR_MAP = CONFIG.get("sensor_map", {})
+FITS_HEADER_MAP = CONFIG.get("fits_header_map", {})
+
+EXPOSURE_COL = "Exposure"
+INSTRUMENT_COL = "Instrument"
+FOCALLENGTH_COL = "Focal Length"
+BINNING_COL = "Binning"
+PIXELSIZE_COL = "Pixel Size"
+
+FITS_DF_COL_MAP = {}
+for col in FITS_HEADER_MAP.get("exposure", ["EXPOSURE"]):
+    FITS_DF_COL_MAP[col] = EXPOSURE_COL
+for col in FITS_HEADER_MAP.get("instrument", ["INSTRUME"]):
+    FITS_DF_COL_MAP[col] = INSTRUMENT_COL
+for col in FITS_HEADER_MAP.get("focal_length", ["FOCALLEN"]):
+    FITS_DF_COL_MAP[col] = FOCALLENGTH_COL
+for col in FITS_HEADER_MAP.get("binning", ["XBINNING"]):
+    FITS_DF_COL_MAP[col] = BINNING_COL
+for col in FITS_HEADER_MAP.get("pixel_size", ["XPIXSZ"]):
+    FITS_DF_COL_MAP[col] = PIXELSIZE_COL
+
+
+print(FITS_DF_COL_MAP)
 
 
 def parse_filename(file_name):
@@ -138,11 +161,11 @@ def format_dates(df):
 
 
 def get_exposure_summary(df_files, filter_list=FILTERS, time_format="minutes"):
-    df_exposures = df_files.groupby(["OBJECT", "FILTER"]).sum()["EXPOSURE"].to_frame()
+    df_exposures = df_files.groupby(["OBJECT", "FILTER"]).sum()[EXPOSURE_COL].to_frame()
 
     df = pd.pivot(
         data=df_exposures.reset_index(), columns="FILTER", index="OBJECT"
-    ).fillna(0)["EXPOSURE"]
+    ).fillna(0)[EXPOSURE_COL]
 
     df = df[[filter for filter in filter_list if filter in df.columns]]
 
@@ -194,7 +217,7 @@ def equinox_ccdfname_parser(string):
         filter = remain[1:]
         r.update(
             {
-                "EXPOSURE": int(exposure),
+                EXPOSURE_COL: int(exposure),
                 "CCD-TEMP": int(temp),
                 "XBINNING": int(bin),
                 "YBINNING": int(bin),
@@ -218,40 +241,27 @@ def clean_file_list(df):
     )
     filters_to_replace.update({"** BayerMatrix **": "OSC"})
     df["FILTER"] = df["FILTER"].replace(filters_to_replace)
-
-    df0 = df[
-        [
-            "filename",
-            "OBJECT",
-            "INSTRUME",
-            "DATE-OBS",
-            "IMAGETYP",
-            "FILTER",
-            "EXPOSURE",
-            "CCD-TEMP",
-            "XBINNING",
-            "YBINNING",
-            "XPIXSZ",
-            "YPIXSZ",
-            "FOCALLEN",
-            "OBJCTRA",
-            "OBJCTDEC",
-            "AIRMASS",
-            "OBJCTALT",
-        ]
-    ].reset_index(drop=True)
-
+    df = df.rename(FITS_DF_COL_MAP, axis=1)
+    cols = [
+        "filename",
+        "OBJECT",
+        "DATE-OBS",
+        "FILTER",
+        INSTRUMENT_COL,
+        FOCALLENGTH_COL,
+        EXPOSURE_COL,
+        "CCD-TEMP",
+        BINNING_COL,
+        PIXELSIZE_COL,
+        "OBJCTRA",
+        "OBJCTDEC",
+        "AIRMASS",
+        "OBJCTALT",
+    ]
+    df0 = df[[col for col in cols if col in df.columns]].reset_index(drop=True)
     sel = ~df0["OBJECT"].isnull()
     df0.loc[sel, "OBJECT"] = df0.loc[sel, "OBJECT"].apply(format_name)
-    df0.loc[:, "INSTRUME"] = df0.loc[:, "INSTRUME"].replace(
-        (
-            {
-                "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8",
-                "QHYCCD-Cameras-Capture": "QHY16200A",
-                np.nan: "",
-            }
-        )
-    )
+    df0.loc[:, INSTRUMENT_COL] = df0.loc[:, INSTRUMENT_COL].replace(SENSOR_MAP)
 
     return df0
 

@@ -26,7 +26,14 @@ from astro_planner.target import object_file_reader
 from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
-from astro_planner.data_parser import get_data_info
+from astro_planner.data_parser import (
+    get_data_info,
+    INSTRUMENT_COL,
+    EXPOSURE_COL,
+    FOCALLENGTH_COL,
+    BINNING_COL,
+)
+
 from astro_planner.data_merge import (
     compute_ra_order,
     merge_roboclip_stored_metadata,
@@ -471,11 +478,11 @@ def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
         return dcc.Graph(figure=p), pd.DataFrame()
 
     df_summary = (
-        df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "INSTRUME"])
-        .agg({"EXPOSURE": "sum"})
+        df0.groupby(["OBJECT", "FILTER", BINNING_COL, FOCALLENGTH_COL, INSTRUMENT_COL])
+        .agg({EXPOSURE_COL: "sum"})
         .dropna()
     )
-    df_summary = df_summary.unstack(1).fillna(0)["EXPOSURE"] / 3600
+    df_summary = df_summary.unstack(1).fillna(0)[EXPOSURE_COL] / 3600
     cols = ["OBJECT", "L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
     df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
 
@@ -492,9 +499,9 @@ def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
     )
 
     df0 = df_summary.reset_index()
-    bin = df0["XBINNING"].astype(int).astype(str)
-    fl = df0["FOCALLEN"].astype(int).astype(str)
-    df0["text"] = df0["INSTRUME"] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
+    bin = df0[BINNING_COL].astype(int).astype(str)
+    fl = df0[FOCALLENGTH_COL].astype(int).astype(str)
+    df0["text"] = df0[INSTRUMENT_COL] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
     df_summary = df0.set_index("OBJECT").loc[objects_sorted]
     for filter in [col for col in COLORS if col in df_summary.columns]:
         p.add_trace(
@@ -510,8 +517,14 @@ def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
         barmode=CONFIG.get("progress_mode", "group"),
         yaxis_title="Total Exposure (hr)",
         title="Acquired Data",
+        title_x=0.5,
     )
-    return dcc.Graph(figure=p), df_summary
+    graph = dcc.Graph(
+        config={"displaylogo": False, "modeBarButtonsToRemove": ["pan2d", "lasso2d"]},
+        figure=p,
+    )
+
+    return graph, df_summary
 
 
 # Set layout
@@ -820,7 +833,7 @@ def update_target_graph(
                 plot_bgcolor="#ddd",
                 paper_bgcolor="#fff",
                 hovermode="closest",
-                transition={"duration": 150},
+                transition={"duration": 50},
             ),
         },
     )

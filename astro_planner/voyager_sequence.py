@@ -1,9 +1,6 @@
 from astro_planner.target import DEC_KEY, RA_KEY, TARGET_KEY, DATA_DIR_KEY, PROFILE_KEY
 from astro_planner.profile import DEFAULT_DATA_PATH, DEFAULT_PROFILE_PATH
 
-# from astro_planner.sequence import *
-
-
 VOYAGER_SEQUENCE_EXTENSION = "s2q"
 VOYAGER_PROFILE_EXTENSION = "v2y"
 
@@ -14,7 +11,6 @@ class VoyagerSequenceWriter:
         self.profile = sequence.profile
         self.target = sequence.target
         self.sequence_template = sequence_template
-        #         self.filter_sequence = filter_sequence
         self.n_rounds = sequence.n_rounds
         self.item_template = (
             '<item id="ref-{ref_id}" xsi:type="SOAP-ENC:string">{value}</item>'

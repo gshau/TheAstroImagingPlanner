@@ -45,9 +45,6 @@ for col in FITS_HEADER_MAP.get("pixel_size", ["XPIXSZ"]):
     FITS_DF_COL_MAP[col] = PIXELSIZE_COL
 
 
-print(FITS_DF_COL_MAP)
-
-
 def parse_filename(file_name):
     file_root = Path(file_name).stem
     if "_LIGHT_" in file_root:
@@ -241,7 +238,10 @@ def clean_file_list(df):
     )
     filters_to_replace.update({"** BayerMatrix **": "OSC"})
     df["FILTER"] = df["FILTER"].replace(filters_to_replace)
+
     df = df.rename(FITS_DF_COL_MAP, axis=1)
+    df = df.groupby(df.columns, axis=1).first()
+
     cols = [
         "filename",
         "OBJECT",

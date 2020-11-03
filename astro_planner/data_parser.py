@@ -16,7 +16,7 @@ from .logger import log
 
 from .profile import cleanup_name
 
-DATA_DIR = os.getenv("DATA_DIR", "/Volumes/Users/gshau/Dropbox/AstroBox/data/")
+DATA_DIR = os.getenv("DATA_DIR", "/data/")
 
 FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
 

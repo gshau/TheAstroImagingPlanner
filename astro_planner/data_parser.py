@@ -20,7 +20,8 @@ DATA_DIR = os.getenv("DATA_DIR", "/data/")
 
 FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
 
-with open("./conf/config.yml", "r") as f:
+app_dir = str(Path(__file__).parents[1])
+with open(f"{app_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
 
 SENSOR_MAP = CONFIG.get("sensor_map", {})

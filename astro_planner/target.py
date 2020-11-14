@@ -105,7 +105,10 @@ class Objects:
     def load_from_df(self, df_input):
         self.df_objects = df_input
         self.process_objects(self.df_objects)
-        self.profiles = sorted(list(self.target_list.keys()))
+        profiles = [
+            profile for profile in self.target_list.keys() if type(profile) == str
+        ]
+        self.profiles = sorted(profiles)
 
 
 class RoboClipObjects(Objects):
@@ -115,6 +118,7 @@ class RoboClipObjects(Objects):
             filename, "RoboClip", converters_from_schema=False
         )
         self.df_objects.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)
+        self.df_objects["GROUP"] = self.df_objects["GROUP"].fillna("UNLABELED")
         self.load_from_df(self.df_objects)
 
 

@@ -7,7 +7,6 @@ from astropy.io import fits
 from functools import lru_cache
 import pandas as pd
 from pathlib import Path
-from tqdm import tqdm
 
 from multiprocessing import Pool
 from functools import partial
@@ -109,13 +108,11 @@ def parse_filelist(file_list, root_key="data/", n_threads=4):
     if multithread_fits_read:
         with Pool(n_threads) as p:
             d_list = list(
-                tqdm(
-                    p.imap(partial(_parse_file, root_key=root_key), file_list),
-                    total=n_files,
-                )
+                p.imap(partial(_parse_file, root_key=root_key), file_list),
+                total=n_files,
             )
     else:
-        for file_name in tqdm(file_list):
+        for file_name in file_list:
             d_list.append(_parse_file(file_name, root_key))
     d_list = [d for d in d_list if d]
     log.info("Read {} files".format(len(d_list)))

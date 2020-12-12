@@ -2,15 +2,21 @@
 fits_file_patterns:
   - "/*/*/*.[fF][iI][tT]"
   - "/*/*/*.[fF][iI][tT]s"
+  - "/*/*/reject*/*.[fF][iI][tT]"
+  - "/*/*/reject*/*.[fF][iI][tT]s"
+  - "/*/*/cloud*/*.[fF][iI][tT]"
+  - "/*/*/cloud*/*.[fF][iI][tT]s"
   - "/*/*/Lights/*.[fF][iI][tT]"
   - "/*/*/Lights/*.[fF][iI][tT][s]"
+
 
 # Default target status when initially parsing data
 default_target_status: 'active'
 
 # Inactive profiles to hide from the UI
 inactive_profiles:
-  - ap130 asi6200mm
+  - borg55fl asi2600mc
+  - rasa8 asi2600mc
 
 # target progress display mode - stack or group
 progress_mode: 'group'
@@ -31,7 +37,7 @@ debug: "True"
 # Default location settings
 lat: 43.37
 lon: -88.37
-utc_offset: -5
+utc_offset: -6
 mpsas: 20.1
 bandwidth: 120
 k_extinction: 0.2

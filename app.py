@@ -1,6 +1,7 @@
 import base64
 import io
 import os
+import sqlalchemy
 from distutils.util import strtobool
 
 import dash
@@ -22,12 +23,11 @@ from dash.dependencies import Input, Output, State
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
-from astro_planner.target import object_file_reader
+from astro_planner.target import object_file_reader, normalize_target_name
 from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import (
-    get_data_info,
     INSTRUMENT_COL,
     EXPOSURE_COL,
     FOCALLENGTH_COL,
@@ -139,6 +139,7 @@ object_data = None
 df_combined = None
 df_target_status = None
 df_stored_data = None
+df_stars_headers = None
 
 
 def update_data():
@@ -146,10 +147,39 @@ def update_data():
     global df_combined
     global df_target_status
     global df_stored_data
+    global df_stars_headers
 
     log.info("Updating Data")
 
-    df_stored_data = get_data_info(data_dir=DATA_DIR)
+    query = """
+    select file_full_path as filename,
+        "OBJECT",
+        "DATE-OBS",
+        "FILTER",
+        cast("CCD-TEMP" as float),
+        "OBJCTRA",
+        "OBJCTDEC",
+        cast("AIRMASS" as float),
+        "OBJCTALT",
+        "INSTRUME" as "Instrument",
+        cast("FOCALLEN" as float) as "Focal Length",
+        cast("EXPOSURE" as float) as "Exposure",
+        cast("XBINNING" as float) as "Binning",
+        date("DATE-OBS") as "date"
+        from fits_headers
+    """
+    conn = sqlalchemy.create_engine(
+        "postgresql+psycopg2://astro_user:andromeda@db:5431/fits_files"
+    )
+
+    df_stored_data = pd.read_sql(query, conn)
+    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
+    df_stored_data["filename"] = df_stored_data["filename"].apply(
+        lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
+    )
+
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
+
     object_data = object_file_reader(ROBOCLIP_FILE)
 
     default_status = CONFIG.get("default_target_status", "")
@@ -166,6 +196,32 @@ def update_data():
     if df_combined["status"].isnull().sum() > 0:
         df_combined["status"] = df_combined["status"].fillna(default_status)
         dump_target_status_to_file(df_combined)
+
+    # files tables
+    log.info("Ready for queries")
+    engine = sqlalchemy.create_engine(
+        "postgresql+psycopg2://astro_user:andromeda@db:5431/fits_files"
+    )
+
+    header_query = "select * from fits_headers;"
+    log.info("Ready to query headers")
+    df_headers = pd.read_sql(header_query, engine)
+    star_query = "select * from star_metrics;"
+
+    log.info("Ready to query stars")
+    df_stars = pd.read_sql(star_query, engine)
+
+    df_stars_headers = pd.merge(df_headers, df_stars, on="filename", how="left")
+    df_stars_headers["fwhm_mean_arcsec"] = (
+        df_stars_headers["fwhm_mean"] * df_stars_headers["arcsec_per_pixel"]
+    )
+    df_stars_headers["fwhm_std_arcsec"] = (
+        df_stars_headers["fwhm_std"] * df_stars_headers["arcsec_per_pixel"]
+    )
+
+    df_stars_headers["frame_snr"] = (
+        10 ** df_stars_headers["log_flux_mean"] * df_stars_headers["n_stars"]
+    ) / df_stars_headers["bkg_val"]
 
 
 update_data()
@@ -623,7 +679,7 @@ def update_data_callback(n_click):
 
 
 @app.callback(
-    [Output("target-match", "options"), Output("target-match", "value")],
+    [Output("target-status-match", "options"), Output("target-status-match", "value")],
     [Input("profile-selection", "value")],
     [State("status-match", "value")],
 )
@@ -635,7 +691,7 @@ def update_target_for_status_callback(profile, status_match):
 
 @app.callback(
     Output("target-status-selector", "value"),
-    [Input("target-match", "value")],
+    [Input("target-status-match", "value")],
     [State("store-target-status", "data"), State("profile-selection", "value")],
 )
 def update_radio_status_for_targets_callback(targets, target_status_store, profile):
@@ -657,7 +713,7 @@ def update_radio_status_for_targets_callback(targets, target_status_store, profi
     Output("store-target-status", "data"),
     [Input("target-status-selector", "value")],
     [
-        State("target-match", "value"),
+        State("target-status-match", "value"),
         State("store-target-status", "data"),
         State("profile-selection", "value"),
     ],
@@ -672,16 +728,22 @@ def update_target_with_status_callback(status, targets, target_status_store, pro
 
 
 @app.callback(
-    [Output("tab-target-div", "style"), Output("tab-data-table-div", "style")],
+    [
+        Output("tab-target-div", "style"),
+        Output("tab-data-table-div", "style"),
+        Output("tab-files-table-div", "style"),
+    ],
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
+    print(tab)
 
-    styles = [{"display": "none"}] * 2
+    styles = [{"display": "none"}] * 3
 
     tab_names = [
         "tab-target",
         "tab-data-table",
+        "tab-files-table",
     ]
 
     indx = tab_names.index(tab)
@@ -795,6 +857,7 @@ def update_target_graph(
 ):
     global df_target_status
     global df_combined
+    global df_stored_data
 
     update_data()
 
@@ -858,9 +921,9 @@ def update_target_graph(
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
 
+    # target table
     data = df_combined.reset_index().to_dict("records")
-
-    table = html.Div(
+    target_table = html.Div(
         [
             dash_table.DataTable(
                 id="table-dropdown",
@@ -895,7 +958,260 @@ def update_target_graph(
         ]
     )
 
-    return target_graph, progress_graph, table
+    return target_graph, progress_graph, target_table
+
+
+@app.callback(
+    [
+        Output("files-table", "children"),
+        Output("summary-table", "children"),
+        Output("header-col-match", "options"),
+        Output("target-match", "options"),
+        # Output("scatter-graph", "children"),
+        Output("x-axis-field", "options"),
+        Output("y-axis-field", "options"),
+        Output("scatter-size-field", "options"),
+    ],
+    [
+        Input("store-target-data", "data"),
+        Input("header-col-match", "value"),
+        Input("target-match", "value"),
+    ],
+)
+def update_files_table(target_data, header_col_match, target_match):
+    global df_target_status
+    global df_combined
+    global df_stars_headers
+
+    targets = sorted(df_stars_headers["OBJECT"].unique())
+    target_options = make_options(targets)
+
+    df0 = df_stars_headers.copy()
+    if target_match:
+        log.info("Selecting target match")
+        df0 = df_stars_headers[df_stars_headers["OBJECT"] == target_match]
+    log.info("Done with queries")
+
+    columns = []
+    default_cols = [
+        "OBJECT",
+        # "filename",
+        "DATE-OBS",
+        "FILTER",
+        "EXPOSURE",
+        "XPIXSZ",
+        "FOCALLEN",
+        "arcsec_per_pixel",
+        "CCD-TEMP",
+        "fwhm_mean_arcsec",
+        "ecc_mean",
+        # "fwhm_ecc",
+        # "fwhm_chip_r",
+        # "ecc_chip_r",
+    ]
+    if "rejected" in df0.columns:
+        default_cols += ["rejected"]
+    fits_cols = [
+        col
+        for col in df0.columns
+        if col in header_col_match and col not in default_cols
+    ]
+    fits_cols = default_cols + fits_cols
+    other_header_cols = [col for col in df0.columns if col not in default_cols]
+    header_options = make_options(other_header_cols)
+
+    for col in fits_cols:
+        entry = {"name": col, "id": col, "deletable": False, "selectable": True}
+        columns.append(entry)
+
+    df0["FILTER_indx"] = df0["FILTER"].map(
+        dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
+    )
+    df0 = df0.sort_values(by=["OBJECT", "FILTER_indx", "DATE-OBS"]).drop(
+        "FILTER_indx", axis=1
+    )
+    data = df0.round(2).to_dict("records")
+    files_table = html.Div(
+        [
+            dash_table.DataTable(
+                columns=columns,
+                data=data,
+                editable=False,
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                selected_columns=[],
+                selected_rows=[],
+                page_action="native",
+                page_current=0,
+                page_size=50,
+                style_cell={"padding": "5px"},
+                style_as_list_view=True,
+                style_cell_conditional=[
+                    {"if": {"column_id": c}, "textAlign": "left"}
+                    for c in ["Date", "Region"]
+                ],
+                style_data_conditional=[
+                    {
+                        "if": {"row_index": "odd"},
+                        "backgroundColor": "rgb(248, 248, 248)",
+                    }
+                ],
+                style_header={
+                    "backgroundColor": "rgb(230, 230, 230)",
+                    "fontWeight": "bold",
+                },
+            )
+        ]
+    )
+
+    df_numeric = df0.select_dtypes(
+        include=["int16", "int32", "int64", "float16", "float32", "float64"]
+    )
+
+    numeric_cols = [col for col in df_numeric.columns if "corr__" not in col]
+    scatter_field_options = make_options(numeric_cols)
+
+    df_agg = df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "XPIXSZ"]).agg(
+        {"EXPOSURE": "sum", "CCD-TEMP": "std", "DATE-OBS": "count"}
+    )
+    df_agg["EXPOSURE"] = df_agg["EXPOSURE"] / 3600
+    col_map = {
+        "DATE-OBS": "n_subs",
+        "CCD-TEMP": "CCD-TEMP Dispersion",
+        "EXPOSURE": "EXPOSURE (hour)",
+    }
+    df_agg = df_agg.reset_index().rename(col_map, axis=1)
+    df_agg["FILTER_indx"] = df_agg["FILTER"].map(
+        dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
+    )
+    df_agg = df_agg.sort_values(by=["FILTER_indx"]).drop("FILTER_indx", axis=1)
+
+    columns = []
+    for col in df_agg.columns:
+        entry = {"name": col, "id": col, "deletable": False, "selectable": True}
+        columns.append(entry)
+    data = df_agg.round(2).to_dict("records")
+    summary_table = html.Div(
+        [
+            dash_table.DataTable(
+                columns=columns,
+                data=data,
+                editable=False,
+                filter_action="native",
+                sort_action="native",
+                sort_mode="multi",
+                selected_columns=[],
+                selected_rows=[],
+                page_action="native",
+                page_current=0,
+                page_size=50,
+                style_cell={"padding": "5px"},
+                style_as_list_view=True,
+                style_cell_conditional=[
+                    {"if": {"column_id": c}, "textAlign": "left"}
+                    for c in ["Date", "Region"]
+                ],
+                style_data_conditional=[
+                    {
+                        "if": {"row_index": "odd"},
+                        "backgroundColor": "rgb(248, 248, 248)",
+                    }
+                ],
+                style_header={
+                    "backgroundColor": "rgb(230, 230, 230)",
+                    "fontWeight": "bold",
+                },
+            )
+        ]
+    )
+
+    return (
+        files_table,
+        summary_table,
+        header_options,
+        target_options,
+        scatter_field_options,
+        scatter_field_options,
+        scatter_field_options,
+    )
+
+
+@app.callback(
+    [Output("x-axis-field", "value"), Output("y-axis-field", "value")],
+    [Input("scatter-radio-selection", "value"),],
+)
+def update_scatter_axes(value):
+    x_col = "fwhm_mean_arcsec"
+    y_col = "ecc_mean"
+    if value:
+        x_col, y_col = value.split(" vs. ")
+    return x_col, y_col
+
+
+@app.callback(
+    [Output("scatter-graph", "children")],
+    [
+        Input("store-target-data", "data"),
+        Input("target-match", "value"),
+        Input("x-axis-field", "value"),
+        Input("y-axis-field", "value"),
+        Input("scatter-size-field", "value"),
+    ],
+)
+def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
+    global df_target_status
+    global df_combined
+    global df_stars_headers
+
+    df0 = df_stars_headers[(df_stars_headers["OBJECT"] == target_match)]
+
+    filters = df0["FILTER"].unique()
+    if not x_col:
+        x_col = "fwhm_mean_arcsec"
+    if not y_col:
+        y_col = "ecc_mean"
+    p = go.Figure()
+    for filter in FILTER_LIST:
+        if filter not in filters:
+            continue
+        df1 = df0[df0["FILTER"] == filter].reset_index()
+
+        df1["text"] = df1.apply(
+            lambda row: "Filename: "
+            + row["filename"]
+            + "<br>Date: "
+            + str(row["DATE-OBS"])
+            + f"<br>Star count: {row['n_stars']}"
+            + f"<br>FWHM: {row['fwhm_mean']:.2f}"
+            + f"<br>Eccentricity: {row['ecc_mean']:.2f}"
+            + f"<br>{size_col}: {row[size_col]:.2f}",
+            axis=1,
+        )
+        size = df1[size_col]
+
+        sizeref = float(2.0 * size.max() / (4 ** 2))
+
+        p.add_trace(
+            go.Scatter(
+                x=df1[x_col],
+                y=df1[y_col],
+                mode="markers",
+                name=filter,
+                hovertemplate="<b>%{text}</b><br>"
+                + f"{x_col}: "
+                + "%{x:.2f}<br>"
+                + f"{y_col}: "
+                + "%{y:.2f}<br>",
+                text=df1["text"],
+                marker=dict(color=COLORS[filter], size=size, sizeref=sizeref),
+            )
+        )
+    p.update_layout(xaxis_title=x_col, yaxis_title=y_col, height=600)
+
+    scatter_graph = dcc.Graph(id="example-graph-2", figure=p)
+
+    return [scatter_graph]
 
 
 if __name__ == "__main__":
@@ -904,4 +1220,4 @@ if __name__ == "__main__":
     host = "0.0.0.0"
     if localhost_only:
         host = "localhost"
-    app.run_server(debug=debug, host=host)
+    app.run_server(debug=True, host=host, dev_tools_serve_dev_bundles=True)

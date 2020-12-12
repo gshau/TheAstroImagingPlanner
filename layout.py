@@ -82,12 +82,14 @@ def serve_layout():
         dark=True,
     )
 
-    target_picker = dbc.Col(
+    target_status_picker = dbc.Col(
         [
             html.Div(
                 [
                     html.Label("Change Target Status", style={"textAlign": "center"},),
-                    dcc.Dropdown(id="target-match", options=[], value=[], multi=True,),
+                    dcc.Dropdown(
+                        id="target-status-match", options=[], value=[], multi=True,
+                    ),
                 ],
                 className="dash-bootstrap",
             )
@@ -221,6 +223,73 @@ def serve_layout():
                 ],
                 className="dash-bootstrap",
             )
+        ]
+    )
+
+    header_col_picker = dbc.Col(
+        [
+            html.Div(
+                [
+                    html.Label("Show FITs HEADER Cols", style={"textAlign": "center"}),
+                    dcc.Dropdown(
+                        id="header-col-match", options=[], value=[], multi=True
+                    ),
+                ],
+                className="dash-bootstrap",
+            )
+        ]
+    )
+
+    scatter_col_picker = dbc.Col(
+        [
+            html.Div(
+                [
+                    html.Label("Quick Options", style={"textAlign": "center"}),
+                    dcc.RadioItems(
+                        id="scatter-radio-selection",
+                        options=[
+                            {
+                                "label": "FWHM vs. Eccentricity",
+                                "value": "fwhm_mean_arcsec vs. ecc_mean",
+                            },
+                            {"label": "Az. vs Alt", "value": "OBJCTAZ vs. OBJCTALT"},
+                            {
+                                "label": "Background vs. Star count",
+                                "value": "bkg_val vs. n_stars",
+                            },
+                            {
+                                "label": "Focus position vs. temperature",
+                                "value": "FOCUSTEM vs. FOCUSPOS",
+                            },
+                        ],
+                        labelStyle={"display": "block"},
+                    ),
+                ],
+                className="dash-bootstrap",
+            ),
+            html.Div(
+                [
+                    html.Label("X-axis", style={"textAlign": "center"}),
+                    dcc.Dropdown(id="x-axis-field", options=[], value=[]),
+                ],
+                className="dash-bootstrap",
+            ),
+            html.Div(
+                [
+                    html.Label("Y-axis", style={"textAlign": "center"}),
+                    dcc.Dropdown(id="y-axis-field", options=[], value=[]),
+                ],
+                className="dash-bootstrap",
+            ),
+            html.Div(
+                [
+                    html.Label("Marker Size", style={"textAlign": "center"}),
+                    dcc.Dropdown(
+                        id="scatter-size-field", options=[], value="fwhm_mean"
+                    ),
+                ],
+                className="dash-bootstrap",
+            ),
         ]
     )
 
@@ -410,7 +479,7 @@ def serve_layout():
                                 html.Br(),
                                 dbc.Row(filter_targets_check, justify="around"),
                                 html.Br(),
-                                dbc.Row(target_picker, justify="around"),
+                                dbc.Row(target_status_picker, justify="around"),
                                 html.Br(),
                                 dbc.Row(target_status_selector, justify="around"),
                                 html.Br(),
@@ -462,6 +531,91 @@ def serve_layout():
         style={},
     )
 
+    target_picker = dbc.Col(
+        [
+            html.Div(
+                [
+                    html.Label("Select Target", style={"textAlign": "center"},),
+                    dcc.Dropdown(id="target-match", options=[]),
+                ],
+                className="dash-bootstrap",
+            )
+        ]
+    )
+
+    data_files_table_container = dbc.Container(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        [
+                            dbc.Row(
+                                [
+                                    dbc.Container(
+                                        fluid=True,
+                                        style={"width": "95%"},
+                                        children=[
+                                            dbc.Row(target_picker, justify="around"),
+                                            html.Br(),
+                                            dbc.Row(
+                                                scatter_col_picker, justify="around"
+                                            ),
+                                            html.Br(),
+                                            dbc.Row(
+                                                header_col_picker, justify="around"
+                                            ),
+                                            html.Br(),
+                                        ],
+                                    )
+                                ],
+                            ),
+                        ],
+                        width=3,
+                    ),
+                    dbc.Col(
+                        children=[
+                            html.Div(
+                                id="scatter-graph",
+                                children=[dbc.Spinner(color="primary")],
+                            ),
+                            html.Br(),
+                        ],
+                        width=9,
+                    ),
+                ]
+            ),
+            dcc.Markdown(
+                """
+            ## Summary Table"""
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        children=[html.Div(id="summary-table")],
+                        width=12,
+                        style={"border": "20px solid white"},
+                    ),
+                ]
+            ),
+            dcc.Markdown(
+                """
+            ## Subexposure data - star measurements and FITs header"""
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        children=[html.Div(id="files-table")],
+                        width=12,
+                        style={"border": "20px solid white"},
+                    ),
+                ]
+            ),
+        ],
+        id="tab-files-table-div",
+        fluid=True,
+        style={},
+    )
+
     tabs = dbc.Tabs(
         id="tabs",
         active_tab="tab-target",
@@ -472,8 +626,13 @@ def serve_layout():
                 labelClassName="text-primary",
             ),
             dbc.Tab(
-                label="Search Stored Data",
+                label="Review Stored Targets",
                 tab_id="tab-data-table",
+                labelClassName="text-success",
+            ),
+            dbc.Tab(
+                label="Review Stored Subframes",
+                tab_id="tab-files-table",
                 labelClassName="text-info",
             ),
         ],
@@ -488,6 +647,7 @@ def serve_layout():
             html.Br(),
             data_table_container,
             target_container,
+            data_files_table_container,
             html.Div(id="date-range", style={"display": "none"}),
         ],
     )

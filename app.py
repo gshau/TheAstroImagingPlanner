@@ -83,6 +83,17 @@ DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 DEFAULT_TIME_RESOLUTION = CONFIG.get("time_resolution", 300)
 
 
+POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+POSTGRES_DB = os.getenv("POSTGRES_DB")
+PGPORT = os.getenv("PGPORT")
+PGHOST = os.getenv("PGHOST", "0.0.0.0")
+
+POSTGRES_ENGINE = sqlalchemy.create_engine(
+    f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{PGHOST}:{PGPORT}/{POSTGRES_DB}"
+)
+
+
 USE_CONTRAST = os.getenv("USE_CONTRAST", False)
 styles = {}
 if not USE_CONTRAST:
@@ -168,11 +179,8 @@ def update_data():
         date("DATE-OBS") as "date"
         from fits_headers
     """
-    conn = sqlalchemy.create_engine(
-        "postgresql+psycopg2://astro_user:andromeda@db:5432/fits_files"
-    )
 
-    df_stored_data = pd.read_sql(query, conn)
+    df_stored_data = pd.read_sql(query, POSTGRES_ENGINE)
     df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
     df_stored_data["filename"] = df_stored_data["filename"].apply(
         lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
@@ -199,17 +207,14 @@ def update_data():
 
     # files tables
     log.info("Ready for queries")
-    engine = sqlalchemy.create_engine(
-        "postgresql+psycopg2://astro_user:andromeda@db:5432/fits_files"
-    )
 
     header_query = "select * from fits_headers;"
     log.info("Ready to query headers")
-    df_headers = pd.read_sql(header_query, engine)
+    df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
     star_query = "select * from star_metrics;"
 
     log.info("Ready to query stars")
-    df_stars = pd.read_sql(star_query, engine)
+    df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
 
     df_stars_headers = pd.merge(df_headers, df_stars, on="filename", how="left")
     df_stars_headers["fwhm_mean_arcsec"] = (
@@ -1143,7 +1148,7 @@ def update_files_table(target_data, header_col_match, target_match):
 
 @app.callback(
     [Output("x-axis-field", "value"), Output("y-axis-field", "value")],
-    [Input("scatter-radio-selection", "value"),],
+    [Input("scatter-radio-selection", "value")],
 )
 def update_scatter_axes(value):
     x_col = "fwhm_mean_arcsec"
@@ -1208,7 +1213,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
                 text=df1["text"],
-                marker=dict(color=COLORS[filter], size=size, sizeref=sizeref),
+                marker=dict(color=COLORS[filter], sizeref=sizeref),
             )
         )
     p.update_layout(xaxis_title=x_col, yaxis_title=y_col, height=600)

@@ -71,7 +71,6 @@ HORIZON_DATA = CONFIG.get("horizon_data", {})
 with open("./conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
 
-DATA_DIR = os.getenv("DATA_DIR", "/data")
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
@@ -206,14 +205,14 @@ def update_data():
         dump_target_status_to_file(df_combined)
 
     # files tables
-    log.info("Ready for queries")
+    log.debug("Ready for queries")
 
     header_query = "select * from fits_headers;"
-    log.info("Ready to query headers")
+    log.debug("Ready to query headers")
     df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
     star_query = "select * from star_metrics;"
 
-    log.info("Ready to query stars")
+    log.debug("Ready to query stars")
     df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
 
     df_stars_headers = pd.merge(df_headers, df_stars, on="filename", how="left")
@@ -674,16 +673,6 @@ def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
 
 
 @app.callback(
-    Output("store-placeholder", "data"), [Input("update-data", "n_clicks")],
-)
-def update_data_callback(n_click):
-    log.info(n_click)
-    if n_click != 0:
-        update_data()
-    return ""
-
-
-@app.callback(
     [Output("target-status-match", "options"), Output("target-status-match", "value")],
     [Input("profile-selection", "value")],
     [State("status-match", "value")],
@@ -990,7 +979,6 @@ def update_files_table(target_data, header_col_match, target_match):
 
     update_data()
 
-    log.info(df_stars_headers)
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
@@ -1003,7 +991,6 @@ def update_files_table(target_data, header_col_match, target_match):
     columns = []
     default_cols = [
         "OBJECT",
-        # "filename",
         "DATE-OBS",
         "FILTER",
         "EXPOSURE",
@@ -1013,9 +1000,6 @@ def update_files_table(target_data, header_col_match, target_match):
         "CCD-TEMP",
         "fwhm_mean_arcsec",
         "ecc_mean",
-        # "fwhm_ecc",
-        # "fwhm_chip_r",
-        # "ecc_chip_r",
     ]
     if "rejected" in df0.columns:
         default_cols += ["rejected"]
@@ -1072,9 +1056,18 @@ def update_files_table(target_data, header_col_match, target_match):
             )
         ]
     )
-
+    df0["DATE-OBS"] = pd.to_datetime(df0["DATE-OBS"])
+    log.info(df0["DATE-OBS"].dtype)
     df_numeric = df0.select_dtypes(
-        include=["int16", "int32", "int64", "float16", "float32", "float64"]
+        include=[
+            "int16",
+            "int32",
+            "int64",
+            "float16",
+            "float32",
+            "float64",
+            "datetime64[ns]",
+        ]
     )
 
     numeric_cols = [col for col in df_numeric.columns if "corr__" not in col]
@@ -1083,7 +1076,6 @@ def update_files_table(target_data, header_col_match, target_match):
     df_agg = df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "XPIXSZ"]).agg(
         {"EXPOSURE": "sum", "CCD-TEMP": "std", "DATE-OBS": "count"}
     )
-    log.info(df_agg["EXPOSURE"])
     df_agg["EXPOSURE"] = df_agg["EXPOSURE"] / 3600
     col_map = {
         "DATE-OBS": "n_subs",
@@ -1187,9 +1179,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
         df1 = df0[df0["FILTER"] == filter].reset_index()
 
         df1["text"] = df1.apply(
-            lambda row: "Filename: "
-            + row["filename"]
-            + "<br>Date: "
+            lambda row: "<br>Date: "
             + str(row["DATE-OBS"])
             + f"<br>Star count: {row['n_stars']}"
             + f"<br>FWHM: {row['fwhm_mean']:.2f}"
@@ -1213,7 +1203,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
                 text=df1["text"],
-                marker=dict(color=COLORS[filter], sizeref=sizeref),
+                marker=dict(color=COLORS[filter], size=size, sizeref=sizeref),
             )
         )
     p.update_layout(xaxis_title=x_col, yaxis_title=y_col, height=600)
@@ -1221,6 +1211,36 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
     scatter_graph = dcc.Graph(id="example-graph-2", figure=p)
 
     return [scatter_graph]
+
+
+@app.callback(
+    [
+        Output("alert-auto", "children"),
+        Output("alert-auto", "is_open"),
+        Output("alert-auto", "duration"),
+        Output("alert-auto", "color"),
+    ],
+    [Input("interval-component", "n_intervals")],
+)
+def toggle_alert(n):
+    global df_stars_headers
+    df_old = df_stars_headers.copy()
+    update_data()
+    df_new = df_stars_headers.drop(df_old.index)
+    new_row_count = df_new.shape[0]
+
+    new_files_available = new_row_count > 0
+
+    if new_files_available:
+        filenames = df_new["filename"].values
+        filenames = "\n".join(filenames)
+        text = f"Detected {new_row_count} new files available: {filenames}"
+        log.info(text)
+        is_open = True
+        duration = 5000
+        color = "primary"
+        return text, is_open, duration, color
+    return "", False, 0, "primary"
 
 
 if __name__ == "__main__":

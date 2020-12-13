@@ -8,6 +8,8 @@ fits_file_patterns:
   - "/*/*/cloud*/*.[fF][iI][tT]s"
   - "/*/*/Lights/*.[fF][iI][tT]"
   - "/*/*/Lights/*.[fF][iI][tT][s]"
+  - "*.[fF][iI][tT]"
+  - "*.[fF][iI][tT][s]"
 
 
 # Default target status when initially parsing data

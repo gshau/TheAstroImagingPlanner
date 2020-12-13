@@ -261,6 +261,10 @@ def serve_layout():
                                 "label": "Focus position vs. temperature",
                                 "value": "FOCUSTEM vs. FOCUSPOS",
                             },
+                            {
+                                "label": "FWHM std. vs. FWHM mean",
+                                "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
+                            },
                         ],
                         labelStyle={"display": "block"},
                     ),
@@ -638,6 +642,17 @@ def serve_layout():
         ],
     )
 
+    alerts = html.Div(
+        [
+            dbc.Alert("", id="alert-auto", is_open=False, duration=1,),
+            dcc.Interval(
+                id="interval-component",
+                interval=15 * 1000,  # in milliseconds
+                n_intervals=0,
+            ),
+        ]
+    )
+
     body = dbc.Container(
         fluid=True,
         style={"width": "80%"},
@@ -645,6 +660,7 @@ def serve_layout():
             navbar,
             tabs,
             html.Br(),
+            alerts,
             data_table_container,
             target_container,
             data_files_table_container,

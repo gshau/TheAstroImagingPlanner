@@ -2,21 +2,19 @@ import glob
 import os
 import sep
 import yaml
+import logging
+import sqlalchemy
+import warnings
 
 import numpy as np
 import pandas as pd
-
 import matplotlib.pyplot as plt
 
 from sqlalchemy import Table, MetaData
 from pathlib import Path
 from astropy.io import fits
 from astropy.utils.exceptions import AstropyUserWarning
-import logging
-
-import sqlalchemy
-
-import warnings
+from multiprocessing import Pool
 
 warnings.filterwarnings("ignore", category=AstropyUserWarning)
 
@@ -285,11 +283,19 @@ def process_stars_from_fits(filename, extract_thresh=3, with_stars=False):
         log.info(f"Issue with file {filename}", exc_info=True)
 
 
-def process_stars(file_list):
+def process_stars(file_list, multithread_fits_read=True, n_threads=8):
     df_stars_list = []
     df_stars = pd.DataFrame()
-    for file in file_list:
-        df_stars_list.append(process_stars_from_fits(file))
+
+    if multithread_fits_read:
+        with Pool(n_threads) as p:
+            df_stars_list = list(p.imap(process_stars_from_fits, file_list))
+            if df_stars_list:
+                df_stars = pd.concat(df_stars_list).reset_index()
+            return df_stars
+    else:
+        for filename in file_list:
+            df_stars_list.append(process_stars_from_fits(filename))
     if df_stars_list:
         df_stars = pd.concat(df_stars_list).reset_index()
     return df_stars
@@ -394,11 +400,13 @@ def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         push_rows_to_table(
             df_stars, POSTGRES_ENGINE, table_name="star_metrics", if_exists="append"
         )
+        return df_stars.shape[0]
+    return 0
 
 
 def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=None):
-    log.debug("Updating db with matching files")
     update_fits_headers(config, data_dir, file_list)
     update_fits_status(config, data_dir, file_list)
-    update_star_metrics(config, data_dir, file_list)
-    log.debug("Finished")
+    n_files_added = update_star_metrics(config, data_dir, file_list)
+    if n_files_added > 0:
+        log.info(f"Finished pushing {n_files_added} entries to database")

@@ -169,7 +169,7 @@ def update_data():
         from fits_headers
     """
     conn = sqlalchemy.create_engine(
-        "postgresql+psycopg2://astro_user:andromeda@db:5431/fits_files"
+        "postgresql+psycopg2://astro_user:andromeda@db:5432/fits_files"
     )
 
     df_stored_data = pd.read_sql(query, conn)
@@ -200,7 +200,7 @@ def update_data():
     # files tables
     log.info("Ready for queries")
     engine = sqlalchemy.create_engine(
-        "postgresql+psycopg2://astro_user:andromeda@db:5431/fits_files"
+        "postgresql+psycopg2://astro_user:andromeda@db:5432/fits_files"
     )
 
     header_query = "select * from fits_headers;"
@@ -983,6 +983,9 @@ def update_files_table(target_data, header_col_match, target_match):
     global df_combined
     global df_stars_headers
 
+    update_data()
+
+    log.info(df_stars_headers)
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
@@ -1075,6 +1078,7 @@ def update_files_table(target_data, header_col_match, target_match):
     df_agg = df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "XPIXSZ"]).agg(
         {"EXPOSURE": "sum", "CCD-TEMP": "std", "DATE-OBS": "count"}
     )
+    log.info(df_agg["EXPOSURE"])
     df_agg["EXPOSURE"] = df_agg["EXPOSURE"] / 3600
     col_map = {
         "DATE-OBS": "n_subs",

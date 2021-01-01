@@ -1,4 +1,5 @@
 import base64
+import time
 import io
 import os
 import sqlalchemy
@@ -14,6 +15,7 @@ import pandas as pd
 import numpy as np
 
 import plotly.graph_objects as go
+
 import warnings
 
 import datetime
@@ -43,6 +45,18 @@ from astro_planner.data_merge import (
     set_target_status,
     update_targets_with_status,
 )
+
+from image_grading.frame_analysis import (
+    show_aberration_inspector_image,
+    show_frame_analysis,
+    show_fwhm_ellipticity_vs_r,
+)
+from image_grading.preprocessing import (
+    preprocess_stars,
+    process_image_from_filename,
+    bin_stars,
+)
+
 from layout import serve_layout, yaxis_map
 import seaborn as sns
 
@@ -159,7 +173,7 @@ def update_data():
     global df_stored_data
     global df_stars_headers
 
-    log.info("Updating Data")
+    log.info("Checking for new data")
 
     query = """
     select file_full_path as filename,
@@ -210,7 +224,7 @@ def update_data():
     header_query = "select * from fits_headers;"
     log.debug("Ready to query headers")
     df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
-    star_query = "select * from star_metrics;"
+    star_query = "select * from aggregated_star_metrics;"
 
     log.debug("Ready to query stars")
     df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
@@ -730,10 +744,7 @@ def update_target_with_status_callback(status, targets, target_status_store, pro
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
-    print(tab)
-
     styles = [{"display": "none"}] * 3
-
     tab_names = [
         "tab-target",
         "tab-data-table",
@@ -961,7 +972,6 @@ def update_target_graph(
         Output("summary-table", "children"),
         Output("header-col-match", "options"),
         Output("target-match", "options"),
-        # Output("scatter-graph", "children"),
         Output("x-axis-field", "options"),
         Output("y-axis-field", "options"),
         Output("scatter-size-field", "options"),
@@ -999,7 +1009,8 @@ def update_files_table(target_data, header_col_match, target_match):
         "arcsec_per_pixel",
         "CCD-TEMP",
         "fwhm_mean_arcsec",
-        "ecc_mean",
+        "eccentricity_mean",
+        "star_trail_strength",
     ]
     if "rejected" in df0.columns:
         default_cols += ["rejected"]
@@ -1144,14 +1155,14 @@ def update_files_table(target_data, header_col_match, target_match):
 )
 def update_scatter_axes(value):
     x_col = "fwhm_mean_arcsec"
-    y_col = "ecc_mean"
+    y_col = "eccentricity_mean"
     if value:
         x_col, y_col = value.split(" vs. ")
     return x_col, y_col
 
 
 @app.callback(
-    [Output("scatter-graph", "children")],
+    Output("target-scatter-graph", "figure"),
     [
         Input("store-target-data", "data"),
         Input("target-match", "value"),
@@ -1171,8 +1182,9 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
     if not x_col:
         x_col = "fwhm_mean_arcsec"
     if not y_col:
-        y_col = "ecc_mean"
+        y_col = "eccentricity_mean"
     p = go.Figure()
+    sizeref = float(2.0 * df0[size_col].max() / (5 ** 2))
     for filter in FILTER_LIST:
         if filter not in filters:
             continue
@@ -1183,13 +1195,14 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
             + str(row["DATE-OBS"])
             + f"<br>Star count: {row['n_stars']}"
             + f"<br>FWHM: {row['fwhm_mean']:.2f}"
-            + f"<br>Eccentricity: {row['ecc_mean']:.2f}"
+            + f"<br>Eccentricity: {row['eccentricity_mean']:.2f}"
             + f"<br>{size_col}: {row[size_col]:.2f}",
             axis=1,
         )
-        size = df1[size_col]
-
-        sizeref = float(2.0 * size.max() / (4 ** 2))
+        default_size = df1[size_col].median()
+        if np.isnan(default_size):
+            default_size = 1
+        size = df1[size_col].fillna(default_size)
 
         p.add_trace(
             go.Scatter(
@@ -1203,14 +1216,84 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
                 text=df1["text"],
-                marker=dict(color=COLORS[filter], size=size, sizeref=sizeref),
+                marker=dict(color=COLORS[filter], size=size, sizeref=sizeref,),
+                customdata=df1["filename"],
             )
         )
-    p.update_layout(xaxis_title=x_col, yaxis_title=y_col, height=600)
+    p.update_layout(
+        xaxis_title=x_col,
+        yaxis_title=y_col,
+        # width=600,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
 
-    scatter_graph = dcc.Graph(id="example-graph-2", figure=p)
+    return p
 
-    return [scatter_graph]
+
+@app.callback(
+    [
+        Output("radial-frame-graph", "figure"),
+        Output("xy-frame-graph", "figure"),
+        Output("inspector-frame", "figure"),
+    ],
+    [Input("target-scatter-graph", "clickData")],
+)
+def inspect_frame_analysis(data, recalculate=False):
+    global df_target_status
+    log.info(data)
+    p0 = go.Figure()
+    p1 = p0
+    p2 = p0
+
+    if data is None:
+        return p0, p1, p2
+    base_filename = data["points"][0]["customdata"]
+    if not base_filename:
+        log.info("Issue 1")
+        return p0, p1, p2
+
+    file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
+    if file_full_path.shape[0] == 1:
+        log.info(file_full_path)
+        filename = file_full_path["file_full_path"].values[0]
+    else:
+        log.info("Issue 2")
+        return p0, p1, p2
+
+    if recalculate:
+        t0 = time.time()
+        df_s = process_image_from_filename(
+            filename, extract_thresh=1.5, tnpix_threshold=6
+        )
+        n_stars = df_s.shape[0]
+
+        xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 12), 3)
+        df_s = preprocess_stars(df_s, xy_n_bins=xy_n_bins)
+
+        df_radial, df_xy = bin_stars(df_s, filename)
+        log.info(df_radial.head())
+        log.info(f"Time for direct computation: {time.time() - t0:.2f} seconds")
+    else:
+        t0 = time.time()
+        radial_query = f"""select * from radial_frame_metrics where filename = '{base_filename}';"""
+        df_radial = pd.read_sql(radial_query, POSTGRES_ENGINE)
+        log.info(df_radial.head())
+
+        xy_query = (
+            f"""select * from xy_frame_metrics where filename = '{base_filename}';"""
+        )
+        df_xy = pd.read_sql(xy_query, POSTGRES_ENGINE)
+        log.info(f"Time for query: {time.time() - t0:.2f} seconds")
+
+    feature_col = "fwhm"
+    # feature_col = 'ellipticity'
+    p2, canvas = show_aberration_inspector_image(
+        filename, with_overlay=False, n_cols=3, n_rows=3, border=5
+    )
+    p0 = show_fwhm_ellipticity_vs_r(df_radial, filename)
+    p1 = show_frame_analysis(df_xy, filename=filename, feature_col=feature_col)
+
+    return p0, p1, p2
 
 
 @app.callback(

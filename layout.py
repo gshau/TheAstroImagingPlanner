@@ -244,35 +244,6 @@ def serve_layout():
         [
             html.Div(
                 [
-                    html.Label("Quick Options", style={"textAlign": "center"}),
-                    dcc.RadioItems(
-                        id="scatter-radio-selection",
-                        options=[
-                            {
-                                "label": "FWHM vs. Eccentricity",
-                                "value": "fwhm_mean_arcsec vs. ecc_mean",
-                            },
-                            {"label": "Az. vs Alt", "value": "OBJCTAZ vs. OBJCTALT"},
-                            {
-                                "label": "Background vs. Star count",
-                                "value": "bkg_val vs. n_stars",
-                            },
-                            {
-                                "label": "Focus position vs. temperature",
-                                "value": "FOCUSTEM vs. FOCUSPOS",
-                            },
-                            {
-                                "label": "FWHM std. vs. FWHM mean",
-                                "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
-                            },
-                        ],
-                        labelStyle={"display": "block"},
-                    ),
-                ],
-                className="dash-bootstrap",
-            ),
-            html.Div(
-                [
                     html.Label("X-axis", style={"textAlign": "center"}),
                     dcc.Dropdown(id="x-axis-field", options=[], value=[]),
                 ],
@@ -290,6 +261,40 @@ def serve_layout():
                     html.Label("Marker Size", style={"textAlign": "center"}),
                     dcc.Dropdown(
                         id="scatter-size-field", options=[], value="fwhm_mean"
+                    ),
+                ],
+                className="dash-bootstrap",
+            ),
+        ]
+    )
+
+    quick_options_col_picker = dbc.Col(
+        [
+            html.Div(
+                [
+                    html.Label("Quick Options", style={"textAlign": "center"}),
+                    dcc.RadioItems(
+                        id="scatter-radio-selection",
+                        options=[
+                            {
+                                "label": "FWHM vs. Eccentricity",
+                                "value": "fwhm_mean_arcsec vs. eccentricity_mean",
+                            },
+                            {"label": "Az. vs Alt", "value": "OBJCTAZ vs. OBJCTALT"},
+                            {
+                                "label": "Background vs. Star count",
+                                "value": "bkg_val vs. n_stars",
+                            },
+                            {
+                                "label": "Focus position vs. temperature",
+                                "value": "FOCUSTEM vs. FOCUSPOS",
+                            },
+                            {
+                                "label": "FWHM std. vs. FWHM mean",
+                                "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
+                            },
+                        ],
+                        labelStyle={"display": "block"},
                     ),
                 ],
                 className="dash-bootstrap",
@@ -559,34 +564,71 @@ def serve_layout():
                                         fluid=True,
                                         style={"width": "95%"},
                                         children=[
-                                            dbc.Row(target_picker, justify="around"),
-                                            html.Br(),
                                             dbc.Row(
-                                                scatter_col_picker, justify="around"
-                                            ),
-                                            html.Br(),
-                                            dbc.Row(
-                                                header_col_picker, justify="around"
-                                            ),
-                                            html.Br(),
+                                                [
+                                                    dbc.Col(target_picker, width=3),
+                                                    dbc.Col(
+                                                        scatter_col_picker, width=3,
+                                                    ),
+                                                    dbc.Col(
+                                                        quick_options_col_picker,
+                                                        width=3,
+                                                    ),
+                                                ]
+                                            )
                                         ],
                                     )
                                 ],
                             ),
                         ],
-                        width=3,
-                    ),
-                    dbc.Col(
-                        children=[
-                            html.Div(
-                                id="scatter-graph",
-                                children=[dbc.Spinner(color="primary")],
-                            ),
-                            html.Br(),
-                        ],
-                        width=9,
+                        width=10,
                     ),
                 ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Div(
+                            id="scatter-graph",
+                            children=[
+                                dcc.Graph(
+                                    id="target-scatter-graph",
+                                    style={"width": "100%", "height": "800px"},
+                                )
+                            ],
+                        ),
+                        width=6,
+                    ),
+                    dbc.Col(
+                        dcc.Graph(
+                            id="inspector-frame",
+                            style={"width": "100%", "height": "800px"},
+                        ),
+                        width=6,
+                    ),
+                ]
+            ),
+            # dbc.Row(
+            #     [
+            #     ]
+            # ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        dcc.Graph(
+                            id="xy-frame-graph",
+                            style={"width": "100%", "height": "600px"},
+                        ),
+                        width=6,
+                    ),
+                    dbc.Col(
+                        dcc.Graph(
+                            id="radial-frame-graph",
+                            style={"width": "100%", "height": "600px"},
+                        ),
+                        width=6,
+                    ),
+                ],
             ),
             dcc.Markdown(
                 """
@@ -605,6 +647,7 @@ def serve_layout():
                 """
             ## Subexposure data - star measurements and FITs header"""
             ),
+            dbc.Row([dbc.Col(header_col_picker, width=3,)]),
             dbc.Row(
                 [
                     dbc.Col(
@@ -622,7 +665,7 @@ def serve_layout():
 
     tabs = dbc.Tabs(
         id="tabs",
-        active_tab="tab-target",
+        active_tab="tab-files-table",
         children=[
             dbc.Tab(
                 label="Target Review",

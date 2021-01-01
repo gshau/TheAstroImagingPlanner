@@ -13,7 +13,7 @@ fits_file_patterns:
 
 
 # Default target status when initially parsing data
-default_target_status: 'active'
+default_target_status: ''
 
 # Inactive profiles to hide from the UI
 inactive_profiles:

@@ -10,11 +10,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from collections import defaultdict
 from sqlalchemy import Table, MetaData
 from pathlib import Path
 from astropy.io import fits
 from astropy.utils.exceptions import AstropyUserWarning
-from multiprocessing import Pool
+
 
 warnings.filterwarnings("ignore", category=AstropyUserWarning)
 
@@ -54,7 +55,15 @@ def aggregate_stars(df_stars):
     df_stars["log_flux"] = np.log10(df_stars["flux"])
     df0 = (
         df_stars[
-            ["filename", "tnpix", "theta", "log_flux", "fwhm", "ecc", "chip_theta"]
+            [
+                "filename",
+                "tnpix",
+                "theta",
+                "log_flux",
+                "fwhm",
+                "eccentricity",
+                "chip_theta",
+            ]
         ]
         .groupby(["filename"])
         .agg(["mean", "std"])
@@ -69,48 +78,48 @@ def aggregate_stars(df_stars):
     )
     df0 = df0.join(df1).join(df2)
 
-    cols_for_corr = [
-        "npix",
-        "tnpix",
-        "x",
-        "y",
-        "x2",
-        "y2",
-        "xy",
-        "errx2",
-        "erry2",
-        "errxy",
-        "a",
-        "b",
-        "theta",
-        "cxx",
-        "cyy",
-        "cxy",
-        "cflux",
-        "flux",
-        "cpeak",
-        "peak",
-        "xcpeak",
-        "ycpeak",
-        "xpeak",
-        "ypeak",
-        "fwhm",
-        "ecc",
-        "ellipticity",
-        "elongation",
-        "chip_theta",
-        "chip_r",
-    ]
+    # cols_for_corr = [
+    #     "npix",
+    #     "tnpix",
+    #     "x",
+    #     "y",
+    #     "x2",
+    #     "y2",
+    #     "xy",
+    #     "errx2",
+    #     "erry2",
+    #     "errxy",
+    #     "a",
+    #     "b",
+    #     "theta",
+    #     "cxx",
+    #     "cyy",
+    #     "cxy",
+    #     "cflux",
+    #     "flux",
+    #     "cpeak",
+    #     "peak",
+    #     "xcpeak",
+    #     "ycpeak",
+    #     "xpeak",
+    #     "ypeak",
+    #     "fwhm",
+    #     "ecc",
+    #     "ellipticity",
+    #     "elongation",
+    #     "chip_theta",
+    #     "chip_r",
+    # ]
 
-    df_corr = df_stars[cols_for_corr].corr().stack().drop_duplicates()
-    df_corr = df_corr[df_corr < 1]
-    df_corr = df_corr.to_frame("corr").T
-    df_corr.columns = [
-        f"corr__{'__'.join(col)}".strip() for col in df_corr.columns.values
-    ]
-    df_corr.index = df0.index
+    # df_corr = df_stars[cols_for_corr].corr().stack().drop_duplicates()
+    # df_corr = df_corr[df_corr < 1]
+    # df_corr = df_corr.to_frame("corr").T
+    # df_corr.columns = [
+    #     f"corr__{'__'.join(col)}".strip() for col in df_corr.columns.values
+    # ]
+    # df_corr.index = df0.index
 
-    df0 = pd.concat([df0, df_corr], axis=1)
+    # df0 = pd.concat([df0, df_corr], axis=1)
     df0.index.name = "filename"
 
     return df0
@@ -137,7 +146,7 @@ def push_rows_to_table(df0, engine, table_name, if_exists="append", index=False)
             clear_table(engine, table_name)
             df_combined.to_sql(table_name, engine, if_exists="replace", index=index)
         except:
-            log.info("Failed")
+            log.info("Failed", exc_info=True)
             return None
         n_rows = df0.shape[0]
         log.debug(f"Added {n_rows} new entries")
@@ -175,9 +184,16 @@ def process_header_from_fits(filename):
         df_header["file_dir"] = file_dir
         df_header["file_full_path"] = filename
         df_header["filename"] = file_base
-        df_header["arcsec_per_pixel"] = (
-            df_header["XPIXSZ"] * 206 / df_header["FOCALLEN"]
-        )
+        fl_cols = ["FOCALLEN", "EFF_FL"]
+        for fl_col in fl_cols:
+            if fl_col in df_header.columns:
+                break
+        if fl_col in df_header.columns:
+            df_header["arcsec_per_pixel"] = (
+                df_header["XPIXSZ"] * 206 / df_header[fl_col]
+            )
+        else:
+            df_header["arcsec_per_pixel"] = np.nan
         if "COMMENT" in df_header.columns:
             df_header["COMMENT"] = df_header["COMMENT"].apply(lambda c: str(c))
         return df_header
@@ -283,41 +299,77 @@ def process_stars_from_fits(filename, extract_thresh=3, with_stars=False):
         log.info(f"Issue with file {filename}", exc_info=True)
 
 
-def process_stars(file_list, multithread_fits_read=True, n_threads=8):
-    df_stars_list = []
+def process_stars(
+    file_list, multithread_fits_read=False, n_threads=8, extract_thresh=1.5,
+):
     df_stars = pd.DataFrame()
+    df_agg_stars = pd.DataFrame()
 
-    if multithread_fits_read:
-        with Pool(n_threads) as p:
-            df_stars_list = list(p.imap(process_stars_from_fits, file_list))
-            if df_stars_list:
-                df_stars = pd.concat(df_stars_list).reset_index()
-            return df_stars
-    else:
-        for filename in file_list:
-            df_stars_list.append(process_stars_from_fits(filename))
-    if df_stars_list:
-        df_stars = pd.concat(df_stars_list).reset_index()
-    return df_stars
+    # if multithread_fits_read:
+    #     with Pool(n_threads) as p:
+    #         df_stars_list = list(p.imap(process_stars_from_fits, file_list))
+    #         if df_stars_list:
+    #             df_stars = pd.concat(df_stars_list).reset_index()
+    #         return df_stars
+    # else:
+    df_lists = defaultdict(list)
+
+    for filename in file_list:
+        df_agg_stars, df_stars = process_stars_from_fits(
+            filename, extract_thresh=extract_thresh, with_stars=True
+        )
+        n_stars = df_stars.shape[0]
+        log.info(f"For {filename}: N-stars = {n_stars}")
+
+        n_stars = df_stars.shape[0]
+        xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 8), 3)
+        df_stars = preprocess_stars(df_stars, xy_n_bins=xy_n_bins)
+
+        df_radial, df_xy = bin_stars(df_stars, filename)
+        trail_strength = np.sqrt(
+            (df_xy["vec_u"].mean() / df_xy["vec_u"].std()) ** 2
+            + (df_xy["vec_v"].mean() / df_xy["vec_v"].std()) ** 2
+        )
+        df_agg_stars["star_trail_strength"] = trail_strength
+
+        df_lists["stars"].append(df_stars)
+        df_lists["agg_stars"].append(df_agg_stars)
+        df_lists["radial_frame"].append(df_radial)
+        df_lists["xy_frame"].append(df_xy)
+
+    result = {}
+    for key, l in df_lists.items():
+        if l:
+            result[key] = to_numeric(pd.concat(l)).reset_index()
+    return result
 
 
-def process_image_data(data, header, tnpix_threshold=4, extract_thresh=3):
+def process_image_data(
+    data, header, tnpix_threshold=4, extract_thresh=3, filter_kernel=None
+):
     data = data.astype(float)
     ny, nx = data.shape
     bkg = sep.Background(data)
-    data_sub = data  # - bkg
+    data_sub = data - bkg
 
-    objects = sep.extract(data_sub, extract_thresh, err=bkg.back(), filter_kernel=None)
+    objects = sep.extract(
+        data_sub, extract_thresh, err=bkg.back(), filter_kernel=filter_kernel
+    )
 
     objects = pd.DataFrame(objects)
-    objects = objects[objects["tnpix"] > tnpix_threshold]
+    objects = objects.drop(["xmin", "xmax", "ymin", "ymax"], axis=1)
+    objects["r_eff"] = np.sqrt(objects["a"] ** 2 + objects["b"] ** 2) / np.sqrt(2)
+    object_selection = objects["tnpix"] > tnpix_threshold
+    object_selection &= objects["r_eff"] < 10
+    object_selection &= objects["r_eff"] < objects["r_eff"].quantile(0.95)
+    objects = objects[object_selection]
 
     coef = 2 * np.sqrt(2 * np.log(2))
-    objects["fwhm"] = coef * np.sqrt(objects["a"] ** 2 + objects["b"] ** 2) / np.sqrt(2)
-    objects["ecc"] = np.sqrt(1 - (objects["b"] / objects["a"]) ** 2)
+    objects["fwhm"] = coef * objects["r_eff"]
+    objects["eccentricity"] = np.sqrt(1 - (objects["b"] / objects["a"]) ** 2)
     objects["ellipticity"] = 1 - objects["b"] / objects["a"]
     objects["elongation"] = objects["a"] / objects["b"]
-    objects["theta"] = -objects["theta"]  # + np.pi / 2
+    objects["theta"] = -objects["theta"]
     objects["x_ref"] = objects["x"] - nx / 2
     objects["y_ref"] = -(objects["y"] - ny / 2)
     objects["chip_theta"] = np.arctan2(objects["y_ref"], objects["x_ref"])
@@ -327,16 +379,29 @@ def process_image_data(data, header, tnpix_threshold=4, extract_thresh=3):
     return objects
 
 
-def process_image_from_filename(filename, tnpix_threshold=4, extract_thresh=3):
+def process_image_from_filename(
+    filename, tnpix_threshold=6, extract_thresh=3, filter_kernel=None
+):
     data, header = fits.getdata(filename, header=True)
-    objects = process_image_data(data, header, tnpix_threshold, extract_thresh)
+    objects = process_image_data(
+        data, header, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
+    )
     objects["filename_with_path"] = filename
     objects["filename"] = os.path.basename(filename)
     return objects
 
 
 def init_tables():
-    clear_all_tables(["fits_headers", "fits_status", "star_metrics"])
+    clear_all_tables(
+        [
+            "fits_headers",
+            "fits_status",
+            "star_metrics",
+            "aggregated_star_metrics",
+            "xy_frame_metrics",
+            "radial_frame_metrics",
+        ]
+    )
 
 
 def clear_all_tables(table_names):
@@ -362,6 +427,7 @@ def update_fits_status(config=CONFIG, data_dir=DATA_DIR, file_list=None):
             log.info(f"Found new file: {filename}")
         df_status = check_status(files_with_data, reject=["reject"], cloud=["cloud"])
         df_status = to_numeric(df_status)
+        # df_status = lower_cols(df_status)
         push_rows_to_table(
             df_status, POSTGRES_ENGINE, table_name="fits_status", if_exists="append"
         )
@@ -389,24 +455,134 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         )
 
 
-def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None):
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+
+def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=10):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
-    new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "star_metrics")
+    new_files = check_file_in_table(
+        file_list, POSTGRES_ENGINE, "aggregated_star_metrics"
+    )
     files_with_data = get_file_list_with_data(new_files)
     if files_with_data:
-        df_stars = process_stars(files_with_data)
-        df_stars = to_numeric(df_stars)
-        push_rows_to_table(
-            df_stars, POSTGRES_ENGINE, table_name="star_metrics", if_exists="append"
-        )
-        return df_stars.shape[0]
-    return 0
+        for file_set in chunks(files_with_data, n_chunk):
+            result = process_stars(file_set)
+            n_stars = result["stars"].shape[0]
+
+            log.info(f"New stars: {n_stars}")
+
+            # Aggregate star metrics table
+            log.info(result["agg_stars"].head())
+            push_rows_to_table(
+                result["agg_stars"],
+                POSTGRES_ENGINE,
+                table_name="aggregated_star_metrics",
+                if_exists="append",
+            )
+
+            # Individual Stars table
+            push_rows_to_table(
+                result["stars"],
+                POSTGRES_ENGINE,
+                table_name="star_metrics",
+                if_exists="append",
+            )
+
+            # Individual Stars table
+            push_rows_to_table(
+                result["radial_frame"],
+                POSTGRES_ENGINE,
+                table_name="radial_frame_metrics",
+                if_exists="append",
+            )
+
+            # Individual Stars table
+            push_rows_to_table(
+                result["xy_frame"],
+                POSTGRES_ENGINE,
+                table_name="xy_frame_metrics",
+                if_exists="append",
+            )
+
+            if n_stars > 0:
+                log.info(f"Finished pushing {n_stars} stars to tables")
 
 
 def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=None):
+    log.debug("Checking for new files")
     update_fits_headers(config, data_dir, file_list)
     update_fits_status(config, data_dir, file_list)
-    n_files_added = update_star_metrics(config, data_dir, file_list)
-    if n_files_added > 0:
-        log.info(f"Finished pushing {n_files_added} entries to database")
+    update_star_metrics(config, data_dir, file_list)
+
+
+def lower_cols(df):
+    df.columns = [col.lower() for col in df.columns]
+    return df
+
+
+def preprocess_stars(df_s, xy_n_bins=10, r_n_bins=20):
+
+    df_s["chip_r_bin"] = df_s["chip_r"] // int(df_s["chip_r"].max() / r_n_bins)
+
+    df_s["vec_u"] = np.cos(df_s["theta"]) * df_s["ellipticity"]  # * df_s['fwhm']
+    df_s["vec_v"] = np.sin(df_s["theta"]) * df_s["ellipticity"]  # * df_s['fwhm']
+
+    y_max = df_s["y_ref"].max()
+    df_s["x_bin"] = np.round(
+        np.round((df_s["x_ref"] / y_max) * xy_n_bins) * y_max / xy_n_bins
+    )
+    df_s["y_bin"] = np.round(
+        np.round(((df_s["y_ref"]) / y_max) * xy_n_bins) * y_max / xy_n_bins
+    )
+    return df_s
+
+
+def flatten_cols(df):
+    df.columns = ["_".join(col).strip() for col in df.columns.values]
+    return df
+
+
+def bin_stars(df_s, filename, tnpix_min=6):
+    df_stars = df_s[df_s["tnpix"] > tnpix_min]
+
+    group_r = df_stars.groupby("chip_r_bin")
+    group_xy = df_stars.groupby(["x_bin", "y_bin"])
+    df_radial = flatten_cols(
+        group_r.agg(
+            {"fwhm": "describe", "ellipticity": "describe", "chip_r": "describe"}
+        )
+    )
+
+    df_radial.columns = [col.replace("%", "_pct") for col in df_radial.columns]
+
+    df_radial["filename_with_path"] = filename
+    df_radial["filename"] = os.path.basename(filename)
+
+    df_xy = group_xy.agg(
+        {
+            "vec_u": "mean",
+            "vec_v": "mean",
+            "fwhm": "median",
+            "ellipticity": "median",
+            "tnpix": "count",
+        }
+    ).reset_index()
+    df_xy.rename({"tnpix": "star_count"}, axis=1, inplace=True)
+    df_xy["x_ref"] = df_xy["x_bin"] - df_xy["x_bin"].mean()
+    df_xy["y_ref"] = df_xy["y_bin"] - df_xy["y_bin"].mean()
+    df_xy["chip_theta"] = np.arctan2(df_xy["y_ref"], df_xy["x_ref"])
+    df_xy["theta"] = np.arctan2(df_xy["vec_u"], df_xy["vec_v"])
+
+    df_xy["dot"] = df_xy["x_ref"] * df_xy["vec_u"] + df_xy["y_ref"] * df_xy["vec_v"]
+
+    df_xy["chip_r"] = np.sqrt(df_xy["x_ref"] ** 2 + df_xy["y_ref"] ** 2)
+    df_xy["ellipticity"] = np.sqrt(df_xy["vec_u"] ** 2 + df_xy["vec_v"] ** 2)
+
+    df_xy["filename_with_path"] = filename
+    df_xy["filename"] = os.path.basename(filename)
+
+    return df_radial, df_xy

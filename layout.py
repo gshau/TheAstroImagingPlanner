@@ -293,6 +293,10 @@ def serve_layout():
                                 "label": "FWHM std. vs. FWHM mean",
                                 "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
                             },
+                            {
+                                "label": "Alt. vs. Background",
+                                "value": "OBJCTALT vs. bkg_val",
+                            },
                         ],
                         labelStyle={"display": "block"},
                     ),
@@ -552,6 +556,19 @@ def serve_layout():
         ]
     )
 
+    filter_targets_check = dbc.FormGroup(
+        [
+            dbc.Checkbox(
+                id="aberration-preview", className="form-check-input", checked=True
+            ),
+            dbc.Label(
+                "As Aberration Inspector View",
+                html_for="standalone-checkbox",
+                className="form-check-label",
+            ),
+        ]
+    )
+
     data_files_table_container = dbc.Container(
         [
             dbc.Row(
@@ -573,6 +590,9 @@ def serve_layout():
                                                     dbc.Col(
                                                         quick_options_col_picker,
                                                         width=3,
+                                                    ),
+                                                    dbc.Col(
+                                                        filter_targets_check, width=3,
                                                     ),
                                                 ]
                                             )
@@ -600,10 +620,12 @@ def serve_layout():
                         width=6,
                     ),
                     dbc.Col(
-                        dcc.Graph(
-                            id="inspector-frame",
-                            style={"width": "100%", "height": "800px"},
-                        ),
+                        [
+                            dcc.Graph(
+                                id="inspector-frame",
+                                style={"width": "100%", "height": "800px"},
+                            ),
+                        ],
                         width=6,
                     ),
                 ]
@@ -615,10 +637,32 @@ def serve_layout():
             dbc.Row(
                 [
                     dbc.Col(
-                        dcc.Graph(
-                            id="xy-frame-graph",
-                            style={"width": "100%", "height": "600px"},
-                        ),
+                        [
+                            html.Div(
+                                [
+                                    html.Label(
+                                        "Select Heatmap Data",
+                                        style={"textAlign": "center"},
+                                    ),
+                                    dcc.Dropdown(
+                                        id="frame-heatmap-dropdown",
+                                        value="fwhm",
+                                        options=[
+                                            {"label": "FWHM", "value": "fwhm"},
+                                            {
+                                                "label": "Ellipticity",
+                                                "value": "ellipticity",
+                                            },
+                                        ],
+                                    ),
+                                ],
+                                className="dash-bootstrap",
+                            ),
+                            dcc.Graph(
+                                id="xy-frame-graph",
+                                style={"width": "100%", "height": "600px"},
+                            ),
+                        ],
                         width=6,
                     ),
                     dbc.Col(
@@ -690,7 +734,7 @@ def serve_layout():
             dbc.Alert("", id="alert-auto", is_open=False, duration=1,),
             dcc.Interval(
                 id="interval-component",
-                interval=15 * 1000,  # in milliseconds
+                interval=60 * 1000,  # in milliseconds
                 n_intervals=0,
             ),
         ]

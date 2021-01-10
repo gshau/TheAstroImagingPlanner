@@ -156,7 +156,7 @@ def push_rows_to_table(df0, engine, table_name, if_exists="append", index=False)
 
 def coord_str_to_vec(coord_string):
     coord_string = str(coord_string)
-    for replace_string in ["h", "m", "s"]:
+    for replace_string in ["h", "m", "s", "d"]:
         coord_string = coord_string.replace(replace_string, "")
     coord_vec = coord_string.split()
     coord_vec = [float(entry) for entry in coord_vec]
@@ -173,12 +173,11 @@ def coord_str_to_float(coord_string):
 
 def process_header_from_fits(filename):
     try:
-
         hdul = fits.open(filename)
-        header = hdul[0].header
+        header = dict(hdul[0].header)
         file_base = os.path.basename(filename)
         file_dir = os.path.dirname(filename)
-        df_header = pd.DataFrame({file_base: dict(header)}).T
+        df_header = pd.DataFrame({file_base: header}).T
         df_header.index.name = "filename"
         df_header.reset_index(inplace=True)
         df_header["file_dir"] = file_dir
@@ -201,12 +200,14 @@ def process_header_from_fits(filename):
         raise ("Stopping...")
     except:
         log.info(f"Issue with file {filename}", exc_info=True)
+        return pd.DataFrame()
 
 
 def process_headers(file_list):
     df_header_list = []
 
     for file in file_list:
+        log.info(f"Processing header for file {file}")
         df_header_list.append(process_header_from_fits(file))
     df_headers = pd.DataFrame()
     if df_header_list:
@@ -280,23 +281,23 @@ def clear_table(engine, table_name):
     log.debug("Finished")
 
 
-def process_stars_from_fits(filename, extract_thresh=3, with_stars=False):
+def process_stars_from_fits(filename, extract_thresh=3):
+    df_agg_stars, df_stars = pd.DataFrame(), pd.DataFrame()
     try:
         df_stars = process_image_from_filename(filename, extract_thresh=extract_thresh)
         if df_stars.shape[0] == 0:
-            df_agg_stars = process_stars_from_fits(
-                filename, extract_thresh=extract_thresh - 0.5, with_stars=with_stars
+            df_agg_stars, df_stars = process_stars_from_fits(
+                filename, extract_thresh=extract_thresh - 0.5
             )
-            return df_agg_stars
+            return df_agg_stars, df_stars
         df_agg_stars = aggregate_stars(df_stars)
         df_agg_stars["extract_thresh"] = extract_thresh
-        if with_stars:
-            return df_agg_stars, df_stars
-        return df_agg_stars
+        return df_agg_stars, df_stars
     except KeyboardInterrupt:
         raise ("Stopping...")
     except:
         log.info(f"Issue with file {filename}", exc_info=True)
+        return df_agg_stars, df_stars
 
 
 def process_stars(
@@ -316,12 +317,25 @@ def process_stars(
 
     for filename in file_list:
         df_agg_stars, df_stars = process_stars_from_fits(
-            filename, extract_thresh=extract_thresh, with_stars=True
+            filename, extract_thresh=extract_thresh
         )
         n_stars = df_stars.shape[0]
         log.info(f"For {filename}: N-stars = {n_stars}")
 
         n_stars = df_stars.shape[0]
+        if n_stars == 0:
+            base_filename = os.path.basename(filename)
+            df_stars["filename"] = base_filename
+            df_agg_stars = df_stars.copy()
+            df_xy = df_stars.copy()
+            df_radial = df_stars.copy()
+
+            df_lists["stars"].append(df_stars)
+            df_lists["agg_stars"].append(df_agg_stars)
+            df_lists["radial_frame"].append(df_radial)
+            df_lists["xy_frame"].append(df_xy)
+
+            continue
         xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 8), 3)
         df_stars = preprocess_stars(df_stars, xy_n_bins=xy_n_bins)
 
@@ -331,6 +345,8 @@ def process_stars(
             + (df_xy["vec_v"].mean() / df_xy["vec_v"].std()) ** 2
         )
         df_agg_stars["star_trail_strength"] = trail_strength
+        df_agg_stars["dot_norm_median"] = np.abs(df_xy["dot_norm"]).median()
+        df_agg_stars["dot_norm_mean"] = np.abs(df_xy["dot_norm"]).mean()
 
         df_lists["stars"].append(df_stars)
         df_lists["agg_stars"].append(df_agg_stars)
@@ -344,9 +360,7 @@ def process_stars(
     return result
 
 
-def process_image_data(
-    data, header, tnpix_threshold=4, extract_thresh=3, filter_kernel=None
-):
+def process_image_data(data, tnpix_threshold=4, extract_thresh=3, filter_kernel=None):
     data = data.astype(float)
     ny, nx = data.shape
     bkg = sep.Background(data)
@@ -382,9 +396,9 @@ def process_image_data(
 def process_image_from_filename(
     filename, tnpix_threshold=6, extract_thresh=3, filter_kernel=None
 ):
-    data, header = fits.getdata(filename, header=True)
+    data = fits.getdata(filename, header=False)
     objects = process_image_data(
-        data, header, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
+        data, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
     )
     objects["filename_with_path"] = filename
     objects["filename"] = os.path.basename(filename)
@@ -427,7 +441,6 @@ def update_fits_status(config=CONFIG, data_dir=DATA_DIR, file_list=None):
             log.info(f"Found new file: {filename}")
         df_status = check_status(files_with_data, reject=["reject"], cloud=["cloud"])
         df_status = to_numeric(df_status)
-        # df_status = lower_cols(df_status)
         push_rows_to_table(
             df_status, POSTGRES_ENGINE, table_name="fits_status", if_exists="append"
         )
@@ -446,13 +459,20 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
+    log.info(f"Found {len(new_files)} new files for headers")
     files_with_data = get_file_list_with_data(new_files)
     if files_with_data:
-        df_header = process_headers(files_with_data)
-        df_header = to_numeric(df_header)
-        push_rows_to_table(
-            df_header, POSTGRES_ENGINE, table_name="fits_headers", if_exists="append"
-        )
+        for files in chunks(files_with_data, 100):
+            df_header = process_headers(files)
+            df_header = to_numeric(df_header)
+            log.info("Pushing to db")
+            push_rows_to_table(
+                df_header,
+                POSTGRES_ENGINE,
+                table_name="fits_headers",
+                if_exists="append",
+            )
+            log.info("Done")
 
 
 def chunks(lst, n):
@@ -470,7 +490,9 @@ def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chun
     files_with_data = get_file_list_with_data(new_files)
     if files_with_data:
         for file_set in chunks(files_with_data, n_chunk):
-            result = process_stars(file_set)
+            result = process_stars(file_set, extract_thresh=0.25)
+            if "stars" not in result:
+                continue
             n_stars = result["stars"].shape[0]
 
             log.info(f"New stars: {n_stars}")
@@ -484,15 +506,15 @@ def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chun
                 if_exists="append",
             )
 
-            # Individual Stars table
-            push_rows_to_table(
-                result["stars"],
-                POSTGRES_ENGINE,
-                table_name="star_metrics",
-                if_exists="append",
-            )
+            # # Individual Stars table
+            # push_rows_to_table(
+            #     result["stars"],
+            #     POSTGRES_ENGINE,
+            #     table_name="star_metrics",
+            #     if_exists="append",
+            # )
 
-            # Individual Stars table
+            # Radial table
             push_rows_to_table(
                 result["radial_frame"],
                 POSTGRES_ENGINE,
@@ -500,7 +522,7 @@ def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chun
                 if_exists="append",
             )
 
-            # Individual Stars table
+            # XY table
             push_rows_to_table(
                 result["xy_frame"],
                 POSTGRES_ENGINE,
@@ -528,8 +550,8 @@ def preprocess_stars(df_s, xy_n_bins=10, r_n_bins=20):
 
     df_s["chip_r_bin"] = df_s["chip_r"] // int(df_s["chip_r"].max() / r_n_bins)
 
-    df_s["vec_u"] = np.cos(df_s["theta"]) * df_s["ellipticity"]  # * df_s['fwhm']
-    df_s["vec_v"] = np.sin(df_s["theta"]) * df_s["ellipticity"]  # * df_s['fwhm']
+    df_s["vec_u"] = np.cos(df_s["theta"]) * df_s["ellipticity"]
+    df_s["vec_v"] = np.sin(df_s["theta"]) * df_s["ellipticity"]
 
     y_max = df_s["y_ref"].max()
     df_s["x_bin"] = np.round(
@@ -567,7 +589,7 @@ def bin_stars(df_s, filename, tnpix_min=6):
             "vec_u": "mean",
             "vec_v": "mean",
             "fwhm": "median",
-            "ellipticity": "median",
+            "eccentricity": "median",
             "tnpix": "count",
         }
     ).reset_index()
@@ -581,6 +603,7 @@ def bin_stars(df_s, filename, tnpix_min=6):
 
     df_xy["chip_r"] = np.sqrt(df_xy["x_ref"] ** 2 + df_xy["y_ref"] ** 2)
     df_xy["ellipticity"] = np.sqrt(df_xy["vec_u"] ** 2 + df_xy["vec_v"] ** 2)
+    df_xy["dot_norm"] = df_xy["dot"] / df_xy["ellipticity"] / df_xy["chip_r"]
 
     df_xy["filename_with_path"] = filename
     df_xy["filename"] = os.path.basename(filename)

@@ -47,7 +47,7 @@ from astro_planner.data_merge import (
 )
 
 from image_grading.frame_analysis import (
-    show_aberration_inspector_image,
+    show_inspector_image,
     show_frame_analysis,
     show_fwhm_ellipticity_vs_r,
 )
@@ -122,7 +122,7 @@ HA_FILTER = "Ha"
 OIII_FILTER = "OIII"
 SII_FILTER = "SII"
 BAYER = "OSC"
-
+BAYER_ = "** BayerMatrix **"
 
 FILTER_LIST = [
     L_FILTER,
@@ -133,6 +133,7 @@ FILTER_LIST = [
     OIII_FILTER,
     SII_FILTER,
     BAYER,
+    BAYER_,
 ]
 
 COLORS = {
@@ -144,6 +145,7 @@ COLORS = {
     SII_FILTER: "maroon",
     OIII_FILTER: "teal",
     BAYER: "gray",
+    BAYER_: "gray",
 }
 
 
@@ -199,6 +201,8 @@ def update_data():
         lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
     )
 
+    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
 
     object_data = object_file_reader(ROBOCLIP_FILE)
@@ -240,6 +244,9 @@ def update_data():
     df_stars_headers["frame_snr"] = (
         10 ** df_stars_headers["log_flux_mean"] * df_stars_headers["n_stars"]
     ) / df_stars_headers["bkg_val"]
+
+    root_name = df_stars_headers["file_full_path"].apply(lambda f: f.split("/")[1])
+    df_stars_headers["OBJECT"] = df_stars_headers["OBJECT"].fillna(root_name)
 
 
 update_data()
@@ -1204,6 +1211,11 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
             default_size = 1
         size = df1[size_col].fillna(default_size)
 
+        if filter in ["L", "R", "G", "B", "OSC"]:
+            symbol = "circle"
+        else:
+            symbol = "diamond"
+
         p.add_trace(
             go.Scatter(
                 x=df1[x_col],
@@ -1216,14 +1228,16 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
                 text=df1["text"],
-                marker=dict(color=COLORS[filter], size=size, sizeref=sizeref,),
+                marker=dict(
+                    color=COLORS[filter], size=size, sizeref=sizeref, symbol=symbol
+                ),
                 customdata=df1["filename"],
             )
         )
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
-        # width=600,
+        title=f"Subframe data for {target_match}",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     )
 
@@ -1236,9 +1250,15 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
         Output("xy-frame-graph", "figure"),
         Output("inspector-frame", "figure"),
     ],
-    [Input("target-scatter-graph", "clickData")],
+    [
+        Input("target-scatter-graph", "clickData"),
+        Input("aberration-preview", "checked"),
+        Input("frame-heatmap-dropdown", "value"),
+    ],
 )
-def inspect_frame_analysis(data, recalculate=False):
+def inspect_frame_analysis(
+    data, as_aberration_inspector, frame_heatmap_col, recalculate=False
+):
     global df_target_status
     log.info(data)
     p0 = go.Figure()
@@ -1263,7 +1283,7 @@ def inspect_frame_analysis(data, recalculate=False):
     if recalculate:
         t0 = time.time()
         df_s = process_image_from_filename(
-            filename, extract_thresh=1.5, tnpix_threshold=6
+            filename, extract_thresh=0.25, tnpix_threshold=5
         )
         n_stars = df_s.shape[0]
 
@@ -1285,13 +1305,17 @@ def inspect_frame_analysis(data, recalculate=False):
         df_xy = pd.read_sql(xy_query, POSTGRES_ENGINE)
         log.info(f"Time for query: {time.time() - t0:.2f} seconds")
 
-    feature_col = "fwhm"
-    # feature_col = 'ellipticity'
-    p2, canvas = show_aberration_inspector_image(
-        filename, with_overlay=False, n_cols=3, n_rows=3, border=5
+    p2, canvas = show_inspector_image(
+        filename,
+        as_aberration_inspector=as_aberration_inspector,
+        with_overlay=False,
+        n_cols=3,
+        n_rows=3,
+        border=5,
     )
+
     p0 = show_fwhm_ellipticity_vs_r(df_radial, filename)
-    p1 = show_frame_analysis(df_xy, filename=filename, feature_col=feature_col)
+    p1 = show_frame_analysis(df_xy, filename=filename, feature_col=frame_heatmap_col)
 
     return p0, p1, p2
 

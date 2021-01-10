@@ -14,6 +14,7 @@ services:
             - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro
             # your DATA_DIR, everything after this path is of the format {target_name}/*/{fits_file} - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
+            # - /Volumes/ATLAS/astronomy/data/raw:/data:ro
         environment:
             POSTGRES_USER: astro_user
             POSTGRES_PASSWORD: andromeda
@@ -23,6 +24,16 @@ services:
         depends_on:
             - db
             - watchdog
+    app_standalone:
+        build: 
+            context: .
+            dockerfile: Dockerfile-frame-inspector
+        restart: always
+        entrypoint: ["python", "./app_frame_inspector.py"]
+        volumes:
+            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app:/app
+        ports:
+            - "8051:8050"
     watchdog:
         build: .
         # image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
@@ -34,6 +45,7 @@ services:
             - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
             # your DATA_DIR, everything after this path is of the format {target_name}/*/{fits_file} - tailor this path to your circumstances
             - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
+            # - /Volumes/ATLAS/astronomy/data/raw:/data:ro
             # - /Volumes/Users/gshau/tmp/image_data/data:/data:ro
         environment:
             POSTGRES_USER: astro_user

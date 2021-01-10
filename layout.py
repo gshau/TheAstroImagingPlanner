@@ -630,10 +630,6 @@ def serve_layout():
                     ),
                 ]
             ),
-            # dbc.Row(
-            #     [
-            #     ]
-            # ),
             dbc.Row(
                 [
                     dbc.Col(

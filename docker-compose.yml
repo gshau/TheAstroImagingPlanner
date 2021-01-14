@@ -24,16 +24,6 @@ services:
         depends_on:
             - db
             - watchdog
-    app_standalone:
-        build: 
-            context: .
-            dockerfile: Dockerfile-frame-inspector
-        restart: always
-        entrypoint: ["python", "./app_frame_inspector.py"]
-        volumes:
-            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app:/app
-        ports:
-            - "8051:8050"
     watchdog:
         build: .
         # image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 

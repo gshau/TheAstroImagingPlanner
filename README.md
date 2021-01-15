@@ -10,6 +10,8 @@
         <li><a href="#target-planning">Target Planning</a></li>
         <li><a href="#target-status">Tracking Target Status</a></li>
         <li><a href="#weather">Weather</a></li>
+        <li><a href="#acquired-data">Acquired Data</a></li>
+        <li><a href="#subexposure-inspector">Subexposure Inspector</a></li>
       </ul>
     </li>
     <li>
@@ -17,10 +19,18 @@
       <ul>
         <li><a href="#prerequisites">Prerequisites</a></li>
         <li><a href="#installation">Installation</a></li>
+        <li><a href="#docker-configuration">Docker configuration</a></li>
+        <li><a href="#app-configuration">App configuration</a></li>
+        <li><a href="#equipment">Equipment configuration</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
+    <!-- <li><a href="#usage">Usage</a></li> -->
+    <li><a href="#roadmap">Roadmap</a>
+    <ul>
+    <li>
+      <a href="#future-development">Future Development</a>
+    </ul>
+    </li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <!-- <li><a href="#contact">Contact</a></li> -->
@@ -98,12 +108,12 @@ You can build your own docker image from these files by using `docker-compose up
 docker pull gshau/astroimaging-planner:latest
 ```
 
-## Necessary components:
+### Necessary components:
 - Voyager Roboclip database file
 - Config files from the `conf` directory
 - Data files of the format `{data_dir}/{target_name}/*/{fits_files}`, where `data_dir` is specified in the volume mappings
 
-## Additional info
+## Docker configuration
 
 Configure the `docker-compose.yml` file.  Most use-cases will only require changing the volume mappings under the app entry as shown below:
 ```
@@ -129,7 +139,7 @@ To start the app, run the following, it will download the docker image, `gshau/a
 docker-compose up
 ```
 
-## Configuration
+## App Configuration
 The config file `conf/config.yml` contains the configuration needed to personalize the app.  This includes the file patterns for detecting subframes, site and horizon data, and custom fits header entries.  Below is an example configuration:
 
 ```
@@ -234,15 +244,12 @@ To merge the Roboclip database and stored subexposure metadata, these components
 
 ## Custom Horizon
 There's an option to allow for a custom horizon, where if the target falls below this horizon, it's rendered as a thinner and more transparent altitude trace in the top figure.  The location and format of this file is specified in the `conf/config.yml` file.  If no file is given, a flat horizon level can be specified.  
-
-# Usage
 # Roadmap
 ## Future development
 I have in development a contrast view, which takes into account the bandwidth of filters and the SNR with certain levels of LP, whether it be artificial light from the city, or natural light from the Moon. This also can be extended to include the effect of aerosols in the atmosphere like the smoke we’ve been getting over much of the US this year.
 
 See below for the wishlist of things I'd like to implement for the future.  
-
-## Wishlist:
+### Wishlist:
 - [x] Custom horizon
   - [x] Alpha reduced on inaccessible targets
 - [x] Target status to filter acquired data chart
@@ -258,8 +265,8 @@ See below for the wishlist of things I'd like to implement for the future.
 - [ ] Add OpenWeatherMap datasource
 - [ ] Suggested target and filter sequences
   - [ ] Show color-coded blocks of when filters are used
-
-# Contributing
+  
 # License
+Distributed under the GPLv3 License. See `LICENSE` for more information.
 
 

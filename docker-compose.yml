@@ -1,8 +1,9 @@
 version: '3'
 services:
-    app:
-        build: .  # uncomment this line to build locally from source
+    planner_app:
         # image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
+        build: .  # uncomment this line to build locally from source
+        dockerfile: app_planner/Dockerfile # uncomment this line to build locally from source
         restart: always
         ports:
             - "8050:8050"
@@ -25,8 +26,9 @@ services:
             - db
             - watchdog
     watchdog:
-        build: .
         # image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
+        build: .  # uncomment this line to build locally from source
+        dockerfile: app_planner/Dockerfile # uncomment this line to build locally from source
         restart: always
         entrypoint: ["python", "./image_grading/watchdog.py"]
         volumes:

@@ -5,3 +5,6 @@ __pycache__
 *.s2q
 *.sgf
 *.ipynb
+
+*.fit*
+*.mdb

@@ -31,17 +31,9 @@ def approx_ra_hr_noon(date):
     return int(hour_diff)
 
 
-def compute_ra_order(ra_string, date_string):
-    try:
-        ra_string = str(ra_string)
-        for replace_string in ["h", "m", "s"]:
-            ra_string = ra_string.replace(replace_string, "")
-        ra_vec = ra_string.split()
-        ra_vec[0] = str((int(ra_vec[0]) - approx_ra_hr_noon(date_string)) % 24)
-        result = float(ra_vec[0]) / 24 * 360 + float(ra_vec[1]) / 24 * 6
-        return result
-    except:
-        return np.nan
+def compute_ra_order(ra, date_string):
+    result = (ra - approx_ra_hr_noon(date_string)) % 24
+    return result
 
 
 def get_sensor_map(equipment, df0):

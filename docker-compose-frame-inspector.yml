@@ -1,0 +1,12 @@
+version: '3'
+services:
+    app_standalone:
+        build: 
+            context: .
+            dockerfile: Dockerfile-frame-inspector
+        restart: always
+        entrypoint: ["python", "./app_frame_inspector.py"]
+        volumes:
+            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app:/app
+        ports:
+            - "8050:8050"

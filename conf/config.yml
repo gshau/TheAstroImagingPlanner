@@ -1,13 +1,9 @@
 # FITs file patters in regex format, relative to DATA_DIR
 fits_file_patterns:
-  - "/*/*/*.[fF][iI][tT]"
-  - "/*/*/*.[fF][iI][tT]s"
-  - "/*/*/reject*/*.[fF][iI][tT]"
-  - "/*/*/reject*/*.[fF][iI][tT]s"
-  - "/*/*/cloud*/*.[fF][iI][tT]"
-  - "/*/*/cloud*/*.[fF][iI][tT]s"
-  - "/*/*/Lights/*.[fF][iI][tT]"
-  - "/*/*/Lights/*.[fF][iI][tT][s]"
+  - "*/*/*.[fF][iI][tT]"
+  - "*/*/*.[fF][iI][tT]s"
+  - "*/*/*/*.[fF][iI][tT]"
+  - "*/*/*/*.[fF][iI][tT]s"
   - "*.[fF][iI][tT]"
   - "*.[fF][iI][tT][s]"
 

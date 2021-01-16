@@ -17,7 +17,7 @@ from image_grading.preprocessing import (
     process_headers,
     to_numeric,
 )
-from layout_frame_inspector import serve_layout
+from layout import serve_layout
 from astropy.utils.exceptions import AstropyWarning
 import flask
 from astro_planner.logger import log

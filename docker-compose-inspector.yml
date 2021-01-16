@@ -1,0 +1,10 @@
+version: '3.7'
+services:
+    app_standalone:
+        build: 
+            context: .
+            dockerfile: app_inspector/Dockerfile
+        restart: always
+        entrypoint: ["python", "./app.py"]
+        ports:
+            - "8050:8050"

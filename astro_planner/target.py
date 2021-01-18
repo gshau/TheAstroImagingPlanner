@@ -149,7 +149,7 @@ class SGPSequenceObjects(Objects):
                 filters.append(event["sSuffix"])
 
                 event_data.append(event)
-                log.info(event_data)
+                log.debug(event_data)
                 note_string += "<br> {filter} {exp}s ({ncomplete} / {ntotal}) exposure: {total_exposure:.1f}h".format(
                     filter=event["sSuffix"],
                     exp=event["nExposureTime"],
@@ -163,6 +163,7 @@ class SGPSequenceObjects(Objects):
             self.sequence[name] = dict(
                 RAJ2000=RA, DECJ2000=DEC, NOTE=notes, TARGET=name, GROUP=root_name
             )
+            log.info(self.sequence[name])
         return pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
             drop=True
         )

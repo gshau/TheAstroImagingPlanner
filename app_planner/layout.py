@@ -154,7 +154,7 @@ def serve_layout():
                 html.Label(
                     "Group (Equipment Profiles)", style={"textAlign": "center"},
                 ),
-                dcc.Dropdown(id="profile-selection",),
+                dcc.Dropdown(id="profile-selection", multi=True),
             ],
             style={"textAlign": "center"},
             className="dash-bootstrap",

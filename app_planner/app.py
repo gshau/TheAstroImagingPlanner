@@ -25,7 +25,7 @@ from dash.dependencies import Input, Output, State
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
-from astro_planner.target import object_file_reader, normalize_target_name
+from astro_planner.target import object_file_reader, normalize_target_name, Objects
 from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
@@ -175,7 +175,7 @@ def update_data():
     global df_stored_data
     global df_stars_headers
 
-    log.info("Checking for new data")
+    log.debug("Checking for new data")
 
     query = """
     select file_full_path as filename,
@@ -206,6 +206,8 @@ def update_data():
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
 
     object_data = object_file_reader(ROBOCLIP_FILE)
+    # object_data = Objects()
+    # object_data.load_from_df(pd.DataFrame())
 
     default_status = CONFIG.get("default_target_status", "")
 
@@ -445,6 +447,7 @@ def get_data(
 
 
 def parse_loaded_contents(contents, filename, date):
+    global object_data
     content_type, content_string = contents.split(",")
     decoded = base64.b64decode(content_string)
     try:
@@ -462,15 +465,16 @@ def parse_loaded_contents(contents, filename, date):
             local_file = f"./data/uploads/{file_root}.sgf"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
-            log.debug("Done!")
+            log.info("Done!")
             object_data = object_file_reader(local_file)
-            log.debug(object_data.df_objects.head())
-            log.debug(local_file)
+            log.info(object_data.df_objects.columns)
+            log.info(object_data.df_objects.head())
+            log.info(local_file)
         else:
-            return html.Div(["Unsupported file!"])
+            return None
     except Exception as e:
         log.warning(e)
-        return html.Div(["There was an error processing this file."])
+        return None
     return object_data
 
 
@@ -541,9 +545,10 @@ def target_filter(targets, filters):
     return list(set(targets_with_filter))
 
 
-def get_progress_graph(df, date_string, profile, days_ago, targets=[]):
+def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
 
     selection = df["date"] < "1970-01-01"
+    # selection = df["profile"].isin(profile_list)
     if days_ago > 0:
         selection |= df["date"] > str(
             datetime.datetime.today() - datetime.timedelta(days=days_ago)
@@ -646,12 +651,16 @@ def update_output_callback(list_of_contents, list_of_names, list_of_dates):
         options = []
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
             object_data = parse_loaded_contents(c, n, d)
-            for profile in object_data.profiles:
-                if profile in inactive_profiles:
-                    options.append({"label": profile, "value": profile})
-        default_option = options[0]["value"]
-        return options, default_option
-    return options, default_option
+            if object_data:
+                for profile in object_data.profiles:
+                    log.info(profile)
+                    if profile not in inactive_profiles:
+                        options.append({"label": profile, "value": profile})
+        if object_data:
+            log.info(options)
+            default_option = options[0]["value"]
+        return options, [default_option]
+    return options, [default_option]
 
 
 @app.callback(
@@ -698,8 +707,8 @@ def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
     [Input("profile-selection", "value")],
     [State("status-match", "value")],
 )
-def update_target_for_status_callback(profile, status_match):
-    df_combined_group = df_combined[df_combined["GROUP"] == profile]
+def update_target_for_status_callback(profile_list, status_match):
+    df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
     targets = df_combined_group.index.values
     return make_options(targets), ""
 
@@ -709,12 +718,14 @@ def update_target_for_status_callback(profile, status_match):
     [Input("target-status-match", "value")],
     [State("store-target-status", "data"), State("profile-selection", "value")],
 )
-def update_radio_status_for_targets_callback(targets, target_status_store, profile):
+def update_radio_status_for_targets_callback(
+    targets, target_status_store, profile_list
+):
     global df_target_status
     status_set = set()
     status = df_target_status.set_index(["OBJECT", "GROUP"])
     for target in targets:
-        status_values = [status.loc[target].loc[profile]["status"]]
+        status_values = [status.loc[target].loc[profile_list]["status"]]
         status_set = status_set.union(set(status_values))
     if len(status_set) == 1:
         log.debug(f"Fetching targets: {targets} with status of {status_set}")
@@ -733,11 +744,13 @@ def update_radio_status_for_targets_callback(targets, target_status_store, profi
         State("profile-selection", "value"),
     ],
 )
-def update_target_with_status_callback(status, targets, target_status_store, profile):
+def update_target_with_status_callback(
+    status, targets, target_status_store, profile_list
+):
     global df_combined
     global df_target_status
     df_combined, df_target_status = update_targets_with_status(
-        targets, status, df_combined, profile
+        targets, status, df_combined, profile_list
     )
     return ""
 
@@ -794,11 +807,13 @@ def store_data(
     filter_targets,
     status_matches,
     filters,
-    profile,
+    profile_list,
 ):
     global df_combined, object_data
     log.debug(f"Calling store_data")
-    targets = list(object_data.target_list[profile].values())
+    targets = []
+    for profile in profile_list:
+        targets += list(object_data.target_list[profile].values())
     site = update_site(
         site_data,
         default_lat=DEFAULT_LAT,
@@ -863,7 +878,7 @@ def update_target_graph(
     target_goals,
     metadata,
     dark_sky_duration,
-    profile,
+    profile_list,
     status_list,
     date,
 ):
@@ -913,7 +928,7 @@ def update_target_graph(
         },
     )
 
-    df_combined_group = df_combined[df_combined["GROUP"] == profile]
+    df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
 
     df_combined_group = set_target_status(df_combined_group, df_target_status)
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
@@ -922,7 +937,7 @@ def update_target_graph(
     progress_graph, df_summary = get_progress_graph(
         df_stored_data,
         date_string=date_string,
-        profile=profile,
+        profile_list=profile_list,
         days_ago=progress_days_ago,
         targets=targets,
     )
@@ -1168,6 +1183,9 @@ def update_scatter_axes(value):
     return x_col, y_col
 
 
+filter_map = {"Red": "R", "Green": "G", "Blue": "B", "Lum": "L", "Luminance": "L"}
+
+
 @app.callback(
     Output("target-scatter-graph", "figure"),
     [
@@ -1184,7 +1202,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
     global df_stars_headers
 
     df0 = df_stars_headers[(df_stars_headers["OBJECT"] == target_match)]
-
+    df0["FILTER"] = df0["FILTER"].replace(filter_map)
     filters = df0["FILTER"].unique()
     if not x_col:
         x_col = "fwhm_mean_arcsec"

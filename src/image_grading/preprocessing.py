@@ -293,7 +293,7 @@ def process_stars(
             + (df_xy["vec_v"].mean() / df_xy["vec_v"].std()) ** 2
         )
         df_agg_stars["star_trail_strength"] = trail_strength
-        df_agg_stars["dot_norm_median"] = np.abs(df_xy["dot_norm"]).median()
+        df_agg_stars["star_orientation_score"] = np.abs(df_xy["dot_norm"]).median()
 
         df_lists["stars"].append(df_stars)
         df_lists["agg_stars"].append(df_agg_stars)
@@ -433,7 +433,7 @@ def chunks(lst, n):
 
 
 def update_star_metrics(
-    config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=32, extract_thresh=0.25
+    config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=16, extract_thresh=0.25
 ):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
@@ -455,12 +455,12 @@ def update_star_metrics(
                             [[f] for f in file_set],
                         )
                     )
-                    result = defaultdict(list)
-                    for r in l_result:
-                        for k, v in r.items():
-                            result[k].append(v)
-                    for k, v in result.items():
-                        result[k] = pd.concat(v)
+                result = defaultdict(list)
+                for r in l_result:
+                    for k, v in r.items():
+                        result[k].append(v)
+                for k, v in result.items():
+                    result[k] = pd.concat(v)
 
             else:
                 result = process_stars(file_set, extract_thresh=extract_thresh)

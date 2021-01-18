@@ -19,7 +19,7 @@ progress_mode: 'group'
 progress_days_ago: 0
 
 # Number of threads used when processing star data
-threads_for_star_processing: 8
+threads_for_star_processing: 4
 
 horizon_data:
   flat_horizon_alt: 10

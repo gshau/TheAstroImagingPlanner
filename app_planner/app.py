@@ -1130,7 +1130,12 @@ def update_files_table(target_data, header_col_match, target_match):
     scatter_field_options = make_options(numeric_cols)
 
     df_agg = df0.groupby(["OBJECT", "FILTER", "XBINNING", "FOCALLEN", "XPIXSZ"]).agg(
-        {"EXPOSURE": "sum", "CCD-TEMP": "std", "DATE-OBS": "count"}
+        {
+            "EXPOSURE": "sum",
+            "CCD-TEMP": "std",
+            "DATE-OBS": "count",
+            "star_orientation_score": "mean",
+        }
     )
     df_agg["EXPOSURE"] = df_agg["EXPOSURE"] / 3600
     col_map = {

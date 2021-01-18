@@ -12,10 +12,10 @@ import matplotlib.pyplot as plt
 
 from collections import defaultdict
 from sqlalchemy import Table, MetaData
-from pathlib import Path
 from astropy.io import fits
 from astropy.utils.exceptions import AstropyUserWarning
-
+from multiprocessing import Pool
+from functools import partial
 
 warnings.filterwarnings("ignore", category=AstropyUserWarning)
 
@@ -34,11 +34,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message
 log = logging.getLogger(__name__)
 
 
-app_dir = str(Path(__file__).parents[1])
-with open(f"{app_dir}/conf/config.yml", "r") as f:
+with open("/app/conf/config.yml", "r") as f:
     CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
 DATA_DIR = os.getenv("DATA_DIR", "/data")
-
+TARGET_DIR = os.getenv("TARGET_DIR", "/targets")
 
 sep.set_extract_pixstack(1000000)
 
@@ -47,7 +46,8 @@ def get_fits_file_list(data_dir, config):
     fits_file_list = []
     if "fits_file_patterns" in config:
         for file_pattern in config["fits_file_patterns"]:
-            fits_file_list += list(glob.iglob(f"{data_dir}/{file_pattern}"))
+            glob_pattern = f"{data_dir}/{file_pattern}"
+            fits_file_list += list(glob.iglob(glob_pattern, recursive=True))
     return fits_file_list
 
 
@@ -78,48 +78,6 @@ def aggregate_stars(df_stars):
     )
     df0 = df0.join(df1).join(df2)
 
-    # cols_for_corr = [
-    #     "npix",
-    #     "tnpix",
-    #     "x",
-    #     "y",
-    #     "x2",
-    #     "y2",
-    #     "xy",
-    #     "errx2",
-    #     "erry2",
-    #     "errxy",
-    #     "a",
-    #     "b",
-    #     "theta",
-    #     "cxx",
-    #     "cyy",
-    #     "cxy",
-    #     "cflux",
-    #     "flux",
-    #     "cpeak",
-    #     "peak",
-    #     "xcpeak",
-    #     "ycpeak",
-    #     "xpeak",
-    #     "ypeak",
-    #     "fwhm",
-    #     "ecc",
-    #     "ellipticity",
-    #     "elongation",
-    #     "chip_theta",
-    #     "chip_r",
-    # ]
-
-    # df_corr = df_stars[cols_for_corr].corr().stack().drop_duplicates()
-    # df_corr = df_corr[df_corr < 1]
-    # df_corr = df_corr.to_frame("corr").T
-    # df_corr.columns = [
-    #     f"corr__{'__'.join(col)}".strip() for col in df_corr.columns.values
-    # ]
-    # df_corr.index = df0.index
-
-    # df0 = pd.concat([df0, df_corr], axis=1)
     df0.index.name = "filename"
 
     return df0
@@ -263,11 +221,8 @@ def check_file_in_table(file_list, engine, table_name):
             if os.path.basename(file) not in df["filename"].values
         ]
     except:
-        # table_exists = check_if_table_exists(engine, table_name)
-        # if table_exists:
-        #     log.warning("Issue reading table", exc_info=True)
+        log.info("Issue: ", exc_info=True)
         new_files = file_list
-    log.debug(f"New files seen: {len(new_files)}")
     return new_files
 
 
@@ -306,13 +261,6 @@ def process_stars(
     df_stars = pd.DataFrame()
     df_agg_stars = pd.DataFrame()
 
-    # if multithread_fits_read:
-    #     with Pool(n_threads) as p:
-    #         df_stars_list = list(p.imap(process_stars_from_fits, file_list))
-    #         if df_stars_list:
-    #             df_stars = pd.concat(df_stars_list).reset_index()
-    #         return df_stars
-    # else:
     df_lists = defaultdict(list)
 
     for filename in file_list:
@@ -346,7 +294,6 @@ def process_stars(
         )
         df_agg_stars["star_trail_strength"] = trail_strength
         df_agg_stars["dot_norm_median"] = np.abs(df_xy["dot_norm"]).median()
-        df_agg_stars["dot_norm_mean"] = np.abs(df_xy["dot_norm"]).mean()
 
         df_lists["stars"].append(df_stars)
         df_lists["agg_stars"].append(df_agg_stars)
@@ -414,6 +361,8 @@ def init_tables():
             "aggregated_star_metrics",
             "xy_frame_metrics",
             "radial_frame_metrics",
+            "targets",
+            "target_status",
         ]
     )
 
@@ -459,7 +408,9 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
-    log.info(f"Found {len(new_files)} new files for headers")
+    n_files = len(new_files)
+    if n_files > 0:
+        log.info(f"Found {n_files} new files for headers")
     files_with_data = get_file_list_with_data(new_files)
     if files_with_data:
         for files in chunks(files_with_data, 100):
@@ -481,16 +432,39 @@ def chunks(lst, n):
         yield lst[i : i + n]
 
 
-def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=10):
+def update_star_metrics(
+    config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=32, extract_thresh=0.25
+):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(
         file_list, POSTGRES_ENGINE, "aggregated_star_metrics"
     )
     files_with_data = get_file_list_with_data(new_files)
+
+    n_threads = int(CONFIG.get("threads_for_star_processing", 1))
+    multithread_fits_read = n_threads > 1
+
     if files_with_data:
-        for file_set in chunks(files_with_data, n_chunk):
-            result = process_stars(file_set, extract_thresh=0.25)
+        for file_set in list(chunks(files_with_data, n_chunk)):
+            if multithread_fits_read:
+                with Pool(n_threads) as p:
+                    l_result = list(
+                        p.imap(
+                            partial(process_stars, extract_thresh=extract_thresh),
+                            [[f] for f in file_set],
+                        )
+                    )
+                    result = defaultdict(list)
+                    for r in l_result:
+                        for k, v in r.items():
+                            result[k].append(v)
+                    for k, v in result.items():
+                        result[k] = pd.concat(v)
+
+            else:
+                result = process_stars(file_set, extract_thresh=extract_thresh)
+
             if "stars" not in result:
                 continue
             n_stars = result["stars"].shape[0]
@@ -531,7 +505,9 @@ def update_star_metrics(config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chun
             )
 
             if n_stars > 0:
-                log.info(f"Finished pushing {n_stars} stars to tables")
+                log.info(
+                    f"Finished pushing {n_stars} stars from {len(file_set)} files to tables"
+                )
 
 
 def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=None):

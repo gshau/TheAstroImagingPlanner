@@ -72,12 +72,13 @@ def clean_subframes(subframes, n_subs_name="subs_requested"):
 
 
 def normalize_target_name(target):
-    target = target.lower()
-    target = target.replace("-", "_")
-    target = target.replace(" ", "_")
-    target = re.sub(r"^(?:sh2)_*", "sh2-", target)
-    for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
-        target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
+    if target:
+        target = target.lower()
+        target = target.replace("-", "_")
+        target = target.replace(" ", "_")
+        target = re.sub(r"^(?:sh2)_*", "sh2-", target)
+        for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
+            target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
     return target
 
 
@@ -149,7 +150,7 @@ class SGPSequenceObjects(Objects):
                 filters.append(event["sSuffix"])
 
                 event_data.append(event)
-                log.info(event_data)
+                log.debug(event_data)
                 note_string += "<br> {filter} {exp}s ({ncomplete} / {ntotal}) exposure: {total_exposure:.1f}h".format(
                     filter=event["sSuffix"],
                     exp=event["nExposureTime"],
@@ -163,6 +164,7 @@ class SGPSequenceObjects(Objects):
             self.sequence[name] = dict(
                 RAJ2000=RA, DECJ2000=DEC, NOTE=notes, TARGET=name, GROUP=root_name
             )
+            log.info(self.sequence[name])
         return pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
             drop=True
         )

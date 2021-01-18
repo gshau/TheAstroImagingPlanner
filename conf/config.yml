@@ -1,11 +1,7 @@
 # FITs file patters in regex format, relative to DATA_DIR
 fits_file_patterns:
-  - "*/*/*.[fF][iI][tT]"
-  - "*/*/*.[fF][iI][tT]s"
-  - "*/*/*/*.[fF][iI][tT]"
-  - "*/*/*/*.[fF][iI][tT]s"
-  - "*.[fF][iI][tT]"
-  - "*.[fF][iI][tT][s]"
+  - "**/*.[fF][iI][tT]"
+  - "**/*.[fF][iI][tT][s]"
 
 
 # Default target status when initially parsing data
@@ -21,6 +17,9 @@ progress_mode: 'group'
 
 # Last number of days to show target progress, regardless of filters
 progress_days_ago: 0
+
+# Number of threads used when processing star data
+threads_for_star_processing: 8
 
 horizon_data:
   flat_horizon_alt: 10

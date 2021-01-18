@@ -67,8 +67,8 @@ def add_group(equipment, df0):
     return df0
 
 
-def merge_roboclip_stored_metadata(
-    df_stored_data, df_roboclip, config, default_status="closed"
+def merge_targets_with_stored_metadata(
+    df_stored_data, df_targets, config, default_status="closed"
 ):
 
     df_stored_data = df_stored_data.rename(FITS_DF_COL_MAP, axis=1)
@@ -84,9 +84,9 @@ def merge_roboclip_stored_metadata(
     df0["status"] = default_status
 
     df0 = add_group(config["equipment"], df0)
-    df_roboclip["OBJECT"] = df_roboclip["TARGET"].apply(normalize_target_name)
+    df_targets["OBJECT"] = df_targets["TARGET"].apply(normalize_target_name)
     df_combined = df0.set_index("OBJECT").join(
-        df_roboclip.set_index("OBJECT"), how="outer"
+        df_targets.set_index("OBJECT"), how="outer"
     )
     df_combined.loc[df_combined["status"].isnull(), "status"] = "pending"
 
@@ -143,7 +143,7 @@ def target_status_to_df(target_status):
     return df_target_status
 
 
-def load_target_status_from_file(filename="./conf/target_status.yml"):
+def load_target_status_from_file(filename="/app/conf/target_status.yml"):
     with open(filename, "r") as f:
         target_status = yaml.load(f, Loader=yaml.BaseLoader)
     df_target_status = pd.DataFrame()
@@ -162,12 +162,13 @@ def set_target_status(df_combined, df_target_status):
     return dfc.set_index("OBJECT")
 
 
-def update_targets_with_status(target_names, status, df_combined, profile):
+def update_targets_with_status(target_names, status, df_combined, profile_list):
 
     if status in VALID_STATUS:
         for target_name in target_names:
             df_combined.loc[
-                (df_combined.index == target_name) & (df_combined["GROUP"] == profile),
+                (df_combined.index == target_name)
+                & (df_combined["GROUP"].isin(profile_list)),
                 "status",
             ] = status
     df_target_status = dump_target_status_to_file(df_combined)

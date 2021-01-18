@@ -3,16 +3,12 @@ services:
     planner_app:
         image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
         restart: always
-        entrypoint: ["python", "./app.py"]
+        entrypoint: ["python", "./src/app.py"]
         ports:
             - "8050:8050"
         volumes:
-            # path to the config files - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
-            # your roboclip path - tailor this path to your circumstances, typically set as `C:\Users\UserName\Documents\Voyager\Data` in Windows
-            - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro
-            # your DATA_DIR, everything after this path is of the format {target_name}/*/{fits_file} - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
+            - ./conf:/app/conf
+            - ${DATA_PATH}:/data:ro
         environment:
             POSTGRES_USER: astro_user
             POSTGRES_PASSWORD: andromeda
@@ -25,12 +21,11 @@ services:
     watchdog:
         image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
         restart: always
-        entrypoint: ["python", "./image_grading/watchdog.py"]
+        entrypoint: ["python", "./src/watchdog.py"]
         volumes:
-            # path to the config files - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
-            # your DATA_DIR, everything after this path is of the format {target_name}/*/{fits_file} - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
+            - ./conf:/app/conf
+            - ${DATA_PATH}:/data:ro
+            - ${TARGETS_PATH}:/targets:ro
         environment:
             POSTGRES_USER: astro_user
             POSTGRES_PASSWORD: andromeda

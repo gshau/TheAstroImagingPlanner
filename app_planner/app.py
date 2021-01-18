@@ -107,7 +107,8 @@ POSTGRES_ENGINE = sqlalchemy.create_engine(
 )
 
 
-USE_CONTRAST = os.getenv("USE_CONTRAST", False)
+USE_CONTRAST = strtobool(os.getenv("USE_CONTRAST", "True")) == 1
+log.info(f"use contrast: {USE_CONTRAST}")
 styles = {}
 if not USE_CONTRAST:
     styles["k-ext"] = {"display": "none"}
@@ -135,6 +136,15 @@ FILTER_LIST = [
     BAYER,
     BAYER_,
 ]
+
+FILTER_MAP = {
+    "Red": R_FILTER,
+    "Green": G_FILTER,
+    "Blue": B_FILTER,
+    "Lum": L_FILTER,
+    "Luminance": L_FILTER,
+}
+
 
 COLORS = {
     L_FILTER: "black",
@@ -244,20 +254,22 @@ def update_data():
     log.debug("Ready to query stars")
     df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
 
-    df_stars_headers = pd.merge(df_headers, df_stars, on="filename", how="left")
-    df_stars_headers["fwhm_mean_arcsec"] = (
-        df_stars_headers["fwhm_mean"] * df_stars_headers["arcsec_per_pixel"]
+    df_stars_headers_ = pd.merge(df_headers, df_stars, on="filename", how="left")
+    df_stars_headers_["fwhm_mean_arcsec"] = (
+        df_stars_headers_["fwhm_mean"] * df_stars_headers_["arcsec_per_pixel"]
     )
-    df_stars_headers["fwhm_std_arcsec"] = (
-        df_stars_headers["fwhm_std"] * df_stars_headers["arcsec_per_pixel"]
+    df_stars_headers_["fwhm_std_arcsec"] = (
+        df_stars_headers_["fwhm_std"] * df_stars_headers_["arcsec_per_pixel"]
     )
 
-    df_stars_headers["frame_snr"] = (
-        10 ** df_stars_headers["log_flux_mean"] * df_stars_headers["n_stars"]
-    ) / df_stars_headers["bkg_val"]
+    df_stars_headers_["frame_snr"] = (
+        10 ** df_stars_headers_["log_flux_mean"] * df_stars_headers_["n_stars"]
+    ) / df_stars_headers_["bkg_val"]
 
-    root_name = df_stars_headers["file_full_path"].apply(lambda f: f.split("/")[1])
-    df_stars_headers["OBJECT"] = df_stars_headers["OBJECT"].fillna(root_name)
+    root_name = df_stars_headers_["file_full_path"].apply(lambda f: f.split("/")[1])
+    df_stars_headers_["OBJECT"] = df_stars_headers_["OBJECT"].fillna(root_name)
+
+    df_stars_headers = df_stars_headers_.copy()
 
 
 update_data()
@@ -567,6 +579,7 @@ def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
     if targets:
         selection |= df["OBJECT"].isin(targets)
     df0 = df[selection].reset_index()
+    df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
 
     p = go.Figure()
     if df0.shape[0] == 0:
@@ -1057,7 +1070,7 @@ def update_files_table(target_data, header_col_match, target_match):
     for col in fits_cols:
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
-
+    df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
     df0["FILTER_indx"] = df0["FILTER"].map(
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
     )
@@ -1192,9 +1205,6 @@ def update_scatter_axes(value):
     return x_col, y_col
 
 
-filter_map = {"Red": "R", "Green": "G", "Blue": "B", "Lum": "L", "Luminance": "L"}
-
-
 @app.callback(
     Output("target-scatter-graph", "figure"),
     [
@@ -1211,7 +1221,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
     global df_stars_headers
 
     df0 = df_stars_headers[(df_stars_headers["OBJECT"] == target_match)]
-    df0["FILTER"] = df0["FILTER"].replace(filter_map)
+    df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
     filters = df0["FILTER"].unique()
     if not x_col:
         x_col = "fwhm_mean_arcsec"
@@ -1367,8 +1377,8 @@ def toggle_alert(n):
 
     if new_files_available:
         filenames = df_new["filename"].values
-        filenames = "\n".join(filenames)
-        text = f"Detected {new_row_count} new files available: {filenames}"
+        filenames = "<br>\n".join(filenames)
+        text = f"Detected {new_row_count} new files \n available: <br> {filenames}"
         log.info(text)
         is_open = True
         duration = 5000

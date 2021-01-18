@@ -85,12 +85,11 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     A0 = sbm._mpsas_to_b(11) / np.exp(-5)
     b_sun = A0 * np.exp(df_sun["alt"]) / 1.15
 
-    # Ad-hoc LP model
-    # b_lp = 2000 * np.exp(-(df_target["alt"] / 20 - 1))
+    b_zenith_lp = sbm._mpsas_to_b(mpsas)
+    b_altitude_lp = b_zenith_lp * 2.512 ** (df_target["airmass"] * k_ext - 0.16)
 
     b_all_terms = b_moon
-    b_all_terms += sbm._mpsas_to_b(mpsas)
-    # b_all_terms += b_lp
+    b_all_terms += b_altitude_lp
     b_all_terms += b_sun
 
     sky_bkg = sbm._b_to_mpsas(b_all_terms)
@@ -113,25 +112,20 @@ def get_contrast(
 ):
     sky_bkg = get_sky_bkg(df_locs, target_name, mpsas, k_ext=k_ext)
 
-    # vis_bw = 300
-
-    # obj = 2.5 ** (-object_brightness)
     bkg = 2.5 ** (-sky_bkg)
     dark_bkg = 2.5 ** (-mpsas)
 
+    # vis_bw = 300
     # if filter_bandwidth:
     #     bkg *= filter_bandwidth / vis_bw
     #     dark_bkg *= filter_bandwidth / vis_bw
 
-    # contrast = obj / (bkg)
-    # contrast_dark = obj / (dark_bkg)
-    # contrast = obj / bkg
-
     contrast_ratio = dark_bkg / bkg
 
-    if include_airmass:
-        contrast_ratio *= np.exp(-k_ext * (df_locs[target_name]["airmass"]) + 0.16)
-        # contrast_ratio *= np.exp(-(df_locs[target_name]["airmass"] - 1))
+    fwhm_increase_from_airmass = df_locs[target_name]["airmass"] ** 0.6
+    contrast_decrease_from_seeing = fwhm_increase_from_airmass ** 2
+    contrast_ratio /= contrast_decrease_from_seeing
+
     return contrast_ratio
 
 

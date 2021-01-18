@@ -72,12 +72,13 @@ def clean_subframes(subframes, n_subs_name="subs_requested"):
 
 
 def normalize_target_name(target):
-    target = target.lower()
-    target = target.replace("-", "_")
-    target = target.replace(" ", "_")
-    target = re.sub(r"^(?:sh2)_*", "sh2-", target)
-    for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
-        target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
+    if target:
+        target = target.lower()
+        target = target.replace("-", "_")
+        target = target.replace(" ", "_")
+        target = re.sub(r"^(?:sh2)_*", "sh2-", target)
+        for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
+            target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
     return target
 
 

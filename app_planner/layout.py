@@ -1,6 +1,9 @@
 import yaml
 import os
+
 from datetime import datetime as dt
+from distutils.util import strtobool
+
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
@@ -15,7 +18,7 @@ DEFAULT_MPSAS = CONFIG.get("mpsas", 19.5)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 
-USE_CONTRAST = os.getenv("USE_CONTRAST", False)
+USE_CONTRAST = strtobool(os.getenv("USE_CONTRAST", "True")) == 1
 styles = {}
 if not USE_CONTRAST:
     styles["k-ext"] = {"display": "none"}
@@ -217,7 +220,7 @@ def serve_layout():
                             {"label": "Acquired", "value": "acquired"},
                             {"label": "Closed", "value": "closed"},
                         ],
-                        value=["pending", "active"],
+                        value=[],
                         multi=True,
                     ),
                 ],
@@ -705,7 +708,7 @@ def serve_layout():
 
     tabs = dbc.Tabs(
         id="tabs",
-        active_tab="tab-files-table",
+        active_tab="tab-target",
         children=[
             dbc.Tab(
                 label="Target Review",

@@ -29,8 +29,10 @@ def update_db_with_targets(config=CONFIG, target_dir=TARGET_DIR, file_list=None)
 def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = []
+
         for extension in ["mdb", "sgf"]:
             file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
+            file_list += glob.glob(f"/app/data/uploads/*.{extension}", recursive=True)
     new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))
     n_files = len(new_files)
     if n_files > 0:

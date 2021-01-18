@@ -3,7 +3,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 
-with open("./conf/config.yml", "r") as f:
+with open("/app/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 

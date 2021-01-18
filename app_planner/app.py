@@ -38,7 +38,7 @@ from astro_planner.data_parser import (
 
 from astro_planner.data_merge import (
     compute_ra_order,
-    merge_roboclip_stored_metadata,
+    merge_targets_with_stored_metadata,
     get_targets_with_status,
     dump_target_status_to_file,
     load_target_status_from_file,
@@ -78,7 +78,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server
 app.title = "The AstroImaging Planner"
 
 
-with open("./conf/config.yml", "r") as f:
+with open("/app/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
 HORIZON_DATA = CONFIG.get("horizon_data", {})
 
@@ -205,11 +205,22 @@ def update_data():
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
 
-    object_data = object_file_reader(ROBOCLIP_FILE)
+    target_query = """select filename,
+        "TARGET",
+        "GROUP",
+        "RAJ2000",
+        "DECJ2000",
+        "NOTE"
+        FROM targets
+    """
+    df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+
+    object_data = Objects()
+    object_data.load_from_df(df_objects)
 
     default_status = CONFIG.get("default_target_status", "")
 
-    df_combined = merge_roboclip_stored_metadata(
+    df_combined = merge_targets_with_stored_metadata(
         df_stored_data,
         object_data.df_objects,
         EQUIPMENT,

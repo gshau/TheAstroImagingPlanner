@@ -1,8 +1,6 @@
 import os
 import yaml
 
-from pathlib import Path
-
 
 from .logger import log
 
@@ -10,8 +8,7 @@ DATA_DIR = os.getenv("DATA_DIR", "/data/")
 
 FILTERS = ["L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
 
-app_dir = str(Path(__file__).parents[1])
-with open(f"{app_dir}/conf/config.yml", "r") as f:
+with open("/app/conf/config.yml", "r") as f:
     CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
 
 SENSOR_MAP = CONFIG.get("sensor_map", {})

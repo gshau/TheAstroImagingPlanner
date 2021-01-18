@@ -14,8 +14,8 @@ RUN pip install --no-cache-dir  --compile -r /requirements.txt
 RUN mkdir /app
 WORKDIR /app
 COPY ./ ./
-COPY ./${APP_DIR}/ ./
+COPY ./${APP_DIR}/ ./src
 
 EXPOSE 8050
 
-CMD ["python", "./app.py"]
+CMD ["python", "./src/app.py"]

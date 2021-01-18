@@ -406,7 +406,7 @@ def get_data(
         name="sun_dn",
     )
     data = [sun_data, sun_up_data, sun_dn_data, moon_data]
-    if value == "contrast":
+    if (value == "contrast") or (value == "airmass"):
         data = [sun_up_data, sun_dn_data]
     n_targets = len(target_coords)
     colors = sns.color_palette(n_colors=n_targets).as_hex()
@@ -435,7 +435,6 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             notes_text = df_combined.loc[target_name, "NOTE"]
-
             for horizon_status in ["above", "below"]:
                 df0 = df.copy()
                 show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
@@ -924,10 +923,12 @@ def update_target_graph(
         date_string=date_string, dark_sky_duration=dark_sky_duration
     )
 
+    yaxis_type = "linear"
     if value == "alt":
         y_range = [0, 90]
     elif value == "airmass":
-        y_range = [1, 5]
+        y_range = [0, 1]
+        yaxis_type = "log"
     elif value == "contrast":
         y_range = [0, 1]
 
@@ -937,7 +938,7 @@ def update_target_graph(
             "data": target_data,
             "layout": dict(
                 xaxis={"title": "", "range": date_range},
-                yaxis={"title": yaxis_map[value], "range": y_range},
+                yaxis={"title": yaxis_map[value], "range": y_range, "type": yaxis_type},
                 title=title,
                 margin={"l": 50, "b": 100, "t": 50, "r": 50},
                 legend={"orientation": "v"},
@@ -1070,7 +1071,7 @@ def update_files_table(target_data, header_col_match, target_match):
     for col in fits_cols:
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
-    df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
+    # df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
     df0["FILTER_indx"] = df0["FILTER"].map(
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
     )

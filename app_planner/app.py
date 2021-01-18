@@ -177,7 +177,7 @@ def update_data():
 
     log.debug("Checking for new data")
 
-    query = """
+    stored_data_query = """
     select file_full_path as filename,
         "OBJECT",
         "DATE-OBS",
@@ -195,7 +195,7 @@ def update_data():
         from fits_headers
     """
 
-    df_stored_data = pd.read_sql(query, POSTGRES_ENGINE)
+    df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
     df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
     df_stored_data["filename"] = df_stored_data["filename"].apply(
         lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
@@ -206,8 +206,6 @@ def update_data():
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
 
     object_data = object_file_reader(ROBOCLIP_FILE)
-    # object_data = Objects()
-    # object_data.load_from_df(pd.DataFrame())
 
     default_status = CONFIG.get("default_target_status", "")
 

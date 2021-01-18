@@ -1,6 +1,6 @@
 import numpy as np
 
-TARGET_BKG = 0.1
+TARGET_BKG = 0.05
 SHADOWS_CLIP = -2.8
 
 

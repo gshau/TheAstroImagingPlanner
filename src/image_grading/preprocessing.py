@@ -18,6 +18,7 @@ from astropy.utils.exceptions import AstropyUserWarning
 from multiprocessing import Pool
 from functools import partial
 
+from ..astro_planner.target import object_file_reader
 
 warnings.filterwarnings("ignore", category=AstropyUserWarning)
 
@@ -40,7 +41,7 @@ app_dir = str(Path(__file__).parents[1])
 with open(f"{app_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
 DATA_DIR = os.getenv("DATA_DIR", "/data")
-
+TARGET_DIR = os.getenv("TARGET_DIR", "/targets")
 
 sep.set_extract_pixstack(1000000)
 
@@ -364,6 +365,8 @@ def init_tables():
             "aggregated_star_metrics",
             "xy_frame_metrics",
             "radial_frame_metrics",
+            "targets",
+            "target_status",
         ]
     )
 
@@ -516,6 +519,40 @@ def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=No
     update_fits_headers(config, data_dir, file_list)
     update_fits_status(config, data_dir, file_list)
     update_star_metrics(config, data_dir, file_list)
+
+
+def update_db_with_targets(config=CONFIG, target_dir=TARGET_DIR, file_list=None):
+    log.debug("Checking for new targets")
+    update_targets(config, target_dir, file_list)
+
+
+def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
+    if not file_list:
+        file_list = []
+        for extension in ["mdb", "sgf"]:
+            file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
+    new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))
+    n_files = len(new_files)
+    if n_files > 0:
+        log.info(f"Found {n_files} new files for headers")
+    files_with_data = get_file_list_with_data(new_files)
+    target_columns = ["TARGET", "GROUP", "RAJ2000", "DECJ2000", "NOTE"]
+    if files_with_data:
+        df_list = []
+        for filename in files_with_data:
+            try:
+                objects = object_file_reader(filename)
+                df = objects.df_objects
+                df["filename"] = os.path.basename(filename)
+                df_list.append(df[target_columns])
+            except:
+                log.info(f"Issue with {filename}", exc_info=True)
+        df_targets = pd.concat(df_list)
+        log.info("Pushing to db")
+        push_rows_to_table(
+            df_targets, POSTGRES_ENGINE, table_name="targets", if_exists="append",
+        )
+        log.info("Done")
 
 
 def lower_cols(df):

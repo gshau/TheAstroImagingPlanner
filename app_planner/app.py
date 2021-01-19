@@ -435,6 +435,8 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             notes_text = df_combined.loc[target_name, "NOTE"]
+            log.info(f'{target_name} df: {df_combined.loc[target_name]}')
+            log.info(f'{target_name} notes: {notes_text}')
             for horizon_status in ["above", "below"]:
                 df0 = df.copy()
                 show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
@@ -653,20 +655,30 @@ def toggle_modal_callback(n1, n2, is_open):
 @app.callback(
     [Output("profile-selection", "options"), Output("profile-selection", "value")],
     [Input("upload-data", "contents")],
-    [State("upload-data", "filename"), State("upload-data", "last_modified")],
+    [
+        State("upload-data", "filename"),
+        State("upload-data", "last_modified"),
+        State("profile-selection", "value"),
+    ],
 )
-def update_output_callback(list_of_contents, list_of_names, list_of_dates):
+def update_output_callback(
+    list_of_contents, list_of_names, list_of_dates, profiles_selected
+):
     global object_data
     profile = object_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
+    default_profiles = CONFIG.get("default_profiles", [])
 
     options = [
         {"label": profile, "value": profile}
         for profile in object_data.profiles
         if profile not in inactive_profiles
     ]
-    default_option = options[0]["value"]
+
+    default_options = profiles_selected
+    if default_profiles:
+        default_options = default_profiles
 
     if list_of_contents is not None:
         options = []
@@ -677,11 +689,8 @@ def update_output_callback(list_of_contents, list_of_names, list_of_dates):
                     log.info(profile)
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
-        if object_data:
-            log.info(options)
-            default_option = options[0]["value"]
-        return options, [default_option]
-    return options, [default_option]
+        return options, default_options
+    return options, default_options
 
 
 @app.callback(

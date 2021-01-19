@@ -461,19 +461,6 @@ def serve_layout():
         multiple=True,
     )
 
-    update_data = html.Div(
-        id="upload-data-div",
-        children=[
-            dbc.Button(
-                "Update Data",
-                id="update-data",
-                color="primary",
-                block=True,
-                className="mr-1",
-            ),
-        ],
-    )
-
     target_container = dbc.Container(
         dbc.Row(
             [
@@ -498,8 +485,6 @@ def serve_layout():
                                 dbc.Row(target_status_picker, justify="around"),
                                 html.Br(),
                                 dbc.Row(target_status_selector, justify="around"),
-                                html.Br(),
-                                dbc.Row(update_data, justify="around"),
                                 html.Br(),
                                 dbc.Row(location_selection, justify="around"),
                                 html.Br(),

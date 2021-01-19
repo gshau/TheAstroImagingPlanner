@@ -1,7 +1,7 @@
 version: '3'
 services:
     planner_app:
-        image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
+        image: gshau/astroimaging-planner:latest
         restart: always
         entrypoint: ["python", "./src/app.py"]
         ports:
@@ -19,7 +19,7 @@ services:
             - db
             - watchdog
     watchdog:
-        image: gshau/astroimaging-planner:latest  # uncomment this line to pull down latest docker image 
+        image: gshau/astroimaging-planner:latest
         restart: always
         entrypoint: ["python", "./src/watchdog.py"]
         volumes:

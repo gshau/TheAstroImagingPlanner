@@ -403,15 +403,14 @@ def to_numeric(df0):
             continue
     return df0
 
-
 def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
-    n_files = len(new_files)
+    files_with_data = get_file_list_with_data(new_files)
+    n_files = len(files_with_data)
     if n_files > 0:
         log.info(f"Found {n_files} new files for headers")
-    files_with_data = get_file_list_with_data(new_files)
     if files_with_data:
         for files in chunks(files_with_data, 100):
             df_header = process_headers(files)

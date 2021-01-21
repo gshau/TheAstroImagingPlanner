@@ -85,6 +85,10 @@ HORIZON_DATA = CONFIG.get("horizon_data", {})
 with open("./conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
 
+with open("./conf/glossary.yml", "r") as f:
+    GLOSSARY_MAP = yaml.safe_load(f)
+
+
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
@@ -207,14 +211,14 @@ def update_data():
 
     df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
     df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
-    df_stored_data["filename"] = df_stored_data["filename"].apply(
-        lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
-    )
+    # df_stored_data["filename"] = df_stored_data["filename"].apply(
+    #     lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
+    # )
 
     root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
-
+    t0 = time.time()
     target_query = """select filename,
         "TARGET",
         "GROUP",
@@ -224,6 +228,17 @@ def update_data():
         FROM targets
     """
     df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+
+    # files tables
+    log.debug("Ready for queries")
+
+    header_query = "select * from fits_headers;"
+    log.debug("Ready to query headers")
+    df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
+    star_query = "select * from aggregated_star_metrics;"
+    log.debug("Ready to query stars")
+    df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
+    log.info(f"Query time: {time.time() - t0:.3f}")
 
     object_data = Objects()
     object_data.load_from_df(df_objects)
@@ -242,17 +257,6 @@ def update_data():
     if df_combined["status"].isnull().sum() > 0:
         df_combined["status"] = df_combined["status"].fillna(default_status)
         dump_target_status_to_file(df_combined)
-
-    # files tables
-    log.debug("Ready for queries")
-
-    header_query = "select * from fits_headers;"
-    log.debug("Ready to query headers")
-    df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
-    star_query = "select * from aggregated_star_metrics;"
-
-    log.debug("Ready to query stars")
-    df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
 
     df_stars_headers_ = pd.merge(df_headers, df_stars, on="filename", how="left")
     df_stars_headers_["fwhm_mean_arcsec"] = (
@@ -435,8 +439,6 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             notes_text = df_combined.loc[target_name, "NOTE"]
-            log.info(f'{target_name} df: {df_combined.loc[target_name]}')
-            log.info(f'{target_name} notes: {notes_text}')
             for horizon_status in ["above", "below"]:
                 df0 = df.copy()
                 show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
@@ -489,9 +491,6 @@ def parse_loaded_contents(contents, filename, date):
                 f.write(out_data.read())
             log.info("Done!")
             object_data = object_file_reader(local_file)
-            log.info(object_data.df_objects.columns)
-            log.info(object_data.df_objects.head())
-            log.info(local_file)
         else:
             return None
     except Exception as e:
@@ -686,7 +685,6 @@ def update_output_callback(
             object_data = parse_loaded_contents(c, n, d)
             if object_data:
                 for profile in object_data.profiles:
-                    log.info(profile)
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
         return options, default_options
@@ -1041,8 +1039,6 @@ def update_files_table(target_data, header_col_match, target_match):
     global df_combined
     global df_stars_headers
 
-    update_data()
-
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
@@ -1122,7 +1118,6 @@ def update_files_table(target_data, header_col_match, target_match):
         ]
     )
     df0["DATE-OBS"] = pd.to_datetime(df0["DATE-OBS"])
-    log.info(df0["DATE-OBS"].dtype)
     df_numeric = df0.select_dtypes(
         include=[
             "int16",
@@ -1157,12 +1152,12 @@ def update_files_table(target_data, header_col_match, target_match):
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
     )
     df_agg = df_agg.sort_values(by=["FILTER_indx"]).drop("FILTER_indx", axis=1)
+    data = df_agg.round(2).to_dict("records")
 
     columns = []
     for col in df_agg.columns:
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
-    data = df_agg.round(2).to_dict("records")
     summary_table = html.Div(
         [
             dash_table.DataTable(
@@ -1312,7 +1307,6 @@ def inspect_frame_analysis(
     data, as_aberration_inspector, frame_heatmap_col, recalculate=False
 ):
     global df_target_status
-    log.info(data)
     p0 = go.Figure()
     p1 = p0
     p2 = p0
@@ -1343,7 +1337,6 @@ def inspect_frame_analysis(
         df_s = preprocess_stars(df_s, xy_n_bins=xy_n_bins)
 
         df_radial, df_xy = bin_stars(df_s, filename)
-        log.info(df_radial.head())
         log.info(f"Time for direct computation: {time.time() - t0:.2f} seconds")
     else:
         t0 = time.time()
@@ -1394,12 +1387,28 @@ def toggle_alert(n):
         filenames = df_new["filename"].values
         filenames = "<br>\n".join(filenames)
         text = f"Detected {new_row_count} new files \n available: <br> {filenames}"
-        log.info(text)
         is_open = True
         duration = 5000
         color = "primary"
         return text, is_open, duration, color
     return "", False, 0, "primary"
+
+
+@app.callback(
+    [Output("glossary-modal", "is_open"), Output("glossary", "children")],
+    [Input("glossary-open", "n_clicks"), Input("glossary-close", "n_clicks")],
+    [State("glossary-modal", "is_open")],
+)
+def toggle_glossary_modal_callback(n1, n2, is_open):
+
+    with open("/app/src/glossary.md", "r") as f:
+        text = f.readlines()
+
+    status = is_open
+    if n1 or n2:
+        status = not is_open
+
+    return status, dcc.Markdown(text)
 
 
 if __name__ == "__main__":

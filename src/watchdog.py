@@ -36,7 +36,7 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
     new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))
     n_files = len(new_files)
     if n_files > 0:
-        log.info(f"Found {n_files} new files for headers")
+        log.info(f"Found {n_files} new files for targets")
     files_with_data = get_file_list_with_data(new_files)
     target_columns = ["filename", "TARGET", "GROUP", "RAJ2000", "DECJ2000", "NOTE"]
     if files_with_data:

@@ -29,7 +29,11 @@ yaxis_map = {
     "airmass": "Airmass",
 }
 if USE_CONTRAST:
-    yaxis_map["contrast"] = "Relative Contrast"
+    yaxis_map = {
+        "alt": "Altitude",
+        "contrast": "Relative Contrast",
+        "airmass": "Airmass",
+    }
 
 
 def serve_layout():
@@ -300,6 +304,10 @@ def serve_layout():
                                 "label": "Alt. vs. Background",
                                 "value": "OBJCTALT vs. bkg_val",
                             },
+                            {
+                                "label": "Star Trailing vs. Spacing Metric",
+                                "value": "star_trail_strength vs. star_orientation_score",
+                            },
                         ],
                         labelStyle={"display": "block"},
                     ),
@@ -447,6 +455,37 @@ def serve_layout():
         ]
     )
 
+    glossary_md = html.Div(id="glossary", children=[])
+
+    glossary_modal = html.Div(
+        [
+            dbc.Button(
+                "Quantity Glossary",
+                id="glossary-open",
+                color="primary",
+                block=True,
+                className="mr-1",
+            ),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader("Quantity Glossary"),
+                    dbc.ModalBody(glossary_md),
+                    dbc.ModalFooter(
+                        dbc.Button(
+                            "Close",
+                            id="glossary-close",
+                            color="danger",
+                            block=True,
+                            className="mr-1",
+                        ),
+                    ),
+                ],
+                id="glossary-modal",
+                size="xl",
+            ),
+        ]
+    )
+
     upload = dcc.Upload(
         id="upload-data",
         children=html.Div(
@@ -580,7 +619,11 @@ def serve_layout():
                                                         width=3,
                                                     ),
                                                     dbc.Col(
-                                                        filter_targets_check, width=3,
+                                                        [
+                                                            filter_targets_check,
+                                                            glossary_modal,
+                                                        ],
+                                                        width=3,
                                                     ),
                                                 ]
                                             )
@@ -701,14 +744,14 @@ def serve_layout():
                 labelClassName="text-primary",
             ),
             dbc.Tab(
+                label="Frame Inspector",
+                tab_id="tab-files-table",
+                labelClassName="text-info",
+            ),
+            dbc.Tab(
                 label="Review Stored Targets",
                 tab_id="tab-data-table",
                 labelClassName="text-success",
-            ),
-            dbc.Tab(
-                label="Review Stored Subframes",
-                tab_id="tab-files-table",
-                labelClassName="text-info",
             ),
         ],
     )

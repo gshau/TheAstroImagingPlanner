@@ -90,9 +90,6 @@ HORIZON_DATA = CONFIG.get("horizon_data", {})
 with open(f"{base_dir}/conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
 
-with open(f"{base_dir}/conf/glossary.yml", "r") as f:
-    GLOSSARY_MAP = yaml.safe_load(f)
-
 
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
 
@@ -1237,8 +1234,6 @@ def update_scatter_axes(value):
     ],
 )
 def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
-    global df_target_status
-    global df_combined
     global df_stars_headers
 
     df0 = df_stars_headers[(df_stars_headers["OBJECT"] == target_match)]
@@ -1317,7 +1312,6 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
 def inspect_frame_analysis(
     data, as_aberration_inspector, frame_heatmap_col, recalculate=False
 ):
-    global df_target_status
     p0 = go.Figure()
     p1 = p0
     p2 = p0

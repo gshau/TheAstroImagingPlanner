@@ -175,7 +175,7 @@ class NINASequenceObjects(Objects):
     def __init__(self, filename):
         super().__init__()
         for self.filename in [filename]:
-            self.tree = ElementTree.parse(filename)
+            self.tree = ElementTree.parse(self.filename)
             self.df_objects = self.parse_data()
             self.process_objects(self.df_objects)
 
@@ -183,7 +183,11 @@ class NINASequenceObjects(Objects):
         self.sequence = {}
         root_name = ntpath.basename(self.filename)
         self.profiles.append(root_name)
-        e_list = self.tree.findall("CaptureSequenceList")
+        r = self.tree.getroot()
+        if r.tag != "CaptureSequenceList":
+            e_list = self.tree.findall("CaptureSequenceList")
+        else:
+            e_list = [r]
         for e in e_list:
             target_name = e.get("TargetName")
             c = e.find("Coordinates")
@@ -195,9 +199,11 @@ class NINASequenceObjects(Objects):
                 RAJ2000=ra, DECJ2000=dec, TARGET=target_name, GROUP=root_name, NOTE=note
             )
             log.debug(self.sequence[target_name])
-        return pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
+        df = pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
             drop=True
         )
+
+        return df
 
 
 def object_file_reader(filename):
@@ -205,5 +211,5 @@ def object_file_reader(filename):
         return RoboClipObjects(filename)
     elif ".sgf" in filename:
         return SGPSequenceObjects(filename)
-    elif ".xml" in filename:
+    elif ".xml" in filename or ".ninaTargetSet" in filename:
         return NINASequenceObjects(filename)

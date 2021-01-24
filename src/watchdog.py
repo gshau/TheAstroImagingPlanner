@@ -30,7 +30,7 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = []
 
-        for extension in ["mdb", "sgf"]:
+        for extension in ["mdb", "sgf", "xml", "ninaTargetSet"]:
             file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
             file_list += glob.glob(f"/app/data/uploads/*.{extension}", recursive=True)
     new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))
@@ -63,4 +63,4 @@ if __name__ == "__main__":
     while True:
         update_db_with_targets(file_list=None)
         update_db_with_matching_files(file_list=None)
-        time.sleep(30)
+        time.sleep(5)

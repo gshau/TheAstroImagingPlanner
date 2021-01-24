@@ -559,6 +559,58 @@ def serve_layout():
         style={},
     )
 
+    config_container = dbc.Container(
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        dbc.Button(
+                            "Clear All Tables",
+                            id="button-clear-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear Targets Table",
+                            id="button-clear-target-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear Header Tables",
+                            id="button-clear-header-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear Star Tables",
+                            id="button-clear-star-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                    ],
+                    width=2,
+                    style={"border": "0px solid"},
+                ),
+                dbc.Col(
+                    children=[
+                        html.Div(
+                            id="log-div", style=dict(height="700px", overflow="auto")
+                        )
+                    ],
+                    width=9,
+                ),
+            ]
+        ),
+        id="tab-config-div",
+        fluid=True,
+        style={},
+    )
+
     data_table_container = dbc.Container(
         dbc.Row(
             [
@@ -756,6 +808,12 @@ def serve_layout():
                 tab_id="tab-data-table",
                 labelClassName="text-success",
             ),
+            dbc.Tab(
+                label="Config",
+                tab_id="tab-config",
+                labelClassName="text-danger",
+                style={"justify": "right"},
+            ),
         ],
     )
 
@@ -780,8 +838,9 @@ def serve_layout():
             alerts,
             data_table_container,
             target_container,
+            config_container,
             data_files_table_container,
-            html.Div(id="date-range", style={"display": "none"}),
+            html.Div(id="dummy-id", style={"display": "none"}),
         ],
     )
 

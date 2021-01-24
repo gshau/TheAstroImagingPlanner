@@ -371,7 +371,7 @@ def process_image_from_filename(
 
 
 def init_tables():
-    clear_all_tables(
+    clear_tables(
         [
             "fits_headers",
             "fits_status",
@@ -384,7 +384,7 @@ def init_tables():
     )
 
 
-def clear_all_tables(table_names):
+def clear_tables(table_names):
     for table_name in table_names:
         clear_table(POSTGRES_ENGINE, table_name)
 

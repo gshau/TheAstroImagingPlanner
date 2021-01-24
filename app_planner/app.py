@@ -37,6 +37,8 @@ from astro_planner.data_parser import (
     BINNING_COL,
 )
 
+from image_grading.preprocessing import clear_tables, init_tables
+
 from astro_planner.data_merge import (
     compute_ra_order,
     merge_targets_with_stored_metadata,
@@ -796,21 +798,68 @@ def update_target_with_status_callback(
         Output("tab-target-div", "style"),
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
+        Output("tab-config-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
-    styles = [{"display": "none"}] * 3
+
     tab_names = [
         "tab-target",
         "tab-data-table",
         "tab-files-table",
+        "tab-config",
     ]
+
+    styles = [{"display": "none"}] * len(tab_names)
 
     indx = tab_names.index(tab)
 
     styles[indx] = {}
     return styles
+
+
+
+# Callbacks
+@app.callback(
+    Output("dummy-id", "children"),
+    [
+        Input("button-clear-tables", "n_clicks"),
+        Input("button-clear-star-tables", "n_clicks"),
+        Input("button-clear-header-tables", "n_clicks"),
+        Input("button-clear-target-tables", "n_clicks"),
+    ],
+)
+def config_buttons(n1, n2, n3, n4):
+
+    ctx = dash.callback_context
+
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "button-clear-tables":
+            log.info("Clearing all tables")
+            init_tables()
+        if button_id == "button-clear-star-tables":
+            tables_to_clear = [
+                "aggregated_star_metrics",
+                "xy_frame_metrics",
+                "radial_frame_metrics",
+            ]
+            log.info(f"Clearing tables: {tables_to_clear}")
+            clear_tables(tables_to_clear)
+        if button_id == "button-clear-header-tables":
+            tables_to_clear = [
+                "fits_headers",
+                "fits_status",
+            ]
+            log.info(f"Clearing tables: {tables_to_clear}")
+            clear_tables(tables_to_clear)
+        if button_id == "button-clear-target-tables":
+            tables_to_clear = ["targets"]
+            log.info(f"Clearing tables: {tables_to_clear}")
+            clear_tables(tables_to_clear)
+
+    return ""
 
 
 @app.callback(

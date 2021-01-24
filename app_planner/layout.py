@@ -809,10 +809,7 @@ def serve_layout():
                 labelClassName="text-success",
             ),
             dbc.Tab(
-                label="Config",
-                tab_id="tab-config",
-                labelClassName="text-danger",
-                style={"justify": "right"},
+                label="Settings", tab_id="tab-config", labelClassName="text-danger",
             ),
         ],
     )

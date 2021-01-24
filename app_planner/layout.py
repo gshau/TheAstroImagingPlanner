@@ -816,10 +816,12 @@ def serve_layout():
 
     alerts = html.Div(
         [
-            dbc.Alert("", id="alert-auto", is_open=False, duration=1,),
+            dbc.Alert(
+                "", id="alert-auto", is_open=False, duration=1, dismissable=True,
+            ),
             dcc.Interval(
                 id="interval-component",
-                interval=60 * 1000,  # in milliseconds
+                interval=15 * 1000,  # in milliseconds
                 n_intervals=0,
             ),
         ]

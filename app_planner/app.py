@@ -690,7 +690,6 @@ def update_output_callback(
         default_options = default_profiles
 
     if list_of_contents is not None:
-        options = []
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
             object_data = parse_loaded_contents(c, n, d)
             if object_data:
@@ -817,7 +816,6 @@ def render_content(tab):
 
     styles[indx] = {}
     return styles
-
 
 
 # Callbacks
@@ -1438,12 +1436,14 @@ def toggle_alert(n):
 
     if new_files_available:
         filenames = df_new["filename"].values
-        filenames = " ".join(filenames)
-        text = f"Detected {new_row_count} new files available: {filenames}"
+        response = [f"Detected {new_row_count} new files available:"]
+        for filename in filenames:
+            response.append(html.Br())
+            response.append(filename)
         is_open = True
-        duration = 5000
+        duration = 60000
         color = "primary"
-        return text, is_open, duration, color
+        return response, is_open, duration, color
     return "", False, 0, "primary"
 
 

@@ -268,6 +268,7 @@ def process_stars(
     df_lists = defaultdict(list)
 
     for filename in file_list:
+        log.info(f"Starting to process stars from {filename}")
         df_agg_stars, df_stars = process_stars_from_fits(
             filename, extract_thresh=extract_thresh
         )

@@ -11,7 +11,7 @@ COPY ${HOME}/${APP_DIR}/requirements.txt /
 
 RUN pip install --no-cache-dir  --compile -r /requirements.txt
 
-RUN mkdir /app
+RUN mkdir /app /logs
 WORKDIR /app
 COPY ./ ./
 COPY ./${APP_DIR}/ ./src

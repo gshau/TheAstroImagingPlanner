@@ -8,7 +8,10 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 
-with open("/app/conf/config.yml", "r") as f:
+from pathlib import Path
+
+base_dir = Path(__file__).parents[1]
+with open(f"{base_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)

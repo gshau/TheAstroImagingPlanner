@@ -3,7 +3,12 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 
-with open("/app/conf/config.yml", "r") as f:
+from pathlib import Path
+import logging
+
+base_dir = Path(__file__).parents[1]
+logging.info(base_dir)
+with open(f"{base_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 

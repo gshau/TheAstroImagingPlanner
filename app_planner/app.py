@@ -22,6 +22,7 @@ import datetime
 import yaml
 
 from dash.dependencies import Input, Output, State
+from sqlalchemy import exc
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
@@ -65,6 +66,8 @@ from astropy.utils.exceptions import AstropyWarning
 import flask
 
 from astro_planner.logger import log
+from pathlib import Path
+
 
 warnings.simplefilter("ignore", category=AstropyWarning)
 
@@ -78,14 +81,16 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server
 app.title = "The AstroImaging Planner"
 
 
-with open("/app/conf/config.yml", "r") as f:
+base_dir = Path(__file__).parents[1]
+with open(f"{base_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
+
 HORIZON_DATA = CONFIG.get("horizon_data", {})
 
-with open("./conf/equipment.yml", "r") as f:
+with open(f"{base_dir}/conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
 
-with open("./conf/glossary.yml", "r") as f:
+with open(f"{base_dir}/conf/glossary.yml", "r") as f:
     GLOSSARY_MAP = yaml.safe_load(f)
 
 
@@ -209,16 +214,6 @@ def update_data():
         from fits_headers
     """
 
-    df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
-    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
-    # df_stored_data["filename"] = df_stored_data["filename"].apply(
-    #     lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
-    # )
-
-    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
-    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
-    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
-    t0 = time.time()
     target_query = """select filename,
         "TARGET",
         "GROUP",
@@ -227,18 +222,26 @@ def update_data():
         "NOTE"
         FROM targets
     """
-    df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
-
-    # files tables
-    log.debug("Ready for queries")
-
     header_query = "select * from fits_headers;"
-    log.debug("Ready to query headers")
-    df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
     star_query = "select * from aggregated_star_metrics;"
-    log.debug("Ready to query stars")
-    df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
-    log.info(f"Query time: {time.time() - t0:.3f}")
+
+    try:
+        df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
+        df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+        df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
+        df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
+    except exc.SQLAlchemyError:
+        log.info(
+            f"Issue with reading tables, waiting for 30 seconds for it to resolve..."
+        )
+        time.sleep(30)
+        return None
+
+    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
+
+    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
 
     object_data = Objects()
     object_data.load_from_df(df_objects)
@@ -487,6 +490,14 @@ def parse_loaded_contents(contents, filename, date):
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace(".sgf", "")
             local_file = f"./data/uploads/{file_root}.sgf"
+            with open(local_file, "w") as f:
+                f.write(out_data.read())
+            log.info("Done!")
+            object_data = object_file_reader(local_file)
+        elif ".xml" in filename:
+            out_data = io.StringIO(decoded.decode("utf-8"))
+            file_root = filename.replace(".xml", "")
+            local_file = f"./data/uploads/{file_root}.xml"
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             log.info("Done!")
@@ -1342,7 +1353,6 @@ def inspect_frame_analysis(
         t0 = time.time()
         radial_query = f"""select * from radial_frame_metrics where filename = '{base_filename}';"""
         df_radial = pd.read_sql(radial_query, POSTGRES_ENGINE)
-        log.info(df_radial.head())
 
         xy_query = (
             f"""select * from xy_frame_metrics where filename = '{base_filename}';"""
@@ -1385,8 +1395,8 @@ def toggle_alert(n):
 
     if new_files_available:
         filenames = df_new["filename"].values
-        filenames = "<br>\n".join(filenames)
-        text = f"Detected {new_row_count} new files \n available: <br> {filenames}"
+        filenames = " ".join(filenames)
+        text = f"Detected {new_row_count} new files available: {filenames}"
         is_open = True
         duration = 5000
         color = "primary"

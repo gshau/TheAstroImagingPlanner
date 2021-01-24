@@ -8,3 +8,6 @@ __pycache__
 
 *.fit*
 *.mdb
+*.xml
+
+*.log

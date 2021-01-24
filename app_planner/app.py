@@ -22,6 +22,7 @@ import datetime
 import yaml
 
 from dash.dependencies import Input, Output, State
+from sqlalchemy import exc
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
@@ -35,6 +36,8 @@ from astro_planner.data_parser import (
     FOCALLENGTH_COL,
     BINNING_COL,
 )
+
+from image_grading.preprocessing import clear_tables, init_tables
 
 from astro_planner.data_merge import (
     compute_ra_order,
@@ -65,6 +68,8 @@ from astropy.utils.exceptions import AstropyWarning
 import flask
 
 from astro_planner.logger import log
+from pathlib import Path
+
 
 warnings.simplefilter("ignore", category=AstropyWarning)
 
@@ -78,12 +83,15 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server
 app.title = "The AstroImaging Planner"
 
 
-with open("/app/conf/config.yml", "r") as f:
+base_dir = Path(__file__).parents[1]
+with open(f"{base_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
+
 HORIZON_DATA = CONFIG.get("horizon_data", {})
 
-with open("./conf/equipment.yml", "r") as f:
+with open(f"{base_dir}/conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
+
 
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
 
@@ -205,16 +213,6 @@ def update_data():
         from fits_headers
     """
 
-    df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
-    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
-    df_stored_data["filename"] = df_stored_data["filename"].apply(
-        lambda f: f.replace("/Volumes/Users/gshau/Dropbox/AstroBox", "")
-    )
-
-    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
-    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
-    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
-
     target_query = """select filename,
         "TARGET",
         "GROUP",
@@ -223,7 +221,26 @@ def update_data():
         "NOTE"
         FROM targets
     """
-    df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+    header_query = "select * from fits_headers;"
+    star_query = "select * from aggregated_star_metrics;"
+
+    try:
+        df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
+        df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+        df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
+        df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
+    except exc.SQLAlchemyError:
+        log.info(
+            f"Issue with reading tables, waiting for 30 seconds for it to resolve..."
+        )
+        time.sleep(30)
+        return None
+
+    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
+
+    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
 
     object_data = Objects()
     object_data.load_from_df(df_objects)
@@ -242,17 +259,6 @@ def update_data():
     if df_combined["status"].isnull().sum() > 0:
         df_combined["status"] = df_combined["status"].fillna(default_status)
         dump_target_status_to_file(df_combined)
-
-    # files tables
-    log.debug("Ready for queries")
-
-    header_query = "select * from fits_headers;"
-    log.debug("Ready to query headers")
-    df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
-    star_query = "select * from aggregated_star_metrics;"
-
-    log.debug("Ready to query stars")
-    df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
 
     df_stars_headers_ = pd.merge(df_headers, df_stars, on="filename", how="left")
     df_stars_headers_["fwhm_mean_arcsec"] = (
@@ -487,9 +493,14 @@ def parse_loaded_contents(contents, filename, date):
                 f.write(out_data.read())
             log.info("Done!")
             object_data = object_file_reader(local_file)
-            log.info(object_data.df_objects.columns)
-            log.info(object_data.df_objects.head())
-            log.info(local_file)
+        elif ".xml" in filename:
+            out_data = io.StringIO(decoded.decode("utf-8"))
+            file_root = filename.replace(".xml", "")
+            local_file = f"./data/uploads/{file_root}.xml"
+            with open(local_file, "w") as f:
+                f.write(out_data.read())
+            log.info("Done!")
+            object_data = object_file_reader(local_file)
         else:
             return None
     except Exception as e:
@@ -653,35 +664,40 @@ def toggle_modal_callback(n1, n2, is_open):
 @app.callback(
     [Output("profile-selection", "options"), Output("profile-selection", "value")],
     [Input("upload-data", "contents")],
-    [State("upload-data", "filename"), State("upload-data", "last_modified")],
+    [
+        State("upload-data", "filename"),
+        State("upload-data", "last_modified"),
+        State("profile-selection", "value"),
+    ],
 )
-def update_output_callback(list_of_contents, list_of_names, list_of_dates):
+def update_output_callback(
+    list_of_contents, list_of_names, list_of_dates, profiles_selected
+):
     global object_data
     profile = object_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
+    default_profiles = CONFIG.get("default_profiles", [])
 
     options = [
         {"label": profile, "value": profile}
         for profile in object_data.profiles
         if profile not in inactive_profiles
     ]
-    default_option = options[0]["value"]
+
+    default_options = profiles_selected
+    if default_profiles:
+        default_options = default_profiles
 
     if list_of_contents is not None:
-        options = []
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
             object_data = parse_loaded_contents(c, n, d)
             if object_data:
                 for profile in object_data.profiles:
-                    log.info(profile)
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
-        if object_data:
-            log.info(options)
-            default_option = options[0]["value"]
-        return options, [default_option]
-    return options, [default_option]
+        return options, default_options
+    return options, default_options
 
 
 @app.callback(
@@ -781,21 +797,67 @@ def update_target_with_status_callback(
         Output("tab-target-div", "style"),
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
+        Output("tab-config-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
 def render_content(tab):
-    styles = [{"display": "none"}] * 3
+
     tab_names = [
         "tab-target",
         "tab-data-table",
         "tab-files-table",
+        "tab-config",
     ]
+
+    styles = [{"display": "none"}] * len(tab_names)
 
     indx = tab_names.index(tab)
 
     styles[indx] = {}
     return styles
+
+
+# Callbacks
+@app.callback(
+    Output("dummy-id", "children"),
+    [
+        Input("button-clear-tables", "n_clicks"),
+        Input("button-clear-star-tables", "n_clicks"),
+        Input("button-clear-header-tables", "n_clicks"),
+        Input("button-clear-target-tables", "n_clicks"),
+    ],
+)
+def config_buttons(n1, n2, n3, n4):
+
+    ctx = dash.callback_context
+
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "button-clear-tables":
+            log.info("Clearing all tables")
+            init_tables()
+        if button_id == "button-clear-star-tables":
+            tables_to_clear = [
+                "aggregated_star_metrics",
+                "xy_frame_metrics",
+                "radial_frame_metrics",
+            ]
+            log.info(f"Clearing tables: {tables_to_clear}")
+            clear_tables(tables_to_clear)
+        if button_id == "button-clear-header-tables":
+            tables_to_clear = [
+                "fits_headers",
+                "fits_status",
+            ]
+            log.info(f"Clearing tables: {tables_to_clear}")
+            clear_tables(tables_to_clear)
+        if button_id == "button-clear-target-tables":
+            tables_to_clear = ["targets"]
+            log.info(f"Clearing tables: {tables_to_clear}")
+            clear_tables(tables_to_clear)
+
+    return ""
 
 
 @app.callback(
@@ -1032,8 +1094,6 @@ def update_files_table(target_data, header_col_match, target_match):
     global df_combined
     global df_stars_headers
 
-    update_data()
-
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
@@ -1113,7 +1173,6 @@ def update_files_table(target_data, header_col_match, target_match):
         ]
     )
     df0["DATE-OBS"] = pd.to_datetime(df0["DATE-OBS"])
-    log.info(df0["DATE-OBS"].dtype)
     df_numeric = df0.select_dtypes(
         include=[
             "int16",
@@ -1148,12 +1207,12 @@ def update_files_table(target_data, header_col_match, target_match):
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
     )
     df_agg = df_agg.sort_values(by=["FILTER_indx"]).drop("FILTER_indx", axis=1)
+    data = df_agg.round(2).to_dict("records")
 
     columns = []
     for col in df_agg.columns:
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
-    data = df_agg.round(2).to_dict("records")
     summary_table = html.Div(
         [
             dash_table.DataTable(
@@ -1222,8 +1281,6 @@ def update_scatter_axes(value):
     ],
 )
 def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
-    global df_target_status
-    global df_combined
     global df_stars_headers
 
     df0 = df_stars_headers[(df_stars_headers["OBJECT"] == target_match)]
@@ -1302,8 +1359,6 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
 def inspect_frame_analysis(
     data, as_aberration_inspector, frame_heatmap_col, recalculate=False
 ):
-    global df_target_status
-    log.info(data)
     p0 = go.Figure()
     p1 = p0
     p2 = p0
@@ -1334,13 +1389,11 @@ def inspect_frame_analysis(
         df_s = preprocess_stars(df_s, xy_n_bins=xy_n_bins)
 
         df_radial, df_xy = bin_stars(df_s, filename)
-        log.info(df_radial.head())
         log.info(f"Time for direct computation: {time.time() - t0:.2f} seconds")
     else:
         t0 = time.time()
         radial_query = f"""select * from radial_frame_metrics where filename = '{base_filename}';"""
         df_radial = pd.read_sql(radial_query, POSTGRES_ENGINE)
-        log.info(df_radial.head())
 
         xy_query = (
             f"""select * from xy_frame_metrics where filename = '{base_filename}';"""
@@ -1383,14 +1436,32 @@ def toggle_alert(n):
 
     if new_files_available:
         filenames = df_new["filename"].values
-        filenames = "<br>\n".join(filenames)
-        text = f"Detected {new_row_count} new files \n available: <br> {filenames}"
-        log.info(text)
+        response = [f"Detected {new_row_count} new files available:"]
+        for filename in filenames:
+            response.append(html.Br())
+            response.append(filename)
         is_open = True
-        duration = 5000
+        duration = 60000
         color = "primary"
-        return text, is_open, duration, color
+        return response, is_open, duration, color
     return "", False, 0, "primary"
+
+
+@app.callback(
+    [Output("glossary-modal", "is_open"), Output("glossary", "children")],
+    [Input("glossary-open", "n_clicks"), Input("glossary-close", "n_clicks")],
+    [State("glossary-modal", "is_open")],
+)
+def toggle_glossary_modal_callback(n1, n2, is_open):
+
+    with open("/app/src/glossary.md", "r") as f:
+        text = f.readlines()
+
+    status = is_open
+    if n1 or n2:
+        status = not is_open
+
+    return status, dcc.Markdown(text)
 
 
 if __name__ == "__main__":

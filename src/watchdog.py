@@ -30,14 +30,14 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = []
 
-        for extension in ["mdb", "sgf"]:
+        for extension in ["mdb", "sgf", "xml", "ninaTargetSet"]:
             file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
             file_list += glob.glob(f"/app/data/uploads/*.{extension}", recursive=True)
     new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))
-    n_files = len(new_files)
-    if n_files > 0:
-        log.info(f"Found {n_files} new files for headers")
-    files_with_data = get_file_list_with_data(new_files)
+    n_files = len(file_list)
+    if len(new_files) > 0:
+        log.info(f"Found {n_files} files for targets")
+    files_with_data = get_file_list_with_data(file_list)
     target_columns = ["filename", "TARGET", "GROUP", "RAJ2000", "DECJ2000", "NOTE"]
     if files_with_data:
         df_list = []
@@ -50,11 +50,12 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
             except:
                 log.info(f"Issue with {filename}", exc_info=True)
         df_targets = pd.concat(df_list)
-        log.info("Pushing to db")
-        push_rows_to_table(
-            df_targets, POSTGRES_ENGINE, table_name="targets", if_exists="append",
-        )
-        log.info("Done")
+        if df_targets.shape[0] > 0:
+            log.debug("Pushing new targets to to db")
+            push_rows_to_table(
+                df_targets, POSTGRES_ENGINE, table_name="targets", if_exists="replace",
+            )
+            log.debug("Done")
 
 
 if __name__ == "__main__":
@@ -62,4 +63,4 @@ if __name__ == "__main__":
     while True:
         update_db_with_targets(file_list=None)
         update_db_with_matching_files(file_list=None)
-        time.sleep(30)
+        time.sleep(5)

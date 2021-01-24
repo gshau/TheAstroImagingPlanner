@@ -9,6 +9,7 @@ from astropy.coordinates import Angle
 
 from collections import defaultdict
 import pandas_access as mdb
+from xml.etree import ElementTree
 
 import json
 import ntpath
@@ -164,10 +165,45 @@ class SGPSequenceObjects(Objects):
             self.sequence[name] = dict(
                 RAJ2000=RA, DECJ2000=DEC, NOTE=notes, TARGET=name, GROUP=root_name
             )
-            log.info(self.sequence[name])
+            log.debug(self.sequence[name])
         return pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
             drop=True
         )
+
+
+class NINASequenceObjects(Objects):
+    def __init__(self, filename):
+        super().__init__()
+        for self.filename in [filename]:
+            self.tree = ElementTree.parse(self.filename)
+            self.df_objects = self.parse_data()
+            self.process_objects(self.df_objects)
+
+    def parse_data(self):
+        self.sequence = {}
+        root_name = ntpath.basename(self.filename)
+        self.profiles.append(root_name)
+        r = self.tree.getroot()
+        if r.tag != "CaptureSequenceList":
+            e_list = self.tree.findall("CaptureSequenceList")
+        else:
+            e_list = [r]
+        for e in e_list:
+            target_name = e.get("TargetName")
+            c = e.find("Coordinates")
+            ra = float(c.find("RA").text)
+            dec = float(c.find("Dec").text)
+
+            note = f"NINA sequence file {root_name}"
+            self.sequence[target_name] = dict(
+                RAJ2000=ra, DECJ2000=dec, TARGET=target_name, GROUP=root_name, NOTE=note
+            )
+            log.debug(self.sequence[target_name])
+        df = pd.DataFrame.from_dict(self.sequence, orient="index").reset_index(
+            drop=True
+        )
+
+        return df
 
 
 def object_file_reader(filename):
@@ -175,3 +211,5 @@ def object_file_reader(filename):
         return RoboClipObjects(filename)
     elif ".sgf" in filename:
         return SGPSequenceObjects(filename)
+    elif ".xml" in filename or ".ninaTargetSet" in filename:
+        return NINASequenceObjects(filename)

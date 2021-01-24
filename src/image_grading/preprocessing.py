@@ -16,6 +16,7 @@ from astropy.io import fits
 from astropy.utils.exceptions import AstropyUserWarning
 from multiprocessing import Pool
 from functools import partial
+from pathlib import Path
 
 warnings.filterwarnings("ignore", category=AstropyUserWarning)
 
@@ -34,20 +35,28 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message
 log = logging.getLogger(__name__)
 
 
-with open("/app/conf/config.yml", "r") as f:
-    CONFIG = yaml.load(f, Loader=yaml.BaseLoader)
+base_dir = Path(__file__).parents[2]
+with open(f"{base_dir}/conf/config.yml", "r") as f:
+    CONFIG = yaml.safe_load(f)
+
 DATA_DIR = os.getenv("DATA_DIR", "/data")
 TARGET_DIR = os.getenv("TARGET_DIR", "/targets")
 
 sep.set_extract_pixstack(1000000)
 
+file_blacklist = []
+
 
 def get_fits_file_list(data_dir, config):
     fits_file_list = []
     if "fits_file_patterns" in config:
-        for file_pattern in config["fits_file_patterns"]:
+        for file_pattern in config["fits_file_patterns"]["allow"]:
             glob_pattern = f"{data_dir}/{file_pattern}"
             fits_file_list += list(glob.iglob(glob_pattern, recursive=True))
+        for reject_file_pattern in config["fits_file_patterns"]["reject"]:
+            fits_file_list = [
+                f for f in fits_file_list if reject_file_pattern not in f.lower()
+            ]
     return fits_file_list
 
 
@@ -221,7 +230,6 @@ def check_file_in_table(file_list, engine, table_name):
             if os.path.basename(file) not in df["filename"].values
         ]
     except:
-        log.info("Issue: ", exc_info=True)
         new_files = file_list
     return new_files
 
@@ -240,11 +248,6 @@ def process_stars_from_fits(filename, extract_thresh=3):
     df_agg_stars, df_stars = pd.DataFrame(), pd.DataFrame()
     try:
         df_stars = process_image_from_filename(filename, extract_thresh=extract_thresh)
-        if df_stars.shape[0] == 0:
-            df_agg_stars, df_stars = process_stars_from_fits(
-                filename, extract_thresh=extract_thresh - 0.5
-            )
-            return df_agg_stars, df_stars
         df_agg_stars = aggregate_stars(df_stars)
         df_agg_stars["extract_thresh"] = extract_thresh
         return df_agg_stars, df_stars
@@ -256,17 +259,25 @@ def process_stars_from_fits(filename, extract_thresh=3):
 
 
 def process_stars(
-    file_list, multithread_fits_read=False, n_threads=8, extract_thresh=1.5,
+    file_list,
+    multithread_fits_read=False,
+    n_threads=8,
+    extract_thresh=1.5,
+    xy_n_bins=None,
 ):
-    df_stars = pd.DataFrame()
-    df_agg_stars = pd.DataFrame()
-
     df_lists = defaultdict(list)
 
     for filename in file_list:
+        log.info(f"Starting to process stars from {filename}")
         df_agg_stars, df_stars = process_stars_from_fits(
             filename, extract_thresh=extract_thresh
         )
+        if filename in file_blacklist:
+            continue
+
+        nx = df_stars["nx"].values[0]
+        ny = df_stars["ny"].values[0]
+
         n_stars = df_stars.shape[0]
         log.info(f"For {filename}: N-stars = {n_stars}")
 
@@ -284,8 +295,9 @@ def process_stars(
             df_lists["xy_frame"].append(df_xy)
 
             continue
-        xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 8), 3)
-        df_stars = preprocess_stars(df_stars, xy_n_bins=xy_n_bins)
+        if not xy_n_bins:
+            xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 8), 3)
+        df_stars = preprocess_stars(df_stars, xy_n_bins=xy_n_bins, nx=nx, ny=ny)
 
         df_radial, df_xy = bin_stars(df_stars, filename)
         trail_strength = np.sqrt(
@@ -313,10 +325,12 @@ def process_image_data(data, tnpix_threshold=4, extract_thresh=3, filter_kernel=
     bkg = sep.Background(data)
     data_sub = data - bkg
 
-    objects = sep.extract(
-        data_sub, extract_thresh, err=bkg.back(), filter_kernel=filter_kernel
-    )
-
+    try:
+        objects = sep.extract(
+            data_sub, extract_thresh, err=bkg.back(), filter_kernel=filter_kernel
+        )
+    except:
+        return pd.DataFrame()
     objects = pd.DataFrame(objects)
     objects = objects.drop(["xmin", "xmax", "ymin", "ymax"], axis=1)
     objects["r_eff"] = np.sqrt(objects["a"] ** 2 + objects["b"] ** 2) / np.sqrt(2)
@@ -347,17 +361,20 @@ def process_image_from_filename(
     objects = process_image_data(
         data, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
     )
+    if objects.shape[0] == 0:
+        file_blacklist.append(filename)
     objects["filename_with_path"] = filename
     objects["filename"] = os.path.basename(filename)
+    objects["nx"] = data.shape[0]
+    objects["ny"] = data.shape[1]
     return objects
 
 
 def init_tables():
-    clear_all_tables(
+    clear_tables(
         [
             "fits_headers",
             "fits_status",
-            "star_metrics",
             "aggregated_star_metrics",
             "xy_frame_metrics",
             "radial_frame_metrics",
@@ -367,7 +384,7 @@ def init_tables():
     )
 
 
-def clear_all_tables(table_names):
+def clear_tables(table_names):
     for table_name in table_names:
         clear_table(POSTGRES_ENGINE, table_name)
 
@@ -408,10 +425,10 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
-    n_files = len(new_files)
+    files_with_data = get_file_list_with_data(new_files)
+    n_files = len(files_with_data)
     if n_files > 0:
         log.info(f"Found {n_files} new files for headers")
-    files_with_data = get_file_list_with_data(new_files)
     if files_with_data:
         for files in chunks(files_with_data, 100):
             df_header = process_headers(files)
@@ -442,11 +459,13 @@ def update_star_metrics(
     )
     files_with_data = get_file_list_with_data(new_files)
 
+    files_to_process = [f for f in files_with_data if f not in file_blacklist]
+
     n_threads = int(CONFIG.get("threads_for_star_processing", 1))
     multithread_fits_read = n_threads > 1
 
-    if files_with_data:
-        for file_set in list(chunks(files_with_data, n_chunk)):
+    if files_to_process:
+        for file_set in list(chunks(files_to_process, n_chunk)):
             if multithread_fits_read:
                 with Pool(n_threads) as p:
                     l_result = list(
@@ -472,21 +491,12 @@ def update_star_metrics(
             log.info(f"New stars: {n_stars}")
 
             # Aggregate star metrics table
-            log.info(result["agg_stars"].head())
             push_rows_to_table(
                 result["agg_stars"],
                 POSTGRES_ENGINE,
                 table_name="aggregated_star_metrics",
                 if_exists="append",
             )
-
-            # # Individual Stars table
-            # push_rows_to_table(
-            #     result["stars"],
-            #     POSTGRES_ENGINE,
-            #     table_name="star_metrics",
-            #     if_exists="append",
-            # )
 
             # Radial table
             push_rows_to_table(
@@ -522,7 +532,7 @@ def lower_cols(df):
     return df
 
 
-def preprocess_stars(df_s, xy_n_bins=10, r_n_bins=20):
+def preprocess_stars(df_s, xy_n_bins=10, r_n_bins=20, nx=None, ny=None):
 
     df_s["chip_r_bin"] = df_s["chip_r"] // int(df_s["chip_r"].max() / r_n_bins)
 
@@ -530,6 +540,8 @@ def preprocess_stars(df_s, xy_n_bins=10, r_n_bins=20):
     df_s["vec_v"] = np.sin(df_s["theta"]) * df_s["ellipticity"]
 
     y_max = df_s["y_ref"].max()
+    if ny:
+        y_max = ny / 2
     df_s["x_bin"] = np.round(
         np.round((df_s["x_ref"] / y_max) * xy_n_bins) * y_max / xy_n_bins
     )

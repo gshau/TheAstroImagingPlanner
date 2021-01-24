@@ -1,9 +1,7 @@
 version: '3.7'
 services:
     app_standalone:
-        build: 
-            context: .
-            dockerfile: app_inspector/Dockerfile
+        image: gshau/astroimaging-planner:latest 
         restart: always
         entrypoint: ["python", "./app.py"]
         ports:

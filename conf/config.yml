@@ -1,16 +1,24 @@
 # FITs file patters in regex format, relative to DATA_DIR
 fits_file_patterns:
-  - "**/*.[fF][iI][tT]"
-  - "**/*.[fF][iI][tT][s]"
-
+  allow:
+    - "**/*.[fF][iI][tT]"
+    - "**/*.[fF][iI][tT][s]"
+  reject:  # reject files with these phrases in the filename or path - case insensitive
+    - "dark"
+    - "bias"
+    - "flat"
+    - "skip"
 
 # Default target status when initially parsing data
 default_target_status: ''
 
 # Inactive profiles to hide from the UI
-inactive_profiles:
-  - borg55fl asi2600mc
-  - rasa8 asi2600mc
+default_profiles:
+  - ap92 asi6200mm
+  - ontc1010 qsi690
+inactive_profiles: {}
+  # - borg55fl asi2600mc
+  # - rasa8 asi2600mc
 
 # target progress display mode - stack or group
 progress_mode: 'group'

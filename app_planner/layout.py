@@ -8,7 +8,10 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 
-with open("/app/conf/config.yml", "r") as f:
+from pathlib import Path
+
+base_dir = Path(__file__).parents[1]
+with open(f"{base_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
@@ -29,7 +32,11 @@ yaxis_map = {
     "airmass": "Airmass",
 }
 if USE_CONTRAST:
-    yaxis_map["contrast"] = "Relative Contrast"
+    yaxis_map = {
+        "alt": "Altitude",
+        "contrast": "Relative Contrast",
+        "airmass": "Airmass",
+    }
 
 
 def serve_layout():
@@ -300,6 +307,10 @@ def serve_layout():
                                 "label": "Alt. vs. Background",
                                 "value": "OBJCTALT vs. bkg_val",
                             },
+                            {
+                                "label": "Star Trailing vs. Spacing Metric",
+                                "value": "star_trail_strength vs. star_orientation_score",
+                            },
                         ],
                         labelStyle={"display": "block"},
                     ),
@@ -447,6 +458,37 @@ def serve_layout():
         ]
     )
 
+    glossary_md = html.Div(id="glossary", children=[])
+
+    glossary_modal = html.Div(
+        [
+            dbc.Button(
+                "Quantity Glossary",
+                id="glossary-open",
+                color="primary",
+                block=True,
+                className="mr-1",
+            ),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader("Quantity Glossary"),
+                    dbc.ModalBody(glossary_md),
+                    dbc.ModalFooter(
+                        dbc.Button(
+                            "Close",
+                            id="glossary-close",
+                            color="danger",
+                            block=True,
+                            className="mr-1",
+                        ),
+                    ),
+                ],
+                id="glossary-modal",
+                size="xl",
+            ),
+        ]
+    )
+
     upload = dcc.Upload(
         id="upload-data",
         children=html.Div(
@@ -459,19 +501,6 @@ def serve_layout():
             ]
         ),
         multiple=True,
-    )
-
-    update_data = html.Div(
-        id="upload-data-div",
-        children=[
-            dbc.Button(
-                "Update Data",
-                id="update-data",
-                color="primary",
-                block=True,
-                className="mr-1",
-            ),
-        ],
     )
 
     target_container = dbc.Container(
@@ -498,8 +527,6 @@ def serve_layout():
                                 dbc.Row(target_status_picker, justify="around"),
                                 html.Br(),
                                 dbc.Row(target_status_selector, justify="around"),
-                                html.Br(),
-                                dbc.Row(update_data, justify="around"),
                                 html.Br(),
                                 dbc.Row(location_selection, justify="around"),
                                 html.Br(),
@@ -528,6 +555,58 @@ def serve_layout():
             ]
         ),
         id="tab-target-div",
+        fluid=True,
+        style={},
+    )
+
+    config_container = dbc.Container(
+        dbc.Row(
+            [
+                dbc.Col(
+                    [
+                        dbc.Button(
+                            "Clear All Tables",
+                            id="button-clear-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear Targets Table",
+                            id="button-clear-target-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear Header Tables",
+                            id="button-clear-header-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear Star Tables",
+                            id="button-clear-star-tables",
+                            color="warning",
+                            block=True,
+                            className="mr-1",
+                        ),
+                    ],
+                    width=2,
+                    style={"border": "0px solid"},
+                ),
+                dbc.Col(
+                    children=[
+                        html.Div(
+                            id="log-div", style=dict(height="700px", overflow="auto")
+                        )
+                    ],
+                    width=9,
+                ),
+            ]
+        ),
+        id="tab-config-div",
         fluid=True,
         style={},
     )
@@ -595,7 +674,11 @@ def serve_layout():
                                                         width=3,
                                                     ),
                                                     dbc.Col(
-                                                        filter_targets_check, width=3,
+                                                        [
+                                                            filter_targets_check,
+                                                            glossary_modal,
+                                                        ],
+                                                        width=3,
                                                     ),
                                                 ]
                                             )
@@ -716,24 +799,29 @@ def serve_layout():
                 labelClassName="text-primary",
             ),
             dbc.Tab(
+                label="Frame Inspector",
+                tab_id="tab-files-table",
+                labelClassName="text-info",
+            ),
+            dbc.Tab(
                 label="Review Stored Targets",
                 tab_id="tab-data-table",
                 labelClassName="text-success",
             ),
             dbc.Tab(
-                label="Review Stored Subframes",
-                tab_id="tab-files-table",
-                labelClassName="text-info",
+                label="Settings", tab_id="tab-config", labelClassName="text-danger",
             ),
         ],
     )
 
     alerts = html.Div(
         [
-            dbc.Alert("", id="alert-auto", is_open=False, duration=1,),
+            dbc.Alert(
+                "", id="alert-auto", is_open=False, duration=1, dismissable=True,
+            ),
             dcc.Interval(
                 id="interval-component",
-                interval=60 * 1000,  # in milliseconds
+                interval=15 * 1000,  # in milliseconds
                 n_intervals=0,
             ),
         ]
@@ -749,8 +837,9 @@ def serve_layout():
             alerts,
             data_table_container,
             target_container,
+            config_container,
             data_files_table_container,
-            html.Div(id="date-range", style={"display": "none"}),
+            html.Div(id="dummy-id", style={"display": "none"}),
         ],
     )
 

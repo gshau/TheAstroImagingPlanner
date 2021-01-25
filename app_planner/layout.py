@@ -592,6 +592,13 @@ def serve_layout():
                             block=True,
                             className="mr-1",
                         ),
+                        dbc.Button(
+                            "Restart App",
+                            id="button-restart-app",
+                            color="danger",
+                            block=True,
+                            className="mr-1",
+                        ),
                     ],
                     width=2,
                     style={"border": "0px solid"},
@@ -808,9 +815,7 @@ def serve_layout():
                 tab_id="tab-data-table",
                 labelClassName="text-success",
             ),
-            dbc.Tab(
-                label="Settings", tab_id="tab-config", labelClassName="text-danger",
-            ),
+            dbc.Tab(label="Utils", tab_id="tab-config", labelClassName="text-danger",),
         ],
     )
 

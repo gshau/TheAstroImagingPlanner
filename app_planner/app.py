@@ -132,6 +132,7 @@ OIII_FILTER = "OIII"
 SII_FILTER = "SII"
 BAYER = "OSC"
 BAYER_ = "** BayerMatrix **"
+NO_FILTER = "NO_FILTER"
 
 FILTER_LIST = [
     L_FILTER,
@@ -143,6 +144,7 @@ FILTER_LIST = [
     SII_FILTER,
     BAYER,
     BAYER_,
+    NO_FILTER,
 ]
 
 FILTER_MAP = {
@@ -164,6 +166,7 @@ COLORS = {
     OIII_FILTER: "teal",
     BAYER: "gray",
     BAYER_: "gray",
+    NO_FILTER: "gray",
 }
 
 
@@ -199,8 +202,8 @@ def update_data():
     select file_full_path as filename,
         "OBJECT",
         "DATE-OBS",
-        "FILTER",
         cast("CCD-TEMP" as float),
+        "FILTER",
         "OBJCTRA",
         "OBJCTDEC",
         cast("AIRMASS" as float),
@@ -231,9 +234,9 @@ def update_data():
         df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 30 seconds for it to resolve..."
+            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
-        time.sleep(30)
+        time.sleep(15)
         return None
 
     df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
@@ -826,9 +829,10 @@ def render_content(tab):
         Input("button-clear-star-tables", "n_clicks"),
         Input("button-clear-header-tables", "n_clicks"),
         Input("button-clear-target-tables", "n_clicks"),
+        Input("button-restart-app", "n_clicks"),
     ],
 )
-def config_buttons(n1, n2, n3, n4):
+def config_buttons(n1, n2, n3, n4, n5):
 
     ctx = dash.callback_context
 
@@ -856,6 +860,9 @@ def config_buttons(n1, n2, n3, n4):
             tables_to_clear = ["targets"]
             log.info(f"Clearing tables: {tables_to_clear}")
             clear_tables(tables_to_clear)
+        if button_id == "button-restart-app":
+            log.info(f"Restarting app")
+            exit(-1)
 
     return ""
 
@@ -1311,10 +1318,10 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
             default_size = 1
         size = df1[size_col].fillna(default_size)
 
-        if filter in ["L", "R", "G", "B", "OSC"]:
-            symbol = "circle"
-        else:
+        if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
             symbol = "diamond"
+        else:
+            symbol = "circle"
 
         p.add_trace(
             go.Scatter(

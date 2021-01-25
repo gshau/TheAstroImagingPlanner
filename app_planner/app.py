@@ -28,7 +28,7 @@ from flask import request
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
 from astro_planner.target import object_file_reader, normalize_target_name, Objects
-from astro_planner.contrast import add_contrast
+from astro_planner.contrast import add_contrast, add_moon_distance
 from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import (
@@ -103,7 +103,7 @@ DEFAULT_MPSAS = CONFIG.get("mpsas", 20.1)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 DEFAULT_TIME_RESOLUTION = CONFIG.get("time_resolution", 300)
-
+DEFAULT_MIN_MOON_DISTANCE = CONFIG.get("min_moon_distance", 30)
 
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
@@ -341,6 +341,7 @@ def get_data(
     filter_bandwidth=300,
     k_ext=0.2,
     filter_targets=True,
+    min_moon_distance=30,
 ):
     log.debug("Starting get_data")
     target_names = [
@@ -352,6 +353,10 @@ def get_data(
         filter_bandwidth = DEFAULT_BANDWIDTH
     if k_ext is None:
         k_ext = DEFAULT_K_EXTINCTION
+    if min_moon_distance is None:
+        min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
+
+    target_coords = add_moon_distance(target_coords)
 
     if value == "contrast":
         target_coords = add_contrast(
@@ -444,34 +449,44 @@ def get_data(
                 )
                 if not (meridian_at_night or high_at_night):
                     continue
+            render_target = True
             notes_text = df_combined.loc[target_name, "NOTE"]
             for horizon_status in ["above", "below"]:
-                df0 = df.copy()
-                show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
-                in_legend = True
-                opacity = 1
-                width = 3
-                if horizon_status == "below":
-                    show_trace = df["alt"] > -90
-                    in_legend = False
-                    opacity = 0.15
-                    width = 1
+                if render_target:
+                    df0 = df.copy()
+                    show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
+                    show_trace &= df["moon_distance"] >= min_moon_distance
 
-                df0.loc[~show_trace, value] = np.nan
-                data.append(
-                    dict(
-                        x=df0.index,
-                        y=df0[value],
-                        mode="lines",
-                        line=dict(color=color, width=width),
-                        showlegend=in_legend,
-                        name=target_name,
-                        connectgaps=False,
-                        legend_group=target_name,
-                        text="Notes: {notes_text}".format(notes_text=notes_text),
-                        opacity=opacity,
+                    in_legend = True
+                    opacity = 1
+                    width = 3
+                    if horizon_status == "below":
+                        show_trace = df["alt"] > -90
+                        in_legend = False
+                        opacity = 0.15
+                        width = 1
+
+                    if show_trace.sum() == 0:
+                        render_target = False
+                        continue
+
+                    df0.loc[~show_trace, value] = np.nan
+                    data.append(
+                        dict(
+                            x=df0.index,
+                            y=df0[value],
+                            mode="lines",
+                            line=dict(color=color, width=width),
+                            showlegend=in_legend,
+                            name=target_name,
+                            connectgaps=False,
+                            legend_group=target_name,
+                            customdata=df0["moon_distance"],
+                            # text=f"Notes: {notes_text}",
+                            hovertemplate=f"Notes: {notes_text}<br>Moon distance: %{{customdata:.1f}} degrees",
+                            opacity=opacity,
+                        )
                     )
-                )
 
     return data, duraion_sun_down_hrs
 
@@ -841,7 +856,6 @@ def shutdown():
     ],
 )
 def config_buttons(n1, n2, n3, n4, n5):
-
     ctx = dash.callback_context
 
     if ctx.triggered:
@@ -892,6 +906,7 @@ def config_buttons(n1, n2, n3, n4, n5):
         Input("filter-targets", "checked"),
         Input("status-match", "value"),
         Input("filter-match", "value"),
+        Input("min-moon-distance", "value"),
     ],
     [State("profile-selection", "value")],
 )
@@ -905,6 +920,7 @@ def store_data(
     filter_targets,
     status_matches,
     filters,
+    min_moon_distance,
     profile_list,
 ):
     global df_combined, object_data
@@ -939,6 +955,7 @@ def store_data(
         local_mpsas=local_mpsas,
         k_ext=k_ext,
         filter_targets=filter_targets,
+        min_moon_distance=min_moon_distance,
     )
 
     dark_sky_duration_text = (

@@ -13,8 +13,8 @@ fits_file_patterns:
 default_target_status: ''
 
 # Inactive profiles to hide from the UI
-default_profiles:
-  - ap92 asi6200mm
+default_profiles: 
+  - ap130 asi6200mm
   - ontc1010 qsi690
 inactive_profiles: {}
   # - borg55fl asi2600mc
@@ -47,6 +47,9 @@ mpsas: 20.1
 bandwidth: 120
 k_extinction: 0.2
 time_resolution: 300
+
+# Minimum Target-moon distance
+min_moon_distance: 30
 
 # Specify fits header entries
 fits_header_map:

@@ -156,3 +156,15 @@ def add_contrast(
             df0 = df0.drop("contrast", axis=1)
         result[target] = df0.join(df_contrast.to_frame("contrast"))
     return result
+
+
+def add_moon_distance(df_loc,):
+    result = {}
+    for target, df in df_loc.items():
+        if target in ["moon", "sun"]:
+            result[target] = df
+            continue
+        df0 = df_loc[target]
+        df0["moon_distance"] = distance(df_loc[target], df_loc["moon"])
+        result[target] = df0
+    return result

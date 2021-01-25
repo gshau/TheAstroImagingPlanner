@@ -20,6 +20,7 @@ DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", -5)
 DEFAULT_MPSAS = CONFIG.get("mpsas", 19.5)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
+MIN_MOON_DISTANCE = CONFIG.get("min_moon_distance", 30)
 
 USE_CONTRAST = strtobool(os.getenv("USE_CONTRAST", "True")) == 1
 styles = {}
@@ -325,6 +326,24 @@ def serve_layout():
             children=[
                 dbc.Col(
                     children=[
+                        dbc.Row(
+                            [
+                                dbc.Col(
+                                    html.Label(
+                                        "Min Moon Distance:  ",
+                                        style={"textAlign": "left"},
+                                    ),
+                                ),
+                                dbc.Col(
+                                    dcc.Input(
+                                        id="min-moon-distance",
+                                        debounce=True,
+                                        placeholder=MIN_MOON_DISTANCE,
+                                        type="number",
+                                    )
+                                ),
+                            ]
+                        ),
                         dbc.Row(
                             [
                                 dbc.Col(

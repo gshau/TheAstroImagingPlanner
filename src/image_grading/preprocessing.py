@@ -289,11 +289,7 @@ def process_stars_from_fits(filename, extract_thresh=3):
 
 
 def process_stars(
-    file_list,
-    multithread_fits_read=False,
-    n_threads=8,
-    extract_thresh=1.5,
-    xy_n_bins=None,
+    file_list, multithread_fits_read=False, extract_thresh=1.5, xy_n_bins=None,
 ):
     df_lists = defaultdict(list)
 
@@ -326,7 +322,7 @@ def process_stars(
 
             continue
         if not xy_n_bins:
-            xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 8), 3)
+            xy_n_bins = max(min(int(np.sqrt(n_stars) / 9), 10), 3)
         df_stars = preprocess_stars(df_stars, xy_n_bins=xy_n_bins, nx=nx, ny=ny)
 
         df_radial, df_xy = bin_stars(df_stars, filename)

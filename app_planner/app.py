@@ -23,6 +23,7 @@ import yaml
 
 from dash.dependencies import Input, Output, State
 from sqlalchemy import exc
+from flask import request
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
@@ -604,7 +605,7 @@ def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
         .dropna()
     )
     df_summary = df_summary.unstack(1).fillna(0)[EXPOSURE_COL] / 3600
-    cols = ["OBJECT", "L", "R", "G", "B", "Ha", "OIII", "SII", "OSC"]
+    cols = ["OBJECT"] + FILTER_LIST
     df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
 
     df0["ra_order"] = df0["OBJCTRA"].apply(
@@ -821,6 +822,13 @@ def render_content(tab):
     return styles
 
 
+def shutdown():
+    func = request.environ.get("werkzeug.server.shutdown")
+    if func is None:
+        raise RuntimeError("Not running with the Werkzeug Server")
+    func()
+
+
 # Callbacks
 @app.callback(
     Output("dummy-id", "children"),
@@ -862,7 +870,7 @@ def config_buttons(n1, n2, n3, n4, n5):
             clear_tables(tables_to_clear)
         if button_id == "button-restart-app":
             log.info(f"Restarting app")
-            exit(-1)
+            shutdown()
 
     return ""
 
@@ -975,8 +983,6 @@ def update_target_graph(
     global df_target_status
     global df_combined
     global df_stored_data
-
-    update_data()
 
     log.debug(f"Calling update_target_graph")
     if not metadata:

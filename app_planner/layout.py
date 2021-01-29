@@ -35,8 +35,9 @@ yaxis_map = {
 if USE_CONTRAST:
     yaxis_map = {
         "alt": "Altitude",
-        "contrast": "Relative Contrast",
         "airmass": "Airmass",
+        "contrast": "Relative Contrast",
+        "sky_mpsas": "Local Sky Brightness",
     }
 
 
@@ -623,12 +624,29 @@ def serve_layout():
                     style={"border": "0px solid"},
                 ),
                 dbc.Col(
-                    children=[
-                        html.Div(
-                            id="log-div", style=dict(height="700px", overflow="auto")
-                        )
+                    [
+                        dbc.Button(
+                            html.A(
+                                "Download Planner log",
+                                href="getLogs/planner.log",
+                                style={"color": "white"},
+                            ),
+                            color="info",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            html.A(
+                                "Download Watchdog log",
+                                href="getLogs/watchdog.log",
+                                style={"color": "white"},
+                            ),
+                            color="info",
+                            block=True,
+                            className="mr-1",
+                        ),
                     ],
-                    width=9,
+                    width=2,
                 ),
             ]
         ),
@@ -760,6 +778,10 @@ def serve_layout():
                                             {
                                                 "label": "Ellipticity",
                                                 "value": "ellipticity",
+                                            },
+                                            {
+                                                "label": "Eccentricity",
+                                                "value": "eccentricity",
                                             },
                                         ],
                                     ),

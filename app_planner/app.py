@@ -184,10 +184,10 @@ TRANSLATED_FILTERS = {
 
 # load main data
 object_data = None
-df_combined = None
-df_target_status = None
-df_stored_data = None
-df_stars_headers = None
+df_combined = pd.DataFrame()
+df_target_status = pd.DataFrame()
+df_stored_data = pd.DataFrame()
+df_stars_headers = pd.DataFrame()
 
 
 def update_data():
@@ -358,7 +358,6 @@ def get_data(
 
     target_coords = add_moon_distance(target_coords)
 
-    if value == "contrast":
         target_coords = add_contrast(
             target_coords,
             filter_bandwidth=filter_bandwidth,
@@ -421,7 +420,7 @@ def get_data(
         name="sun_dn",
     )
     data = [sun_data, sun_up_data, sun_dn_data, moon_data]
-    if (value == "contrast") or (value == "airmass"):
+    if (value == "contrast") or (value == "airmass") or (value == "sky_mpsas"):
         data = [sun_up_data, sun_dn_data]
     n_targets = len(target_coords)
     colors = sns.color_palette(n_colors=n_targets).as_hex()
@@ -451,7 +450,10 @@ def get_data(
                     continue
             render_target = True
             notes_text = df_combined.loc[target_name, "NOTE"]
+            skip_below_horizon = True
             for horizon_status in ["above", "below"]:
+                if (horizon_status == "below") and skip_below_horizon:
+                    continue
                 if render_target:
                     df0 = df.copy()
                     show_trace = df["alt"] >= f_horizon(np.clip(df["az"], 0, 360))
@@ -471,6 +473,12 @@ def get_data(
                         continue
 
                     df0.loc[~show_trace, value] = np.nan
+
+                    text = df0.apply(
+                        lambda row: f"Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        axis=1,
+                    )
+
                     data.append(
                         dict(
                             x=df0.index,
@@ -481,9 +489,10 @@ def get_data(
                             name=target_name,
                             connectgaps=False,
                             legend_group=target_name,
-                            customdata=df0["moon_distance"],
-                            # text=f"Notes: {notes_text}",
-                            hovertemplate=f"Notes: {notes_text}<br>Moon distance: %{{customdata:.1f}} degrees",
+                            customdata=np.dstack(
+                                (df0["moon_distance"].values, df0["sky_mpsas"].values)
+                            ),
+                            hovertext=text,
                             opacity=opacity,
                         )
                     )
@@ -844,6 +853,13 @@ def shutdown():
     func()
 
 
+@app.server.route("/getLogs/<file>")
+def download_log(file):
+    return flask.send_file(
+        f"/logs/{file}", attachment_filename=file, as_attachment=True, cache_timeout=-1
+    )
+
+
 # Callbacks
 @app.callback(
     Output("dummy-id", "children"),
@@ -1021,6 +1037,8 @@ def update_target_graph(
     elif value == "airmass":
         y_range = [0, 1]
         yaxis_type = "log"
+    elif value == "sky_mpsas":
+        y_range = [16, 22]
     elif value == "contrast":
         y_range = [0, 1]
 
@@ -1032,10 +1050,10 @@ def update_target_graph(
                 xaxis={"title": "", "range": date_range},
                 yaxis={"title": yaxis_map[value], "range": y_range, "type": yaxis_type},
                 title=title,
-                margin={"l": 50, "b": 100, "t": 50, "r": 50},
-                legend={"orientation": "v"},
-                height=400,
-                plot_bgcolor="#ddd",
+                margin={"l": 50, "b": 50, "t": 50, "r": 50},
+                legend={"orientation": "h"},
+                height=800,
+                plot_bgcolor="#ccc",
                 paper_bgcolor="#fff",
                 hovermode="closest",
                 transition={"duration": 50},

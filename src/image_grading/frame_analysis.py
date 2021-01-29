@@ -74,6 +74,9 @@ def show_frame_analysis(df_xy, filename, feature_col="fwhm"):
         lambda row: f"fwhm: {row['fwhm']:.2f} px<br>\
 radius: {row['chip_r']:.0f} px<br>\
 ellipticity: {row['ellipticity']:.3f}<br>\
+eccentricity: {row['eccentricity']:.3f}<br>\
+major-axis: {row['a']:.3f}<br>\
+minor-axis: {row['b']:.3f}<br>\
 stars: {row['star_count']}<br>",
         axis=1,
     )
@@ -102,6 +105,9 @@ stars: {row['star_count']}<br>",
     elif feature_col == "ellipticity":
         zmin = 0
         zmax = max([0.5, zmax])
+    elif feature_col == "eccentricity":
+        zmin = 0
+        zmax = max([1, zmax])
 
     p.add_trace(
         go.Heatmap(

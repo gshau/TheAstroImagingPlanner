@@ -201,7 +201,7 @@ df_stars_headers = pd.DataFrame()
 def pull_inspector_data():
     global df_stars_headers
 
-    query = "select fh.*, asm.* from fits_headers fh join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
+    query = "select fh.*, asm.* from fits_headers fh left join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
 
     try:
         df_stars_headers_ = pd.read_sql(query, POSTGRES_ENGINE)

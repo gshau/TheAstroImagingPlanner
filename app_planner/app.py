@@ -646,7 +646,6 @@ def target_filter(targets, filters):
 def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
 
     selection = df["date"] < "1970-01-01"
-    selection = df["profile"].isin(profile_list)
     if days_ago > 0:
         selection |= df["date"] > str(
             datetime.datetime.today() - datetime.timedelta(days=days_ago)

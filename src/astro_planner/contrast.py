@@ -81,7 +81,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
 
     # Ad-hoc extinguish moon light near horizon
-    b_moon *= logistic(np.clip(df_moon["airmass"], 1, 10), 10, 5)
+    b_moon *= logistic(np.clip(df_moon["airmass"], 1, 1e3), 10, 5)
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
     A0 = sbm._mpsas_to_b(11) / np.exp(-5)

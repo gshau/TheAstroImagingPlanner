@@ -64,11 +64,11 @@ def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
         periods=24 * (60 * 60 / time_resolution_in_sec),
         tz=site.tz,
     )
-    df_ephem = get_sun_moon_loc(dates, location=site.location)
+    ephem_dict = get_sun_moon_loc(dates, location=site.location)
     gtl = partial(get_target_loc, dates=dates, location=site.location)
     with Pool(8) as pool:
         result = pool.map(gtl, [target.target for target in targets])
     for name, df in zip([target.name for target in targets], result):
-        df_ephem[name] = df
+        ephem_dict[name] = df
 
-    return df_ephem
+    return ephem_dict

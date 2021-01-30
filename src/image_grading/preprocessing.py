@@ -148,24 +148,18 @@ def process_header_from_fits(filename, skip_missing_entries=True):
         header = dict(hdul[0].header)
         file_base = os.path.basename(filename)
         file_dir = os.path.dirname(filename)
+
+        if "OBJECT" not in header:
+            if "Voyager" in header.get("SWCREATE", {}):
+                if "Light Frame" in header.get("IMAGETYP", {}):
+                    header["OBJECT"] = file_base.split("_LIGHT_")[0]
+
         df_header = pd.DataFrame({file_base: header}).T
         df_header.index.name = "filename"
         df_header.reset_index(inplace=True)
         df_header["file_dir"] = file_dir
         df_header["file_full_path"] = filename
         df_header["filename"] = file_base
-        fl_cols = ["FOCALLEN", "EFF_FL"]
-        for fl_col in fl_cols:
-            if fl_col in df_header.columns:
-                break
-        if fl_col in df_header.columns:
-            df_header["arcsec_per_pixel"] = (
-                df_header["XPIXSZ"] * 206 / df_header[fl_col]
-            )
-        else:
-            df_header["arcsec_per_pixel"] = np.nan
-        if "COMMENT" in df_header.columns:
-            df_header["COMMENT"] = df_header["COMMENT"].apply(lambda c: str(c))
 
         cols = [
             "filename",
@@ -175,13 +169,12 @@ def process_header_from_fits(filename, skip_missing_entries=True):
             "FILTER",
             "OBJCTRA",
             "OBJCTDEC",
-            "AIRMASS",
-            "OBJCTALT",
             "INSTRUME",
             "FOCALLEN",
             "EXPOSURE",
             "XBINNING",
             "DATE-OBS",
+            "XPIXSZ",
         ]
         missing_cols = []
         for col in cols:
@@ -202,7 +195,11 @@ def process_header_from_fits(filename, skip_missing_entries=True):
             )
             file_blacklist.append(filename)
             return pd.DataFrame()
+
         df_header["FILTER"] = df_header["FILTER"].fillna("NO_FILTER")
+        if "COMMENT" in df_header.columns:
+            df_header["COMMENT"] = df_header["COMMENT"].apply(lambda c: str(c))
+
         return df_header
     except KeyboardInterrupt:
         raise ("Stopping...")
@@ -226,6 +223,15 @@ def process_headers(file_list, skip_missing_entries=True):
     for col in ["OBJCTRA", "OBJCTDEC", "OBJCTALT", "OBJCTAZ"]:
         if col in df_headers.columns:
             df_headers[col] = df_headers[col].apply(coord_str_to_float)
+            if col == "OBJCTALT":
+                df_headers["AIRMASS"] = 1.0 / np.cos(
+                    df_headers["OBJCTALT"] * np.pi / 180.0
+                )
+
+    df_headers["arcsec_per_pixel"] = (
+        df_headers["XPIXSZ"] * 206 / df_headers["FOCALLEN"]
+    ).astype(float)
+
     return df_headers
 
 
@@ -465,9 +471,9 @@ def to_numeric(df0):
     return df0
 
 
-def to_str(df0):
+def to_str(df0):  # to handle _HeaderCommentary entries
     for col in df0.columns:
-        if "date" not in col.lower():
+        if col in ["COMMENT", "HISTORY"]:
             try:
                 df0[col] = df0[col].apply(str)
             except:
@@ -489,7 +495,6 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
     if files_with_data:
         for files in chunks(files_with_data, 100):
             df_header = process_headers(files)
-            df_header = to_numeric(df_header)
             df_header = to_str(df_header)
             log.info("Pushing to db")
             push_rows_to_table(

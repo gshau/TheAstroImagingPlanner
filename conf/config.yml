@@ -14,11 +14,13 @@ default_target_status: ''
 
 # Inactive profiles to hide from the UI
 default_profiles: 
-  - ap130 asi6200mm
-  - ontc1010 qsi690
-inactive_profiles: {}
-  # - borg55fl asi2600mc
-  # - rasa8 asi2600mc
+  # - redcat51 asi2600mc
+  - ap92 asi6200mm
+  # - ap130 asi6200mm
+  # - ontc1010 qsi690
+inactive_profiles: #{}
+  - borg55fl asi2600mc
+  - rasa8 asi2600mc
 
 # target progress display mode - stack or group
 progress_mode: 'group'
@@ -50,22 +52,6 @@ time_resolution: 300
 
 # Minimum Target-moon distance
 min_moon_distance: 30
-
-# Specify fits header entries
-fits_header_map:
-  exposure: 
-    - EXPTIME
-    - EXPOSURE
-  target_name: 
-    - TARGET
-  instrument: 
-    - INSTRUME
-  focal_length: 
-    - FOCALLEN
-  binning: 
-    - XBINNING
-  pixel_size:
-    - XPIXSIZ
 
 sensor_map:
   'null': null

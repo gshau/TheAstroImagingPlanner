@@ -11,7 +11,6 @@ from astro_planner.data_parser import (
     EXPOSURE_COL,
     FOCALLENGTH_COL,
     BINNING_COL,
-    FITS_DF_COL_MAP,
 )
 from astro_planner.target import normalize_target_name
 
@@ -38,7 +37,7 @@ def compute_ra_order(ra, date_string):
 
 def get_sensor_map(equipment, df0):
     sensor_map = {}
-    for sensor_name in equipment["sensors"]:
+    for sensor_name in equipment.get("sensors", {}):
         for instrument in df0[INSTRUMENT_COL].unique():
             if sensor_name.lower() in instrument.lower():
                 sensor_map[instrument] = sensor_name
@@ -47,7 +46,7 @@ def get_sensor_map(equipment, df0):
 
 def get_optic_map(equipment, df0):
     optic_map = {}
-    for optic_name in equipment["optics"]:
+    for optic_name in equipment.get("optics", {}):
         for fl in df0[FOCALLENGTH_COL].unique():
             if np.abs(int(equipment["optics"][optic_name]["focal_length"]) - fl) < 2:
                 optic_map[fl] = optic_name
@@ -71,11 +70,10 @@ def merge_targets_with_stored_metadata(
     df_stored_data, df_targets, config, default_status="closed"
 ):
 
-    df_stored_data = df_stored_data.rename(FITS_DF_COL_MAP, axis=1)
     df0 = (
-        df_stored_data[df_stored_data["date"] > "2000-01-01"]
-        .groupby(["OBJECT", INSTRUMENT_COL, FOCALLENGTH_COL, BINNING_COL, "FILTER"])
-        .agg({EXPOSURE_COL: "sum"})
+        df_stored_data.groupby(
+            ["OBJECT", INSTRUMENT_COL, FOCALLENGTH_COL, BINNING_COL, "FILTER"]
+        ).agg({EXPOSURE_COL: "sum"})
         / 3600
     )
     df0 = df0[EXPOSURE_COL].unstack(4).fillna(0).reset_index()
@@ -83,7 +81,7 @@ def merge_targets_with_stored_metadata(
     # set status
     df0["status"] = default_status
 
-    df0 = add_group(config["equipment"], df0)
+    df0 = add_group(config.get("equipment", {}), df0)
     df_targets["OBJECT"] = df_targets["TARGET"].apply(normalize_target_name)
     df_combined = df0.set_index("OBJECT").join(
         df_targets.set_index("OBJECT"), how="outer"

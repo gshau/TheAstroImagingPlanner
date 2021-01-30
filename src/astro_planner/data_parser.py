@@ -13,25 +13,12 @@ with open(f"{base_dir}/conf/config.yml", "r") as f:
     CONFIG = yaml.safe_load(f)
 
 SENSOR_MAP = CONFIG.get("sensor_map", {})
-FITS_HEADER_MAP = CONFIG.get("fits_header_map", {})
 
 EXPOSURE_COL = "Exposure"
 INSTRUMENT_COL = "Instrument"
 FOCALLENGTH_COL = "Focal Length"
 BINNING_COL = "Binning"
 PIXELSIZE_COL = "Pixel Size"
-
-FITS_DF_COL_MAP = {}
-for col in FITS_HEADER_MAP.get("exposure", ["EXPOSURE"]):
-    FITS_DF_COL_MAP[col] = EXPOSURE_COL
-for col in FITS_HEADER_MAP.get("instrument", ["INSTRUME"]):
-    FITS_DF_COL_MAP[col] = INSTRUMENT_COL
-for col in FITS_HEADER_MAP.get("focal_length", ["FOCALLEN"]):
-    FITS_DF_COL_MAP[col] = FOCALLENGTH_COL
-for col in FITS_HEADER_MAP.get("binning", ["XBINNING"]):
-    FITS_DF_COL_MAP[col] = BINNING_COL
-for col in FITS_HEADER_MAP.get("pixel_size", ["XPIXSZ"]):
-    FITS_DF_COL_MAP[col] = PIXELSIZE_COL
 
 
 def format_name(name):

@@ -553,7 +553,11 @@ def serve_layout():
                                 dbc.Row(weather_modal, justify="around"),
                                 html.Br(),
                                 dbc.Row(
-                                    html.Div(id="upload-button", children=[upload]),
+                                    html.Div(
+                                        id="upload-button",
+                                        children=[upload],
+                                        style={"display": "none"},
+                                    ),
                                     justify="around",
                                 ),
                             ],
@@ -772,9 +776,8 @@ def serve_layout():
                                     ),
                                     dcc.Dropdown(
                                         id="frame-heatmap-dropdown",
-                                        value="fwhm",
+                                        value="ellipticity",
                                         options=[
-                                            {"label": "FWHM", "value": "fwhm"},
                                             {
                                                 "label": "Ellipticity",
                                                 "value": "ellipticity",
@@ -783,6 +786,7 @@ def serve_layout():
                                                 "label": "Eccentricity",
                                                 "value": "eccentricity",
                                             },
+                                            {"label": "FWHM", "value": "fwhm"},
                                         ],
                                     ),
                                 ],
@@ -893,6 +897,7 @@ def serve_layout():
         [
             body,
             dcc.Store(id="store-target-data"),
+            dcc.Store(id="store-target-coordinate-data"),
             dcc.Store(id="store-target-list"),
             dcc.Store(id="store-site-data", data={}),
             dcc.Store(id="store-goal-data", data="{}"),

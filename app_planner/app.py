@@ -92,6 +92,8 @@ HORIZON_DATA = CONFIG.get("horizon_data", {})
 
 with open(f"{base_dir}/conf/equipment.yml", "r") as f:
     EQUIPMENT = yaml.safe_load(f)
+    if EQUIPMENT is None:
+        EQUIPMENT = {}
 
 
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
@@ -190,81 +192,24 @@ df_stored_data = pd.DataFrame()
 df_stars_headers = pd.DataFrame()
 
 
-def update_data():
-    global object_data
-    global df_combined
-    global df_target_status
-    global df_stored_data
+def pull_inspector_data():
     global df_stars_headers
 
-    log.debug("Checking for new data")
-
-    stored_data_query = """
-    select file_full_path as filename,
-        "OBJECT",
-        "DATE-OBS",
-        cast("CCD-TEMP" as float),
-        "FILTER",
-        "OBJCTRA",
-        "OBJCTDEC",
-        cast("AIRMASS" as float),
-        "OBJCTALT",
-        "INSTRUME" as "Instrument",
-        cast("FOCALLEN" as float) as "Focal Length",
-        cast("EXPOSURE" as float) as "Exposure",
-        cast("XBINNING" as float) as "Binning",
-        date("DATE-OBS") as "date"
-        from fits_headers
-    """
-
-    target_query = """select filename,
-        "TARGET",
-        "GROUP",
-        "RAJ2000",
-        "DECJ2000",
-        "NOTE"
-        FROM targets
-    """
-    header_query = "select * from fits_headers;"
-    star_query = "select * from aggregated_star_metrics;"
+    query = "select fh.*, asm.* from fits_headers fh join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
 
     try:
-        df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
-        df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
-        df_headers = pd.read_sql(header_query, POSTGRES_ENGINE)
-        df_stars = pd.read_sql(star_query, POSTGRES_ENGINE)
+        df_stars_headers_ = pd.read_sql(query, POSTGRES_ENGINE)
+        df_stars_headers_ = df_stars_headers_.loc[
+            :, ~df_stars_headers_.columns.duplicated()
+        ]
     except exc.SQLAlchemyError:
         log.info(
             f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
+    log.info(df_stars_headers_["arcsec_per_pixel"])
 
-    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
-
-    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
-    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
-    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
-
-    object_data = Objects()
-    object_data.load_from_df(df_objects)
-
-    default_status = CONFIG.get("default_target_status", "")
-
-    df_combined = merge_targets_with_stored_metadata(
-        df_stored_data,
-        object_data.df_objects,
-        EQUIPMENT,
-        default_status=default_status,
-    )
-
-    df_target_status = load_target_status_from_file()
-    df_combined = set_target_status(df_combined, df_target_status)
-    if df_combined["status"].isnull().sum() > 0:
-        df_combined["status"] = df_combined["status"].fillna(default_status)
-        dump_target_status_to_file(df_combined)
-
-    df_stars_headers_ = pd.merge(df_headers, df_stars, on="filename", how="left")
     df_stars_headers_["fwhm_mean_arcsec"] = (
         df_stars_headers_["fwhm_mean"] * df_stars_headers_["arcsec_per_pixel"]
     )
@@ -280,6 +225,101 @@ def update_data():
     df_stars_headers_["OBJECT"] = df_stars_headers_["OBJECT"].fillna(root_name)
 
     df_stars_headers = df_stars_headers_.copy()
+
+
+def pull_stored_data():
+    global df_stored_data
+
+    log.debug("Checking for new data")
+
+    stored_data_query = """
+    select file_full_path as filename,
+        "OBJECT",
+        "DATE-OBS",
+        cast("CCD-TEMP" as float),
+        "FILTER",
+        "OBJCTRA",
+        "OBJCTDEC",
+        "OBJCTALT",
+        "INSTRUME" as "Instrument",
+        cast("FOCALLEN" as float) as "Focal Length",
+        cast("EXPOSURE" as float) as "Exposure",
+        cast("XBINNING" as float) as "Binning",
+        date("DATE-OBS") as "date"
+        from fits_headers
+    """
+
+    try:
+        df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
+    except exc.SQLAlchemyError:
+        log.info(
+            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+        )
+        time.sleep(15)
+        return None
+
+    df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
+
+    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
+    df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
+
+
+def pull_target_data():
+    global object_data
+    global df_combined
+    global df_target_status
+    global df_stored_data
+
+    target_query = """select filename,
+        "TARGET",
+        "GROUP",
+        "RAJ2000",
+        "DECJ2000",
+        "NOTE"
+        FROM targets
+    """
+
+    try:
+        df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+    except exc.SQLAlchemyError:
+        log.info(
+            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+        )
+        time.sleep(15)
+        return None
+
+    object_data = Objects()
+    object_data.load_from_df(df_objects)
+
+
+def merge_target_with_stored_data():
+    global df_stored_data
+    global object_data
+    global df_target_status
+    global df_combined
+
+    default_status = CONFIG.get("default_target_status", "")
+    log.info(df_stored_data.head())
+    df_combined = merge_targets_with_stored_metadata(
+        df_stored_data,
+        object_data.df_objects,
+        EQUIPMENT,
+        default_status=default_status,
+    )
+
+    df_target_status = load_target_status_from_file()
+    df_combined = set_target_status(df_combined, df_target_status)
+    if df_combined["status"].isnull().sum() > 0:
+        df_combined["status"] = df_combined["status"].fillna(default_status)
+        dump_target_status_to_file(df_combined)
+
+
+def update_data():
+    pull_stored_data()
+    pull_target_data()
+    pull_inspector_data()
+    merge_target_with_stored_data()
 
 
 update_data()
@@ -333,7 +373,6 @@ def get_time_limits(targets, sun_alt=-5):
 
 def get_data(
     target_coords,
-    targets,
     df_combined,
     value="alt",
     sun_alt_for_twilight=-18,
@@ -358,14 +397,14 @@ def get_data(
 
     target_coords = add_moon_distance(target_coords)
 
-        target_coords = add_contrast(
-            target_coords,
-            filter_bandwidth=filter_bandwidth,
-            mpsas=local_mpsas,
-            object_brightness=19,
-            include_airmass=True,
-            k_ext=k_ext,
-        )
+    target_coords = add_contrast(
+        target_coords,
+        filter_bandwidth=filter_bandwidth,
+        mpsas=local_mpsas,
+        object_brightness=19,
+        include_airmass=True,
+        k_ext=k_ext,
+    )
     moon_data = dict(
         x=target_coords["moon"].index,
         y=target_coords["moon"]["alt"],
@@ -408,7 +447,7 @@ def get_data(
         line=dict(color="Orange", width=1),
         showlegend=False,
         fill="toself",
-        name="sun_up",
+        name="Sun up",
     )
     sun_dn_data = dict(
         x=[sun.index[sun_dn], sun.index[sun_dn], sun.index[0], sun.index[0]],
@@ -417,7 +456,7 @@ def get_data(
         line=dict(color="Orange", width=1),
         showlegend=False,
         fill="toself",
-        name="sun_dn",
+        name="Sun down",
     )
     data = [sun_data, sun_up_data, sun_dn_data, moon_data]
     if (value == "contrast") or (value == "airmass") or (value == "sky_mpsas"):
@@ -607,7 +646,7 @@ def target_filter(targets, filters):
 def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
 
     selection = df["date"] < "1970-01-01"
-    # selection = df["profile"].isin(profile_list)
+    selection = df["profile"].isin(profile_list)
     if days_ago > 0:
         selection |= df["date"] > str(
             datetime.datetime.today() - datetime.timedelta(days=days_ago)
@@ -702,6 +741,12 @@ def update_output_callback(
     list_of_contents, list_of_names, list_of_dates, profiles_selected
 ):
     global object_data
+
+    if not object_data:
+        return [{}], [{}]
+    if not object_data.profiles:
+        return [{}], [{}]
+
     profile = object_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
@@ -905,6 +950,57 @@ def config_buttons(n1, n2, n3, n4, n5):
     return ""
 
 
+target_coords = pd.DataFrame()
+
+
+# @app.callback(
+#     Output("store-target-coordinate-data", "data"),
+#     [Input("date-picker", "date"), Input("store-site-data", "data")],
+# )
+def store_target_coordinate_data(date_string, site_data):
+    global df_combined, object_data, target_coords
+
+    t0 = time.time()
+    site = update_site(
+        site_data,
+        default_lat=DEFAULT_LAT,
+        default_lon=DEFAULT_LON,
+        default_utc_offset=DEFAULT_UTC_OFFSET,
+    )
+    targets = []
+    target_list = object_data.target_list
+    for profile in target_list:
+        targets += list(target_list[profile].values())
+
+    target_coords = get_coordinates(
+        targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
+    )
+
+    log.info(f"store_target_coordinate_data: {time.time() - t0:.3f}")
+
+    return target_coords, targets
+
+
+def filter_targets_for_matches_and_filters(
+    targets, status_matches, filters, profile_list
+):
+    global df_combined
+    global object_data
+
+    targets = []
+    for profile in profile_list:
+        targets += list(object_data.target_list[profile].values())
+
+    if filters:
+        targets = target_filter(targets, filters)
+
+    if status_matches:
+        matching_targets = df_combined[df_combined["status"].isin(status_matches)].index
+        targets = [target for target in targets if target.name in matching_targets]
+
+    return targets
+
+
 @app.callback(
     [
         Output("store-target-data", "data"),
@@ -939,33 +1035,36 @@ def store_data(
     min_moon_distance,
     profile_list,
 ):
-    global df_combined, object_data
-    log.debug(f"Calling store_data")
-    targets = []
-    for profile in profile_list:
-        targets += list(object_data.target_list[profile].values())
-    site = update_site(
-        site_data,
-        default_lat=DEFAULT_LAT,
-        default_lon=DEFAULT_LON,
-        default_utc_offset=DEFAULT_UTC_OFFSET,
+
+    global df_combined, object_data, target_coords
+    t0 = time.time()
+
+    target_coords, targets = store_target_coordinate_data(date_string, site_data)
+    log.info(f"store_target_coordinate_data: {time.time() - t0}")
+
+    # use df_target for NOTE match and target name match
+
+    # log.info(targets)
+    targets = filter_targets_for_matches_and_filters(
+        targets, status_matches, filters, profile_list
+    )
+    target_names = [t.name for t in targets]
+    log.info(target_names)
+    log.info(f"filter_targets_for_matches_and_filters: {time.time() - t0}")
+
+    target_coords = dict(
+        [
+            [k, v]
+            for k, v in target_coords.items()
+            if (k in target_names) or (k == "sun") or (k == "moon")
+        ]
     )
 
-    if filters:
-        targets = target_filter(targets, filters)
-
-    if status_matches:
-        matching_targets = df_combined[df_combined["status"].isin(status_matches)].index
-        targets = [target for target in targets if target.name in matching_targets]
-
-    coords = get_coordinates(
-        targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
-    )
-    sun_down_range = get_time_limits(coords)
+    sun_down_range = get_time_limits(target_coords)
+    log.info(f"get_time_limits: {time.time() - t0}")
 
     data, duration_sun_down_hrs = get_data(
-        coords,
-        targets,
+        target_coords,
         df_combined,
         value=value,
         local_mpsas=local_mpsas,
@@ -973,6 +1072,7 @@ def store_data(
         filter_targets=filter_targets,
         min_moon_distance=min_moon_distance,
     )
+    log.info(f"get_data: {time.time() - t0}")
 
     dark_sky_duration_text = (
         f"Length of sky darkness: {duration_sun_down_hrs:.1f} hours"

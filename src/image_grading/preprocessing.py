@@ -220,6 +220,8 @@ def process_headers(file_list, skip_missing_entries=True):
     if df_header_list:
         df_headers = pd.concat(df_header_list)
 
+    df_headers = to_numeric(df_headers)
+
     for col in ["OBJCTRA", "OBJCTDEC", "OBJCTALT", "OBJCTAZ"]:
         if col in df_headers.columns:
             df_headers[col] = df_headers[col].apply(coord_str_to_float)
@@ -228,9 +230,7 @@ def process_headers(file_list, skip_missing_entries=True):
                     df_headers["OBJCTALT"] * np.pi / 180.0
                 )
 
-    df_headers["arcsec_per_pixel"] = (
-        df_headers["XPIXSZ"] * 206 / df_headers["FOCALLEN"]
-    ).astype(float)
+    df_headers["arcsec_per_pixel"] = df_headers["XPIXSZ"] * 206 / df_headers["FOCALLEN"]
 
     return df_headers
 

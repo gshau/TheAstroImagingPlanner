@@ -175,21 +175,6 @@ bandwidth: 120
 k_extinction: 0.2
 time_resolution: 300
 
-# Specify fits header entries
-fits_header_map:
-  exposure: 
-    - EXPTIME
-    - EXPOSURE
-  target_name: 
-    - TARGET
-  instrument: 
-    - INSTRUME
-  focal_length: 
-    - FOCALLEN
-  binning: 
-    - XBINNING
-  pixel_size:
-    - XPIXSIZ
 
 sensor_map:
   'null': null

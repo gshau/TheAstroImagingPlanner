@@ -79,7 +79,9 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     b_moon = sbm._bmoon(phase, separation, df_moon["alt"], df_target["alt"])
     b_moon *= df_moon["alt"] > 0
     # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
-    b_moon *= logistic(df_moon["airmass"], 10, 5)
+
+    # Ad-hoc extinguish moon light near horizon
+    b_moon *= logistic(np.clip(df_moon["airmass"], 1, 1e3), 10, 5)
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
     A0 = sbm._mpsas_to_b(11) / np.exp(-5)
@@ -126,7 +128,7 @@ def get_contrast(
     contrast_decrease_from_seeing = fwhm_increase_from_airmass ** 2
     contrast_ratio /= contrast_decrease_from_seeing
 
-    return contrast_ratio
+    return contrast_ratio, sky_bkg
 
 
 def add_contrast(
@@ -142,7 +144,7 @@ def add_contrast(
         if target in ["moon", "sun"]:
             result[target] = df
             continue
-        df_contrast = get_contrast(
+        df_contrast, sky_bkg = get_contrast(
             df_loc,
             target,
             filter_bandwidth=filter_bandwidth,
@@ -154,5 +156,20 @@ def add_contrast(
         df0 = df_loc[target]
         if "contrast" in df0.columns:
             df0 = df0.drop("contrast", axis=1)
-        result[target] = df0.join(df_contrast.to_frame("contrast"))
+        df0 = df0.join(df_contrast.to_frame("contrast"))
+        df0 = df0.join(sky_bkg.to_frame("sky_mpsas"))
+        result[target] = df0
+
+    return result
+
+
+def add_moon_distance(df_loc,):
+    result = {}
+    for target, df in df_loc.items():
+        if target in ["moon", "sun"]:
+            result[target] = df
+            continue
+        df0 = df_loc[target]
+        df0["moon_distance"] = distance(df_loc[target], df_loc["moon"])
+        result[target] = df0
     return result

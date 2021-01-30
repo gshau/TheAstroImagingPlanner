@@ -9,6 +9,7 @@ services:
         volumes:
             - ./conf:/app/conf
             - ${DATA_PATH}:/data:ro
+            - ./logs:/logs
         environment:
             POSTGRES_USER: astro_user
             POSTGRES_PASSWORD: andromeda
@@ -26,6 +27,7 @@ services:
             - ./conf:/app/conf
             - ${DATA_PATH}:/data:ro
             - ${TARGETS_PATH}:/targets:ro
+            - ./logs:/logs
         environment:
             POSTGRES_USER: astro_user
             POSTGRES_PASSWORD: andromeda

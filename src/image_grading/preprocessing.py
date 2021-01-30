@@ -142,30 +142,24 @@ def coord_str_to_float(coord_string):
     return result
 
 
-def process_header_from_fits(filename):
+def process_header_from_fits(filename, skip_missing_entries=True):
     try:
         hdul = fits.open(filename)
         header = dict(hdul[0].header)
         file_base = os.path.basename(filename)
         file_dir = os.path.dirname(filename)
+
+        if "OBJECT" not in header:
+            if "Voyager" in header.get("SWCREATE", {}):
+                if "Light Frame" in header.get("IMAGETYP", {}):
+                    header["OBJECT"] = file_base.split("_LIGHT_")[0]
+
         df_header = pd.DataFrame({file_base: header}).T
         df_header.index.name = "filename"
         df_header.reset_index(inplace=True)
         df_header["file_dir"] = file_dir
         df_header["file_full_path"] = filename
         df_header["filename"] = file_base
-        fl_cols = ["FOCALLEN", "EFF_FL"]
-        for fl_col in fl_cols:
-            if fl_col in df_header.columns:
-                break
-        if fl_col in df_header.columns:
-            df_header["arcsec_per_pixel"] = (
-                df_header["XPIXSZ"] * 206 / df_header[fl_col]
-            )
-        else:
-            df_header["arcsec_per_pixel"] = np.nan
-        if "COMMENT" in df_header.columns:
-            df_header["COMMENT"] = df_header["COMMENT"].apply(lambda c: str(c))
 
         cols = [
             "filename",
@@ -175,23 +169,37 @@ def process_header_from_fits(filename):
             "FILTER",
             "OBJCTRA",
             "OBJCTDEC",
-            "AIRMASS",
-            "OBJCTALT",
             "INSTRUME",
             "FOCALLEN",
             "EXPOSURE",
             "XBINNING",
             "DATE-OBS",
+            "XPIXSZ",
         ]
+        missing_cols = []
         for col in cols:
             if col not in df_header.columns:
-                df_header[col] = np.nan
+                found_col = False
                 if col in FITS_HEADER_MAP.keys():
                     for trial_col in FITS_HEADER_MAP[col]:
                         if trial_col in df_header.columns:
-                            df_header[col] = df_header[trial_col]
+                            found_col = True
+                            value = df_header[trial_col]
+                            df_header[col] = value
+                if not found_col:
+                    missing_cols.append(col)
+
+        if missing_cols and skip_missing_entries:
+            log.info(
+                f"Header for {filename} missing matching columns {missing_cols}, skipping this file..."
+            )
+            file_blacklist.append(filename)
+            return pd.DataFrame()
 
         df_header["FILTER"] = df_header["FILTER"].fillna("NO_FILTER")
+        if "COMMENT" in df_header.columns:
+            df_header["COMMENT"] = df_header["COMMENT"].apply(lambda c: str(c))
+
         return df_header
     except KeyboardInterrupt:
         raise ("Stopping...")
@@ -200,12 +208,14 @@ def process_header_from_fits(filename):
         return pd.DataFrame()
 
 
-def process_headers(file_list):
+def process_headers(file_list, skip_missing_entries=True):
     df_header_list = []
 
     for file in file_list:
         log.info(f"Processing header for file {file}")
-        df_header_list.append(process_header_from_fits(file))
+        df_header_list.append(
+            process_header_from_fits(file, skip_missing_entries=skip_missing_entries)
+        )
     df_headers = pd.DataFrame()
     if df_header_list:
         df_headers = pd.concat(df_header_list)
@@ -213,12 +223,23 @@ def process_headers(file_list):
     for col in ["OBJCTRA", "OBJCTDEC", "OBJCTALT", "OBJCTAZ"]:
         if col in df_headers.columns:
             df_headers[col] = df_headers[col].apply(coord_str_to_float)
+            if col == "OBJCTALT":
+                df_headers["AIRMASS"] = 1.0 / np.cos(
+                    df_headers["OBJCTALT"] * np.pi / 180.0
+                )
+
+    df_headers["arcsec_per_pixel"] = (
+        df_headers["XPIXSZ"] * 206 / df_headers["FOCALLEN"]
+    ).astype(float)
+
     return df_headers
 
 
 def check_status(file_list, **status_args):
     df_status_list = []
     for filename in file_list:
+        if filename in file_blacklist:
+            continue
         status_dict = {}
         file_base = os.path.basename(filename)
         file_dir = os.path.dirname(filename)
@@ -428,9 +449,11 @@ def update_fits_status(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_status")
     files_with_data = get_file_list_with_data(new_files)
+    files_with_data = [f for f in files_with_data if f not in file_blacklist]
     if files_with_data:
         for filename in files_with_data:
             log.info(f"Found new file: {filename}")
+
         df_status = check_status(files_with_data, reject=["reject"], cloud=["cloud"])
         df_status = to_numeric(df_status)
         push_rows_to_table(
@@ -440,10 +463,21 @@ def update_fits_status(config=CONFIG, data_dir=DATA_DIR, file_list=None):
 
 def to_numeric(df0):
     for col in df0.columns:
-        try:
-            df0[col] = df0[col].apply(pd.to_numeric)
-        except:
-            continue
+        if "date" not in col.lower():
+            try:
+                df0[col] = df0[col].apply(pd.to_numeric)
+            except:
+                continue
+    return df0
+
+
+def to_str(df0):  # to handle _HeaderCommentary entries
+    for col in df0.columns:
+        if col in ["COMMENT", "HISTORY"]:
+            try:
+                df0[col] = df0[col].apply(str)
+            except:
+                continue
     return df0
 
 
@@ -452,13 +486,16 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
     files_with_data = get_file_list_with_data(new_files)
+
+    files_with_data = [f for f in files_with_data if f not in file_blacklist]
+
     n_files = len(files_with_data)
     if n_files > 0:
         log.info(f"Found {n_files} new files for headers")
     if files_with_data:
         for files in chunks(files_with_data, 100):
             df_header = process_headers(files)
-            df_header = to_numeric(df_header)
+            df_header = to_str(df_header)
             log.info("Pushing to db")
             push_rows_to_table(
                 df_header,
@@ -491,6 +528,7 @@ def update_star_metrics(
     multithread_fits_read = n_threads > 1
 
     if files_to_process:
+        log.info(f"Found {len(files_to_process)} new files with data")
         for file_set in list(chunks(files_to_process, n_chunk)):
             if multithread_fits_read:
                 with Pool(n_threads) as p:
@@ -544,6 +582,8 @@ def update_star_metrics(
                 log.info(
                     f"Finished pushing {n_stars} stars from {len(file_set)} files to tables"
                 )
+
+        log.info("Done processing stars")
 
 
 def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=None):
@@ -605,6 +645,8 @@ def bin_stars(df_s, filename, tnpix_min=6):
             "fwhm": "median",
             "eccentricity": "median",
             "tnpix": "count",
+            "a": "median",
+            "b": "median",
         }
     ).reset_index()
     df_xy.rename({"tnpix": "star_count"}, axis=1, inplace=True)

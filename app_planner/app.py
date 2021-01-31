@@ -57,11 +57,6 @@ from image_grading.frame_analysis import (
     show_frame_analysis,
     show_fwhm_ellipticity_vs_r,
 )
-from image_grading.preprocessing import (
-    preprocess_stars,
-    process_image_from_filename,
-    bin_stars,
-)
 
 from layout import serve_layout, yaxis_map
 import seaborn as sns
@@ -305,7 +300,6 @@ def merge_target_with_stored_data():
     global df_combined
 
     default_status = CONFIG.get("default_target_status", "")
-    log.info(df_stored_data.head())
     df_combined = merge_targets_with_stored_metadata(
         df_stored_data,
         object_data.df_objects,

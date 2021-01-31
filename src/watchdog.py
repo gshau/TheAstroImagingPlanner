@@ -1,8 +1,13 @@
 import time
 import logging
+import sys
+
 import os
 import glob
 import pandas as pd
+
+import paho.mqtt.client as mqtt
+
 
 from image_grading.preprocessing import (
     update_db_with_matching_files,
@@ -19,6 +24,24 @@ from astro_planner.target import object_file_reader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
 log = logging.getLogger(__name__)
+
+client = mqtt.Client()
+
+
+def on_connect(client, obj, flags, rc):
+    log.info(f"Connecting to {client}")
+
+
+def on_message(client, obj, msg):
+    if msg.payload.decode("ascii") == "restart":
+        log.info(msg.payload)
+        sys.exit()
+
+
+client.on_message = on_message
+client.on_connect = on_connect
+client.connect("mqtt", 1883, 60)
+client.subscribe("watchdog", 0)
 
 
 def update_db_with_targets(config=CONFIG, target_dir=TARGET_DIR, file_list=None):
@@ -59,7 +82,18 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
 
 if __name__ == "__main__":
     log.info(f"Starting watchdog on data directory")
+    client.publish("watchdog", "running")
+    t_last_update = time.time()
+    update_frequency = 60
+    update = True
     while True:
-        update_db_with_targets(file_list=None)
-        update_db_with_matching_files(file_list=None)
-        time.sleep(5)
+        client.loop()
+        t_elapsed = time.time() - t_last_update
+        if t_elapsed > update_frequency:
+            update = True
+        if update:
+            update_db_with_targets(file_list=None)
+            update_db_with_matching_files(file_list=None)
+            t_last_update = time.time()
+            update = False
+        time.sleep(1)

@@ -21,6 +21,8 @@ import warnings
 import datetime
 import yaml
 
+import paho.mqtt.client as mqtt
+
 from dash.dependencies import Input, Output, State
 from sqlalchemy import exc
 from flask import request
@@ -82,6 +84,10 @@ BS = dbc.themes.FLATLY
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
 
 app.title = "The AstroImaging Planner"
+
+
+mqtt_client = mqtt.Client()
+mqtt_client.connect("mqtt", 1883, 60)
 
 
 base_dir = Path(__file__).parents[1]
@@ -195,7 +201,7 @@ df_stars_headers = pd.DataFrame()
 def pull_inspector_data():
     global df_stars_headers
 
-    query = "select fh.*, asm.* from fits_headers fh join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
+    query = "select fh.*, asm.* from fits_headers fh left join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
 
     try:
         df_stars_headers_ = pd.read_sql(query, POSTGRES_ENGINE)
@@ -208,7 +214,6 @@ def pull_inspector_data():
         )
         time.sleep(15)
         return None
-    log.info(df_stars_headers_["arcsec_per_pixel"])
 
     df_stars_headers_["fwhm_mean_arcsec"] = (
         df_stars_headers_["fwhm_mean"] * df_stars_headers_["arcsec_per_pixel"]
@@ -904,6 +909,10 @@ def download_log(file):
     )
 
 
+def shutdown_watchdog():
+    mqtt_client.publish("watchdog", "restart")
+
+
 # Callbacks
 @app.callback(
     Output("dummy-id", "children"),
@@ -913,9 +922,10 @@ def download_log(file):
         Input("button-clear-header-tables", "n_clicks"),
         Input("button-clear-target-tables", "n_clicks"),
         Input("button-restart-app", "n_clicks"),
+        Input("button-restart-watchdog", "n_clicks"),
     ],
 )
-def config_buttons(n1, n2, n3, n4, n5):
+def config_buttons(n1, n2, n3, n4, n5, n6):
     ctx = dash.callback_context
 
     if ctx.triggered:
@@ -945,6 +955,9 @@ def config_buttons(n1, n2, n3, n4, n5):
         if button_id == "button-restart-app":
             log.info(f"Restarting app")
             shutdown()
+        if button_id == "button-restart-watchdog":
+            log.info(f"Restarting watchdog")
+            shutdown_watchdog()
 
     return ""
 
@@ -1503,9 +1516,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
         Input("frame-heatmap-dropdown", "value"),
     ],
 )
-def inspect_frame_analysis(
-    data, as_aberration_inspector, frame_heatmap_col, recalculate=False
-):
+def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
     p0 = go.Figure()
     p1 = p0
     p2 = p0
@@ -1514,7 +1525,6 @@ def inspect_frame_analysis(
         return p0, p1, p2
     base_filename = data["points"][0]["customdata"]
     if not base_filename:
-        log.info("Issue 1")
         return p0, p1, p2
 
     file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
@@ -1522,31 +1532,17 @@ def inspect_frame_analysis(
         log.info(file_full_path)
         filename = file_full_path["file_full_path"].values[0]
     else:
-        log.info("Issue 2")
         return p0, p1, p2
 
-    if recalculate:
-        t0 = time.time()
-        df_s = process_image_from_filename(
-            filename, extract_thresh=0.25, tnpix_threshold=5
-        )
-        n_stars = df_s.shape[0]
+    t0 = time.time()
+    radial_query = (
+        f"""select * from radial_frame_metrics where filename = '{base_filename}';"""
+    )
+    df_radial = pd.read_sql(radial_query, POSTGRES_ENGINE)
 
-        xy_n_bins = max(min(int(np.sqrt(n_stars) / 8), 12), 3)
-        df_s = preprocess_stars(df_s, xy_n_bins=xy_n_bins)
-
-        df_radial, df_xy = bin_stars(df_s, filename)
-        log.info(f"Time for direct computation: {time.time() - t0:.2f} seconds")
-    else:
-        t0 = time.time()
-        radial_query = f"""select * from radial_frame_metrics where filename = '{base_filename}';"""
-        df_radial = pd.read_sql(radial_query, POSTGRES_ENGINE)
-
-        xy_query = (
-            f"""select * from xy_frame_metrics where filename = '{base_filename}';"""
-        )
-        df_xy = pd.read_sql(xy_query, POSTGRES_ENGINE)
-        log.info(f"Time for query: {time.time() - t0:.2f} seconds")
+    xy_query = f"""select * from xy_frame_metrics where filename = '{base_filename}';"""
+    df_xy = pd.read_sql(xy_query, POSTGRES_ENGINE)
+    log.info(f"Time for query: {time.time() - t0:.2f} seconds")
 
     p2, canvas = show_inspector_image(
         filename,

@@ -191,6 +191,8 @@ df_combined = pd.DataFrame()
 df_target_status = pd.DataFrame()
 df_stored_data = pd.DataFrame()
 df_stars_headers = pd.DataFrame()
+all_target_coords = pd.DataFrame()
+all_targets = []
 
 
 def pull_inspector_data():
@@ -375,35 +377,14 @@ def get_data(
     df_combined,
     value="alt",
     sun_alt_for_twilight=-18,
-    local_mpsas=20,
-    filter_bandwidth=300,
-    k_ext=0.2,
     filter_targets=True,
     min_moon_distance=30,
 ):
-    log.debug("Starting get_data")
+
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
-    if local_mpsas is None:
-        local_mpsas = DEFAULT_MPSAS
-    if filter_bandwidth is None:
-        filter_bandwidth = DEFAULT_BANDWIDTH
-    if k_ext is None:
-        k_ext = DEFAULT_K_EXTINCTION
-    if min_moon_distance is None:
-        min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
 
-    target_coords = add_moon_distance(target_coords)
-
-    target_coords = add_contrast(
-        target_coords,
-        filter_bandwidth=filter_bandwidth,
-        mpsas=local_mpsas,
-        object_brightness=19,
-        include_airmass=True,
-        k_ext=k_ext,
-    )
     moon_data = dict(
         x=target_coords["moon"].index,
         y=target_coords["moon"]["alt"],
@@ -956,15 +937,8 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
     return ""
 
 
-target_coords = pd.DataFrame()
-
-
-# @app.callback(
-#     Output("store-target-coordinate-data", "data"),
-#     [Input("date-picker", "date"), Input("store-site-data", "data")],
-# )
 def store_target_coordinate_data(date_string, site_data):
-    global df_combined, object_data, target_coords
+    global df_combined, object_data, all_target_coords
 
     t0 = time.time()
     site = update_site(
@@ -978,13 +952,13 @@ def store_target_coordinate_data(date_string, site_data):
     for profile in target_list:
         targets += list(target_list[profile].values())
 
-    target_coords = get_coordinates(
+    all_target_coords = get_coordinates(
         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
     )
 
     log.info(f"store_target_coordinate_data: {time.time() - t0:.3f}")
 
-    return target_coords, targets
+    return all_target_coords, targets
 
 
 def filter_targets_for_matches_and_filters(
@@ -995,7 +969,8 @@ def filter_targets_for_matches_and_filters(
 
     targets = []
     for profile in profile_list:
-        targets += list(object_data.target_list[profile].values())
+        if profile in object_data.target_list:
+            targets += list(object_data.target_list[profile].values())
 
     if filters:
         targets = target_filter(targets, filters)
@@ -1008,6 +983,55 @@ def filter_targets_for_matches_and_filters(
 
 
 @app.callback(
+    Output("dummy-id-target-data", "children"),
+    [Input("date-picker", "date"), Input("store-site-data", "data"),],
+)
+def get_target_data(
+    date_string, site_data,
+):
+    global all_target_coords, all_targets
+    t0 = time.time()
+
+    all_target_coords, all_targets = store_target_coordinate_data(
+        date_string, site_data
+    )
+    all_target_coords = add_moon_distance(all_target_coords)
+
+    log.info(f"store_target_coordinate_data: {time.time() - t0}")
+    return ""
+
+
+@app.callback(
+    Output("dummy-id-contrast-data", "children"),
+    [
+        Input("dummy-id-target-data", "children"),
+        Input("local-mpsas", "value"),
+        Input("k-ext", "value"),
+    ],
+)
+def update_contrast(
+    dummy_input, local_mpsas, k_ext,
+):
+    global all_target_coords
+
+    if local_mpsas is None:
+        local_mpsas = DEFAULT_MPSAS
+    filter_bandwidth = DEFAULT_BANDWIDTH
+    if k_ext is None:
+        k_ext = DEFAULT_K_EXTINCTION
+
+    all_target_coords = add_contrast(
+        all_target_coords,
+        filter_bandwidth=filter_bandwidth,
+        mpsas=local_mpsas,
+        include_airmass=True,
+        k_ext=k_ext,
+    )
+
+    return ""
+
+
+@app.callback(
     [
         Output("store-target-data", "data"),
         Output("store-target-list", "data"),
@@ -1015,12 +1039,9 @@ def filter_targets_for_matches_and_filters(
         Output("dark-sky-duration", "data"),
     ],
     [
-        Input("date-picker", "date"),
-        Input("store-site-data", "data"),
+        Input("dummy-id-contrast-data", "children"),
         Input("store-target-status", "data"),
         Input("y-axis-type", "value"),
-        Input("local-mpsas", "value"),
-        Input("k-ext", "value"),
         Input("filter-targets", "checked"),
         Input("status-match", "value"),
         Input("filter-match", "value"),
@@ -1029,12 +1050,9 @@ def filter_targets_for_matches_and_filters(
     [State("profile-selection", "value")],
 )
 def store_data(
-    date_string,
-    site_data,
+    dummy_input,
     target_status_store,
     value,
-    local_mpsas,
-    k_ext,
     filter_targets,
     status_matches,
     filters,
@@ -1042,28 +1060,23 @@ def store_data(
     profile_list,
 ):
 
-    global df_combined, object_data, target_coords
+    global df_combined, object_data, all_target_coords, all_targets
     t0 = time.time()
 
-    target_coords, targets = store_target_coordinate_data(date_string, site_data)
-    log.info(f"store_target_coordinate_data: {time.time() - t0}")
+    if min_moon_distance is None:
+        min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
 
-    # use df_target for NOTE match and target name match
-
-    # log.info(targets)
     targets = filter_targets_for_matches_and_filters(
-        targets, status_matches, filters, profile_list
+        all_targets, status_matches, filters, profile_list
     )
     target_names = [t.name for t in targets]
-    log.info(target_names)
+    target_names.append("sun")
+    target_names.append("moon")
+
     log.info(f"filter_targets_for_matches_and_filters: {time.time() - t0}")
 
     target_coords = dict(
-        [
-            [k, v]
-            for k, v in target_coords.items()
-            if (k in target_names) or (k == "sun") or (k == "moon")
-        ]
+        [[k, v] for k, v in all_target_coords.items() if k in target_names]
     )
 
     sun_down_range = get_time_limits(target_coords)
@@ -1073,8 +1086,6 @@ def store_data(
         target_coords,
         df_combined,
         value=value,
-        local_mpsas=local_mpsas,
-        k_ext=k_ext,
         filter_targets=filter_targets,
         min_moon_distance=min_moon_distance,
     )
@@ -1157,8 +1168,7 @@ def update_target_graph(
                 yaxis={"title": yaxis_map[value], "range": y_range, "type": yaxis_type},
                 title=title,
                 margin={"l": 50, "b": 50, "t": 50, "r": 50},
-                legend={"orientation": "h"},
-                height=800,
+                height=600,
                 plot_bgcolor="#ccc",
                 paper_bgcolor="#fff",
                 hovermode="closest",

@@ -1,5 +1,7 @@
+import time
 import numpy as np
 from .ephemeris import get_sun, get_moon
+from .logger import log
 
 RADIANS_PER_DEGREE = np.pi / 180.0
 
@@ -74,9 +76,9 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     df_moon = df_locs["moon"]
     df_sun = df_locs["sun"]
     phase = (distance(df_moon, df_sun, lat_key="dec", long_key="ra") + 360) % 360 - 180
-    separation = distance(df_moon, df_target)
+    moon_separation = distance(df_moon, df_target)
 
-    b_moon = sbm._bmoon(phase, separation, df_moon["alt"], df_target["alt"])
+    b_moon = sbm._bmoon(phase, moon_separation, df_moon["alt"], df_target["alt"])
     b_moon *= df_moon["alt"] > 0
     # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
 
@@ -100,7 +102,10 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     sky_bkg[df_target["alt"] < 0] = np.nan
     sky_bkg[sky_bkg < 0] = np.nan
 
-    return sky_bkg.dropna()
+    moon_separation[df_target["alt"] < 0] = np.nan
+    moon_separation[sky_bkg < 0] = np.nan
+
+    return sky_bkg.dropna(), moon_separation.dropna()
 
 
 def get_contrast(
@@ -108,11 +113,10 @@ def get_contrast(
     target_name,
     filter_bandwidth=None,
     mpsas=20.2,
-    object_brightness=19,
     k_ext=0.2,
     include_airmass=True,
 ):
-    sky_bkg = get_sky_bkg(df_locs, target_name, mpsas, k_ext=k_ext)
+    sky_bkg, moon_separation = get_sky_bkg(df_locs, target_name, mpsas, k_ext=k_ext)
 
     bkg = 2.5 ** (-sky_bkg)
     dark_bkg = 2.5 ** (-mpsas)
@@ -128,36 +132,36 @@ def get_contrast(
     contrast_decrease_from_seeing = fwhm_increase_from_airmass ** 2
     contrast_ratio /= contrast_decrease_from_seeing
 
-    return contrast_ratio, sky_bkg
+    return contrast_ratio, sky_bkg, moon_separation
 
 
 def add_contrast(
-    df_loc,
-    filter_bandwidth=300,
-    include_airmass=True,
-    mpsas=20.2,
-    object_brightness=19,
-    k_ext=0.2,
+    df_loc, filter_bandwidth=300, include_airmass=True, mpsas=20.2, k_ext=0.2,
 ):
     result = {}
+    t0 = time.time()
+    # TODO: make parallel
     for target, df in df_loc.items():
+        log.info(f"Adding Contrast: {target}: {time.time() - t0:.3f}")
         if target in ["moon", "sun"]:
             result[target] = df
             continue
-        df_contrast, sky_bkg = get_contrast(
+        df_contrast, sky_bkg, moon_separation = get_contrast(
             df_loc,
             target,
             filter_bandwidth=filter_bandwidth,
             include_airmass=include_airmass,
             mpsas=mpsas,
-            object_brightness=object_brightness,
             k_ext=k_ext,
         )
         df0 = df_loc[target]
-        if "contrast" in df0.columns:
-            df0 = df0.drop("contrast", axis=1)
+        for col in ["contrast"]:
+            if col in df0.columns:
+                df0 = df0.drop(col, axis=1)
         df0 = df0.join(df_contrast.to_frame("contrast"))
         df0 = df0.join(sky_bkg.to_frame("sky_mpsas"))
+        # df0 = df0.join(moon_separation.to_frame("moon_distance"))
+        # log.info(moon_separation)
         result[target] = df0
 
     return result
@@ -165,7 +169,9 @@ def add_contrast(
 
 def add_moon_distance(df_loc,):
     result = {}
+    t0 = time.time()
     for target, df in df_loc.items():
+        log.info(f"Adding moon distance: {target}: {time.time() - t0:.3f}")
         if target in ["moon", "sun"]:
             result[target] = df
             continue

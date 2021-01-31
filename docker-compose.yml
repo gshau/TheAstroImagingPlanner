@@ -3,6 +3,7 @@ services:
     planner_app:
         image: gshau/astroimaging-planner:latest
         restart: always
+        container_name: planner
         entrypoint: ["python", "./src/app.py"]
         ports:
             - "8050:8050"
@@ -22,6 +23,7 @@ services:
     watchdog:
         image: gshau/astroimaging-planner:latest
         restart: always
+        container_name: watchdog
         entrypoint: ["python", "./src/watchdog.py"]
         volumes:
             - ./conf:/app/conf
@@ -39,6 +41,7 @@ services:
     db:
         image: postgres
         restart: always
+        container_name: db
         ports:
             - "5432:5432"
         environment:
@@ -50,3 +53,11 @@ services:
             options:
                 max-size: 10m
                 max-file: "3"                
+    mqtt:
+        image: eclipse-mosquitto
+        container_name: mqtt
+        expose:
+            - 1883
+        ports:
+            - 1883:1883
+        restart: unless-stopped                                

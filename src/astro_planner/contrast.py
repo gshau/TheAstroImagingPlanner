@@ -104,6 +104,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     moon_separation[df_target["alt"] < 0] = np.nan
     moon_separation[sky_bkg < 0] = np.nan
+    moon_separation.index = time_index
 
     return sky_bkg.dropna(), moon_separation.dropna()
 
@@ -160,22 +161,7 @@ def add_contrast(
                 df0 = df0.drop(col, axis=1)
         df0 = df0.join(df_contrast.to_frame("contrast"))
         df0 = df0.join(sky_bkg.to_frame("sky_mpsas"))
-        # df0 = df0.join(moon_separation.to_frame("moon_distance"))
-        # log.info(moon_separation)
+        df0 = df0.join(moon_separation.to_frame("moon_distance"))
         result[target] = df0
 
-    return result
-
-
-def add_moon_distance(df_loc,):
-    result = {}
-    t0 = time.time()
-    for target, df in df_loc.items():
-        log.info(f"Adding moon distance: {target}: {time.time() - t0:.3f}")
-        if target in ["moon", "sun"]:
-            result[target] = df
-            continue
-        df0 = df_loc[target]
-        df0["moon_distance"] = distance(df_loc[target], df_loc["moon"])
-        result[target] = df0
     return result

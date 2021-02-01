@@ -30,7 +30,7 @@ from flask import request
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
 from astro_planner.target import object_file_reader, normalize_target_name, Objects
-from astro_planner.contrast import add_contrast, add_moon_distance
+from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import (
@@ -269,9 +269,6 @@ def pull_stored_data():
 
 def pull_target_data():
     global object_data
-    global df_combined
-    global df_target_status
-    global df_stored_data
 
     target_query = """select filename,
         "TARGET",
@@ -297,7 +294,6 @@ def pull_target_data():
 
 def merge_target_with_stored_data():
     global df_stored_data
-    global object_data
     global df_target_status
     global df_combined
 
@@ -696,6 +692,17 @@ app.layout = serve_layout
 
 
 # Callbacks
+
+@app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
+def set_date(utc_offset):
+    if utc_offset is None:
+        utc_offset = DEFAULT_UTC_OFFSET
+    date = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=utc_offset))
+    )
+    return date
+
+
 @app.callback(
     Output("modal", "is_open"),
     [Input("open", "n_clicks"), Input("close", "n_clicks")],
@@ -995,7 +1002,6 @@ def get_target_data(
     all_target_coords, all_targets = store_target_coordinate_data(
         date_string, site_data
     )
-    all_target_coords = add_moon_distance(all_target_coords)
 
     log.info(f"store_target_coordinate_data: {time.time() - t0}")
     return ""

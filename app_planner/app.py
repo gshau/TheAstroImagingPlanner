@@ -157,6 +157,9 @@ FILTER_MAP = {
     "Blue": B_FILTER,
     "Lum": L_FILTER,
     "Luminance": L_FILTER,
+    "HA": HA_FILTER,
+    "O3": OIII_FILTER,
+    "S2": SII_FILTER,
 }
 
 
@@ -619,7 +622,7 @@ def target_filter(targets, filters):
     return list(set(targets_with_filter))
 
 
-def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
+def get_progress_graph(df, dfs, date_string, profile_list, days_ago, targets=[]):
 
     selection = df["date"] < "1970-01-01"
     if days_ago > 0:
@@ -630,7 +633,8 @@ def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
     targets += targets_in_last_n_days
     if targets:
         selection |= df["OBJECT"].isin(targets)
-    df0 = df[selection].reset_index()
+    df0 = df[selection]
+    df0 = df0.reset_index()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
 
     p = go.Figure()
@@ -693,13 +697,12 @@ app.layout = serve_layout
 
 # Callbacks
 
+
 @app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
 def set_date(utc_offset):
     if utc_offset is None:
         utc_offset = DEFAULT_UTC_OFFSET
-    date = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=utc_offset))
-    )
+    date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
     return date
 
 
@@ -1139,6 +1142,7 @@ def update_target_graph(
     global df_target_status
     global df_combined
     global df_stored_data
+    global df_stars_headers
 
     log.debug(f"Calling update_target_graph")
     if not metadata:
@@ -1191,6 +1195,7 @@ def update_target_graph(
 
     progress_graph, df_summary = get_progress_graph(
         df_stored_data,
+        df_stars_headers,
         date_string=date_string,
         profile_list=profile_list,
         days_ago=progress_days_ago,
@@ -1462,9 +1467,8 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
         y_col = "eccentricity_mean"
     p = go.Figure()
     sizeref = float(2.0 * df0[size_col].max() / (5 ** 2))
-    for filter in FILTER_LIST:
-        if filter not in filters:
-            continue
+
+    for i_filter, filter in enumerate(filters):
         df1 = df0[df0["FILTER"] == filter].reset_index()
 
         df1["text"] = df1.apply(
@@ -1483,8 +1487,15 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
 
         if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
             symbol = "diamond"
-        else:
+        elif filter in [L_FILTER, R_FILTER, G_FILTER, B_FILTER]:
             symbol = "circle"
+        else:
+            symbol = "star"
+
+        if filter in COLORS:
+            color = COLORS[filter]
+        else:
+            color = sns.color_palette(n_colors=len(filters)).as_hex()[i_filter]
 
         p.add_trace(
             go.Scatter(
@@ -1498,9 +1509,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
                 text=df1["text"],
-                marker=dict(
-                    color=COLORS[filter], size=size, sizeref=sizeref, symbol=symbol
-                ),
+                marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
                 customdata=df1["filename"],
             )
         )
@@ -1623,4 +1632,4 @@ if __name__ == "__main__":
     host = "0.0.0.0"
     if localhost_only:
         host = "localhost"
-    app.run_server(debug=True, host=host, dev_tools_serve_dev_bundles=True)
+    app.run_server(debug=debug, host=host)

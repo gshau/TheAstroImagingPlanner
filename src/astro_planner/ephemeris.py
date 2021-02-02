@@ -62,6 +62,7 @@ def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
         "{} 12:00:00".format(date_string),
         freq="{}s".format(time_resolution_in_sec),
         periods=24 * (60 * 60 / time_resolution_in_sec),
+        tz=site.tz,
     )
     ephem_dict = get_sun_moon_loc(dates, location=site.location)
     gtl = partial(get_target_loc, dates=dates, location=site.location)

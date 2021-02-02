@@ -80,7 +80,7 @@ There’s also various weather tools like the local forecast using clearoutside,
 A second tab shows the targets with gear I'd want to use to capture it, the target status (pending/active/acquired/closed), and the exposure summaries. Here’s a view of that:
 ![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_stored_data_view.png)
 
-## Subexposure inspector
+## Frame inspector
 A third tab shows a new section that inspects all the frames that are already stored to give more insights about your data.  This includes, but not limited to:
 - Field curvature / astigmatism
 - Trailing due to bad tracking and/or wind
@@ -109,9 +109,23 @@ docker pull gshau/astroimaging-planner:latest
 ```
 
 ### Necessary components:
-- Voyager Roboclip database file
+- Voyager Roboclip database file or SGP/NINA sequences
 - Config files from the `conf` directory
-- Data files of the format `{data_dir}/{target_name}/*/{fits_files}`, where `data_dir` is specified in the volume mappings
+- Data files of the format `{data_dir}/*/{fits_files}`, where `data_dir` is specified in the volume mappings.  Files are expected to have the following entries in their FITs headers:
+```
+  "OBJECT"
+  "DATE-OBS"
+  "CCD-TEMP"
+  "FILTER"
+  "OBJCTRA"
+  "OBJCTDEC"
+  "OBJCTALT"
+  "INSTRUME"
+  "FOCALLEN"
+  "EXPOSURE"
+  "XBINNING"
+  "DATE-OBS"
+```
 
 ## Docker configuration
 
@@ -145,10 +159,23 @@ The config file `conf/config.yml` contains the configuration needed to personali
 ```
 # FITs file patters in regex format, relative to DATA_DIR
 fits_file_patterns:
-  - "/*/*/*.[fF][iI][tT]"
-  - "/*/*/*.[fF][iI][tT]s"
-  - "/*/*/Lights/*.[fF][iI][tT]"
-  - "/*/*/Lights/*.[fF][iI][tT][s]"
+  allow:
+    - "**/*.[fF][iI][tT]"
+    - "**/*.[fF][iI][tT][s]"
+  reject:  # reject files with these phrases in the filename or path - case insensitive
+    - "dark"
+    - "bias"
+    - "flat"
+    - "skip"
+
+# Default target status when initially parsing data
+default_target_status: ''
+
+# Inactive profiles to hide from the UI
+default_profiles: 
+  - ap92 asi6200mm
+inactive_profiles: #{}
+  - rasa8 asi2600mc
 
 # target progress display mode - stack or group
 progress_mode: 'group'
@@ -158,7 +185,7 @@ progress_days_ago: 0
 
 horizon_data:
   flat_horizon_alt: 10
-  horizon_file: "data/custom_horizon.txt"
+  horizon_file: "conf/custom_horizon.txt"  # comment this line out, and behavior reverts to flat altitude
   alt_az_seperator: " "
   header_length: 3
 
@@ -180,7 +207,6 @@ sensor_map:
   'null': null
   "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8"
   "QHYCCD-Cameras-Capture": "QHY16200A"
-  "AltaF-8300D2": "Alta_Camera_8300"
 ```
 
 ## Equipment

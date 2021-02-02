@@ -602,7 +602,12 @@ def update_weather(site):
         f"http://forecast.weather.gov/MapClick.php?lon={site.lon}&lat={site.lat}#.U1xl5F7N7wI",
     )
 
-    return graph_data, clear_outside_link[0], nws_link[0]
+    goes_satellite_link = CONFIG.get(
+        "goes_satellite_link",
+        "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36",
+    )
+
+    return graph_data, clear_outside_link[0], nws_link[0], goes_satellite_link
 
 
 def target_filter(targets, filters):
@@ -767,6 +772,7 @@ def update_output_callback(
         Output("weather-graph", "children"),
         Output("clear-outside", "href"),
         Output("nws-weather", "href"),
+        Output("goes-satellite", "href"),
     ],
     [Input("store-site-data", "data")],
 )
@@ -777,8 +783,8 @@ def update_weather_data_callback(site_data):
         default_lon=DEFAULT_LON,
         default_utc_offset=DEFAULT_UTC_OFFSET,
     )
-    weather_graph, clear_outside_link, nws_link = update_weather(site)
-    return weather_graph, clear_outside_link, nws_link
+    weather_graph, clear_outside_link, nws_link, goes_link = update_weather(site)
+    return weather_graph, clear_outside_link, nws_link, goes_link
 
 
 @app.callback(
@@ -994,7 +1000,7 @@ def filter_targets_for_matches_and_filters(
 
 @app.callback(
     Output("dummy-id-target-data", "children"),
-    [Input("date-picker", "date"), Input("store-site-data", "data"),],
+    [Input("date-picker", "date"), Input("store-site-data", "data")],
 )
 def get_target_data(
     date_string, site_data,

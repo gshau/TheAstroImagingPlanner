@@ -902,6 +902,8 @@ def serve_layout():
             config_container,
             data_files_table_container,
             html.Div(id="dummy-id", style={"display": "none"}),
+            html.Div(id="dummy-id-target-data", style={"display": "none"}),
+            html.Div(id="dummy-id-contrast-data", style={"display": "none"}),
         ],
     )
 

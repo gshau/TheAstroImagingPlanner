@@ -12,13 +12,12 @@ fits_file_patterns:
 # Default target status when initially parsing data
 default_target_status: ''
 
-# Inactive profiles to hide from the UI
+# Default profiles to start new session with
 default_profiles: 
-  # - redcat51 asi2600mc
   - ap92 asi6200mm
-  # - ap130 asi6200mm
-  # - ontc1010 qsi690
-inactive_profiles: #{}
+  - ontc1010 qsi690
+# Inactive profiles to hide from the UI
+inactive_profiles:
   - borg55fl asi2600mc
   - rasa8 asi2600mc
 
@@ -33,7 +32,7 @@ threads_for_star_processing: 4
 
 horizon_data:
   flat_horizon_alt: 10
-  horizon_file: "data/custom_horizon.txt"
+  horizon_file: "conf/custom_horizon.txt"
   alt_az_seperator: " "
   header_length: 3
 
@@ -45,17 +44,24 @@ debug: "True"
 lat: 43.37
 lon: -88.37
 utc_offset: -6
+
+# Link override for GOES satellite
+goes_satellite_link: "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36"
+
+# Local light pollution level (for contrast / local sky brightness calculations)
 mpsas: 20.1
 bandwidth: 120
 k_extinction: 0.2
+
+# Time resolution of target figure on first tab
 time_resolution: 300
 
 # Minimum Target-moon distance
 min_moon_distance: 30
 
+# Sensor map - for cleaning up the naming of some entries
 sensor_map:
   'null': null
   "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8"
   "QHYCCD-Cameras-Capture": "QHY16200A"
-  "AltaF-8300D2": "Alta_Camera_8300"
 

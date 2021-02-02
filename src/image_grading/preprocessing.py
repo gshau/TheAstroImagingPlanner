@@ -187,7 +187,7 @@ def process_header_from_fits(filename, skip_missing_entries=True):
                             value = df_header[trial_col]
                             df_header[col] = value
                 if not found_col:
-                    missing_cols.append(col)
+                    df_header[col] = np.nan
 
         if missing_cols and skip_missing_entries:
             log.info(

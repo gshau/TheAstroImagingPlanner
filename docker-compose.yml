@@ -20,6 +20,7 @@ services:
         depends_on:
             - db
             - watchdog
+            - mqtt
     watchdog:
         image: gshau/astroimaging-planner:latest
         restart: always
@@ -38,6 +39,7 @@ services:
             PGHOST: db
         depends_on:
             - db
+            - mqtt
     db:
         image: postgres
         restart: always

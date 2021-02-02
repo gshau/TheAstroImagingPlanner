@@ -30,7 +30,7 @@ from flask import request
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
 from astro_planner.target import object_file_reader, normalize_target_name, Objects
-from astro_planner.contrast import add_contrast, add_moon_distance
+from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import (
@@ -56,11 +56,6 @@ from image_grading.frame_analysis import (
     show_inspector_image,
     show_frame_analysis,
     show_fwhm_ellipticity_vs_r,
-)
-from image_grading.preprocessing import (
-    preprocess_stars,
-    process_image_from_filename,
-    bin_stars,
 )
 
 from layout import serve_layout, yaxis_map
@@ -162,6 +157,9 @@ FILTER_MAP = {
     "Blue": B_FILTER,
     "Lum": L_FILTER,
     "Luminance": L_FILTER,
+    "HA": HA_FILTER,
+    "O3": OIII_FILTER,
+    "S2": SII_FILTER,
 }
 
 
@@ -196,6 +194,8 @@ df_combined = pd.DataFrame()
 df_target_status = pd.DataFrame()
 df_stored_data = pd.DataFrame()
 df_stars_headers = pd.DataFrame()
+all_target_coords = pd.DataFrame()
+all_targets = []
 
 
 def pull_inspector_data():
@@ -272,9 +272,6 @@ def pull_stored_data():
 
 def pull_target_data():
     global object_data
-    global df_combined
-    global df_target_status
-    global df_stored_data
 
     target_query = """select filename,
         "TARGET",
@@ -300,12 +297,10 @@ def pull_target_data():
 
 def merge_target_with_stored_data():
     global df_stored_data
-    global object_data
     global df_target_status
     global df_combined
 
     default_status = CONFIG.get("default_target_status", "")
-    log.info(df_stored_data.head())
     df_combined = merge_targets_with_stored_metadata(
         df_stored_data,
         object_data.df_objects,
@@ -381,35 +376,14 @@ def get_data(
     df_combined,
     value="alt",
     sun_alt_for_twilight=-18,
-    local_mpsas=20,
-    filter_bandwidth=300,
-    k_ext=0.2,
     filter_targets=True,
     min_moon_distance=30,
 ):
-    log.debug("Starting get_data")
+
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
-    if local_mpsas is None:
-        local_mpsas = DEFAULT_MPSAS
-    if filter_bandwidth is None:
-        filter_bandwidth = DEFAULT_BANDWIDTH
-    if k_ext is None:
-        k_ext = DEFAULT_K_EXTINCTION
-    if min_moon_distance is None:
-        min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
 
-    target_coords = add_moon_distance(target_coords)
-
-    target_coords = add_contrast(
-        target_coords,
-        filter_bandwidth=filter_bandwidth,
-        mpsas=local_mpsas,
-        object_brightness=19,
-        include_airmass=True,
-        k_ext=k_ext,
-    )
     moon_data = dict(
         x=target_coords["moon"].index,
         y=target_coords["moon"]["alt"],
@@ -628,7 +602,12 @@ def update_weather(site):
         f"http://forecast.weather.gov/MapClick.php?lon={site.lon}&lat={site.lat}#.U1xl5F7N7wI",
     )
 
-    return graph_data, clear_outside_link[0], nws_link[0]
+    goes_satellite_link = CONFIG.get(
+        "goes_satellite_link",
+        "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36",
+    )
+
+    return graph_data, clear_outside_link[0], nws_link[0], goes_satellite_link
 
 
 def target_filter(targets, filters):
@@ -648,7 +627,7 @@ def target_filter(targets, filters):
     return list(set(targets_with_filter))
 
 
-def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
+def get_progress_graph(df, dfs, date_string, profile_list, days_ago, targets=[]):
 
     selection = df["date"] < "1970-01-01"
     if days_ago > 0:
@@ -659,7 +638,8 @@ def get_progress_graph(df, date_string, profile_list, days_ago, targets=[]):
     targets += targets_in_last_n_days
     if targets:
         selection |= df["OBJECT"].isin(targets)
-    df0 = df[selection].reset_index()
+    df0 = df[selection]
+    df0 = df0.reset_index()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
 
     p = go.Figure()
@@ -721,6 +701,16 @@ app.layout = serve_layout
 
 
 # Callbacks
+
+
+@app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
+def set_date(utc_offset):
+    if utc_offset is None:
+        utc_offset = DEFAULT_UTC_OFFSET
+    date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
+    return date
+
+
 @app.callback(
     Output("modal", "is_open"),
     [Input("open", "n_clicks"), Input("close", "n_clicks")],
@@ -782,6 +772,7 @@ def update_output_callback(
         Output("weather-graph", "children"),
         Output("clear-outside", "href"),
         Output("nws-weather", "href"),
+        Output("goes-satellite", "href"),
     ],
     [Input("store-site-data", "data")],
 )
@@ -792,8 +783,8 @@ def update_weather_data_callback(site_data):
         default_lon=DEFAULT_LON,
         default_utc_offset=DEFAULT_UTC_OFFSET,
     )
-    weather_graph, clear_outside_link, nws_link = update_weather(site)
-    return weather_graph, clear_outside_link, nws_link
+    weather_graph, clear_outside_link, nws_link, goes_link = update_weather(site)
+    return weather_graph, clear_outside_link, nws_link, goes_link
 
 
 @app.callback(
@@ -962,15 +953,8 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
     return ""
 
 
-target_coords = pd.DataFrame()
-
-
-# @app.callback(
-#     Output("store-target-coordinate-data", "data"),
-#     [Input("date-picker", "date"), Input("store-site-data", "data")],
-# )
 def store_target_coordinate_data(date_string, site_data):
-    global df_combined, object_data, target_coords
+    global df_combined, object_data, all_target_coords
 
     t0 = time.time()
     site = update_site(
@@ -984,13 +968,13 @@ def store_target_coordinate_data(date_string, site_data):
     for profile in target_list:
         targets += list(target_list[profile].values())
 
-    target_coords = get_coordinates(
+    all_target_coords = get_coordinates(
         targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
     )
 
     log.info(f"store_target_coordinate_data: {time.time() - t0:.3f}")
 
-    return target_coords, targets
+    return all_target_coords, targets
 
 
 def filter_targets_for_matches_and_filters(
@@ -1001,7 +985,8 @@ def filter_targets_for_matches_and_filters(
 
     targets = []
     for profile in profile_list:
-        targets += list(object_data.target_list[profile].values())
+        if profile in object_data.target_list:
+            targets += list(object_data.target_list[profile].values())
 
     if filters:
         targets = target_filter(targets, filters)
@@ -1014,6 +999,54 @@ def filter_targets_for_matches_and_filters(
 
 
 @app.callback(
+    Output("dummy-id-target-data", "children"),
+    [Input("date-picker", "date"), Input("store-site-data", "data")],
+)
+def get_target_data(
+    date_string, site_data,
+):
+    global all_target_coords, all_targets
+    t0 = time.time()
+
+    all_target_coords, all_targets = store_target_coordinate_data(
+        date_string, site_data
+    )
+
+    log.info(f"store_target_coordinate_data: {time.time() - t0}")
+    return ""
+
+
+@app.callback(
+    Output("dummy-id-contrast-data", "children"),
+    [
+        Input("dummy-id-target-data", "children"),
+        Input("local-mpsas", "value"),
+        Input("k-ext", "value"),
+    ],
+)
+def update_contrast(
+    dummy_input, local_mpsas, k_ext,
+):
+    global all_target_coords
+
+    if local_mpsas is None:
+        local_mpsas = DEFAULT_MPSAS
+    filter_bandwidth = DEFAULT_BANDWIDTH
+    if k_ext is None:
+        k_ext = DEFAULT_K_EXTINCTION
+
+    all_target_coords = add_contrast(
+        all_target_coords,
+        filter_bandwidth=filter_bandwidth,
+        mpsas=local_mpsas,
+        include_airmass=True,
+        k_ext=k_ext,
+    )
+
+    return ""
+
+
+@app.callback(
     [
         Output("store-target-data", "data"),
         Output("store-target-list", "data"),
@@ -1021,12 +1054,9 @@ def filter_targets_for_matches_and_filters(
         Output("dark-sky-duration", "data"),
     ],
     [
-        Input("date-picker", "date"),
-        Input("store-site-data", "data"),
+        Input("dummy-id-contrast-data", "children"),
         Input("store-target-status", "data"),
         Input("y-axis-type", "value"),
-        Input("local-mpsas", "value"),
-        Input("k-ext", "value"),
         Input("filter-targets", "checked"),
         Input("status-match", "value"),
         Input("filter-match", "value"),
@@ -1035,12 +1065,9 @@ def filter_targets_for_matches_and_filters(
     [State("profile-selection", "value")],
 )
 def store_data(
-    date_string,
-    site_data,
+    dummy_input,
     target_status_store,
     value,
-    local_mpsas,
-    k_ext,
     filter_targets,
     status_matches,
     filters,
@@ -1048,28 +1075,23 @@ def store_data(
     profile_list,
 ):
 
-    global df_combined, object_data, target_coords
+    global df_combined, object_data, all_target_coords, all_targets
     t0 = time.time()
 
-    target_coords, targets = store_target_coordinate_data(date_string, site_data)
-    log.info(f"store_target_coordinate_data: {time.time() - t0}")
+    if min_moon_distance is None:
+        min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
 
-    # use df_target for NOTE match and target name match
-
-    # log.info(targets)
     targets = filter_targets_for_matches_and_filters(
-        targets, status_matches, filters, profile_list
+        all_targets, status_matches, filters, profile_list
     )
     target_names = [t.name for t in targets]
-    log.info(target_names)
+    target_names.append("sun")
+    target_names.append("moon")
+
     log.info(f"filter_targets_for_matches_and_filters: {time.time() - t0}")
 
     target_coords = dict(
-        [
-            [k, v]
-            for k, v in target_coords.items()
-            if (k in target_names) or (k == "sun") or (k == "moon")
-        ]
+        [[k, v] for k, v in all_target_coords.items() if k in target_names]
     )
 
     sun_down_range = get_time_limits(target_coords)
@@ -1079,8 +1101,6 @@ def store_data(
         target_coords,
         df_combined,
         value=value,
-        local_mpsas=local_mpsas,
-        k_ext=k_ext,
         filter_targets=filter_targets,
         min_moon_distance=min_moon_distance,
     )
@@ -1128,6 +1148,7 @@ def update_target_graph(
     global df_target_status
     global df_combined
     global df_stored_data
+    global df_stars_headers
 
     log.debug(f"Calling update_target_graph")
     if not metadata:
@@ -1163,8 +1184,7 @@ def update_target_graph(
                 yaxis={"title": yaxis_map[value], "range": y_range, "type": yaxis_type},
                 title=title,
                 margin={"l": 50, "b": 50, "t": 50, "r": 50},
-                legend={"orientation": "h"},
-                height=800,
+                height=600,
                 plot_bgcolor="#ccc",
                 paper_bgcolor="#fff",
                 hovermode="closest",
@@ -1181,6 +1201,7 @@ def update_target_graph(
 
     progress_graph, df_summary = get_progress_graph(
         df_stored_data,
+        df_stars_headers,
         date_string=date_string,
         profile_list=profile_list,
         days_ago=progress_days_ago,
@@ -1452,9 +1473,8 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
         y_col = "eccentricity_mean"
     p = go.Figure()
     sizeref = float(2.0 * df0[size_col].max() / (5 ** 2))
-    for filter in FILTER_LIST:
-        if filter not in filters:
-            continue
+
+    for i_filter, filter in enumerate(filters):
         df1 = df0[df0["FILTER"] == filter].reset_index()
 
         df1["text"] = df1.apply(
@@ -1473,8 +1493,15 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
 
         if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
             symbol = "diamond"
-        else:
+        elif filter in [L_FILTER, R_FILTER, G_FILTER, B_FILTER]:
             symbol = "circle"
+        else:
+            symbol = "star"
+
+        if filter in COLORS:
+            color = COLORS[filter]
+        else:
+            color = sns.color_palette(n_colors=len(filters)).as_hex()[i_filter]
 
         p.add_trace(
             go.Scatter(
@@ -1488,9 +1515,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
                 text=df1["text"],
-                marker=dict(
-                    color=COLORS[filter], size=size, sizeref=sizeref, symbol=symbol
-                ),
+                marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
                 customdata=df1["filename"],
             )
         )
@@ -1613,4 +1638,4 @@ if __name__ == "__main__":
     host = "0.0.0.0"
     if localhost_only:
         host = "localhost"
-    app.run_server(debug=True, host=host, dev_tools_serve_dev_bundles=True)
+    app.run_server(debug=debug, host=host)

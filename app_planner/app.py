@@ -198,6 +198,16 @@ all_target_coords = pd.DataFrame()
 all_targets = []
 
 
+def set_date_cols(df, utc_offset):
+    df["date"] = pd.to_datetime(df["DATE-OBS"])
+    df["date_night_of"] = (
+        pd.to_datetime(df["date"]) + pd.Timedelta(hours=utc_offset - 12)
+    ).dt.date
+
+    return df
+
+
+# TODO: streamline data flow among callbacks
 def pull_inspector_data():
     global df_stars_headers
 
@@ -230,6 +240,7 @@ def pull_inspector_data():
     df_stars_headers_["OBJECT"] = df_stars_headers_["OBJECT"].fillna(root_name)
 
     df_stars_headers = df_stars_headers_.copy()
+    df_stars_headers = set_date_cols(df_stars_headers, utc_offset=DEFAULT_UTC_OFFSET)
 
 
 def pull_stored_data():
@@ -238,20 +249,31 @@ def pull_stored_data():
     log.debug("Checking for new data")
 
     stored_data_query = """
-    select file_full_path as filename,
-        "OBJECT",
-        "DATE-OBS",
-        cast("CCD-TEMP" as float),
-        "FILTER",
-        "OBJCTRA",
-        "OBJCTDEC",
-        "OBJCTALT",
-        "INSTRUME" as "Instrument",
-        cast("FOCALLEN" as float) as "Focal Length",
-        cast("EXPOSURE" as float) as "Exposure",
-        cast("XBINNING" as float) as "Binning",
-        date("DATE-OBS") as "date"
-        from fits_headers
+        select fh.file_full_path,
+        fh.filename,
+        fh."OBJECT",
+        fh."DATE-OBS",
+        fh."FILTER",
+        cast(fh."CCD-TEMP" as float),
+        fh."OBJCTRA",
+        fh."OBJCTDEC",
+        cast(fh."AIRMASS" as float),
+        fh."OBJCTALT",
+        fh."INSTRUME" as "Instrument",
+        cast(fh."FOCALLEN" as float) as "Focal Length",
+        cast(fh."EXPOSURE" as float) as "Exposure",
+        cast(fh."XBINNING" as float) as "Binning",
+        date(fh."DATE-OBS") as "date",
+        asm.fwhm_mean,
+        asm.eccentricity_mean,
+        asm.n_stars,
+        asm.star_trail_strength,
+        asm.star_orientation_score,
+        asm.log_flux_mean,
+        asm.bkg_val
+        from fits_headers fh
+            left join aggregated_star_metrics asm
+            on asm.filename = fh.filename;
     """
 
     try:
@@ -265,9 +287,10 @@ def pull_stored_data():
 
     df_stored_data["date"] = pd.to_datetime(df_stored_data["date"])
 
-    root_name = df_stored_data["filename"].apply(lambda f: f.split("/")[1])
+    root_name = df_stored_data["file_full_path"].apply(lambda f: f.split("/")[1])
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
+    df_stored_data = set_date_cols(df_stored_data, utc_offset=DEFAULT_UTC_OFFSET)
 
 
 def pull_target_data():
@@ -627,11 +650,13 @@ def target_filter(targets, filters):
     return list(set(targets_with_filter))
 
 
-def get_progress_graph(df, dfs, date_string, profile_list, days_ago, targets=[]):
+def get_progress_graph(
+    df, date_string, days_ago, targets=[], apply_rejection_criteria=True
+):
 
-    selection = df["date"] < "1970-01-01"
+    selection = df["DATE-OBS"] < "1970-01-01"
     if days_ago > 0:
-        selection |= df["date"] > str(
+        selection |= df["DATE-OBS"] > str(
             datetime.datetime.today() - datetime.timedelta(days=days_ago)
         )
     targets_in_last_n_days = list(df[selection]["OBJECT"].unique())
@@ -646,12 +671,19 @@ def get_progress_graph(df, dfs, date_string, profile_list, days_ago, targets=[])
     if df0.shape[0] == 0:
         return dcc.Graph(figure=p), pd.DataFrame()
 
+    exposure_col = EXPOSURE_COL
+    if "is_ok" in df0.columns and apply_rejection_criteria:
+        df0["exposure_ok"] = df0[EXPOSURE_COL] * (2 * df0["is_ok"].astype(int) - 1)
+        exposure_col = "exposure_ok"
+
     df_summary = (
-        df0.groupby(["OBJECT", "FILTER", BINNING_COL, FOCALLENGTH_COL, INSTRUMENT_COL])
-        .agg({EXPOSURE_COL: "sum"})
+        df0.groupby(
+            ["OBJECT", "FILTER", BINNING_COL, FOCALLENGTH_COL, INSTRUMENT_COL, "is_ok"]
+        )
+        .agg({exposure_col: "sum"})
         .dropna()
     )
-    df_summary = df_summary.unstack(1).fillna(0)[EXPOSURE_COL] / 3600
+    df_summary = df_summary.unstack(1).fillna(0)[exposure_col] / 3600
     cols = ["OBJECT"] + FILTER_LIST
     df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
 
@@ -680,12 +712,16 @@ def get_progress_graph(df, dfs, date_string, profile_list, days_ago, targets=[])
                 y=df_summary[filter],
                 hovertext=df_summary["text"],
                 marker_color=COLORS[filter],
+                text=np.abs(df_summary[filter].round(2)),
+                textposition="auto",
             )
         )
     p.update_layout(
         barmode=CONFIG.get("progress_mode", "group"),
-        yaxis_title="Total Exposure (hr)",
+        xaxis_title="Total Exposure (hr)",
         title="Acquired Data",
+        height=600,
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0.02),
         title_x=0.5,
     )
     graph = dcc.Graph(
@@ -705,9 +741,13 @@ app.layout = serve_layout
 
 @app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
 def set_date(utc_offset):
+    global df_stored_data, df_stars_headers
     if utc_offset is None:
         utc_offset = DEFAULT_UTC_OFFSET
     date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
+    df_stars_headers = set_date_cols(df_stars_headers, utc_offset=utc_offset)
+    df_stored_data = set_date_cols(df_stored_data, utc_offset=utc_offset)
+
     return date
 
 
@@ -1052,6 +1092,7 @@ def update_contrast(
         Output("store-target-list", "data"),
         Output("store-target-metadata", "data"),
         Output("dark-sky-duration", "data"),
+        Output("loading-output", "children"),
     ],
     [
         Input("dummy-id-contrast-data", "children"),
@@ -1113,7 +1154,7 @@ def store_data(
     metadata = dict(date_range=sun_down_range, value=value)
     filtered_targets = [d["name"] for d in data if d["name"]]
 
-    return data, filtered_targets, metadata, dark_sky_duration_text
+    return data, filtered_targets, metadata, dark_sky_duration_text, ""
 
 
 @app.callback(
@@ -1122,11 +1163,7 @@ def store_data(
         Output("progress-graph", "children"),
         Output("data-table", "children"),
     ],
-    [
-        Input("store-target-data", "data"),
-        Input("store-progress-data", "data"),
-        Input("store-target-goals", "data"),
-    ],
+    [Input("store-target-data", "data")],
     [
         State("store-target-metadata", "data"),
         State("dark-sky-duration", "data"),
@@ -1137,13 +1174,16 @@ def store_data(
 )
 def update_target_graph(
     target_data,
-    progress_data,
-    target_goals,
     metadata,
     dark_sky_duration,
     profile_list,
     status_list,
     date,
+    z_score_thr=2,
+    iqr_scale=1.5,
+    eccentricity_mean_thr=0.6,
+    star_trail_strength_thr=5,
+    apply_rejection_criteria=True,
 ):
     global df_target_status
     global df_combined
@@ -1189,23 +1229,38 @@ def update_target_graph(
                 paper_bgcolor="#fff",
                 hovermode="closest",
                 transition={"duration": 50},
+                legend={
+                    "orientation": "h",
+                    "yanchor": "top",
+                    "y": -0.15,
+                    "xanchor": "left",
+                    "x": 0.02,
+                },
             ),
         },
     )
-
-    df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
+    df_combined_group = df_combined.copy()
+    if profile_list:
+        df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
 
     df_combined_group = set_target_status(df_combined_group, df_target_status)
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
 
-    progress_graph, df_summary = get_progress_graph(
+    df0 = add_rejection_criteria(
         df_stored_data,
-        df_stars_headers,
+        z_score_thr=z_score_thr,
+        iqr_scale=iqr_scale,
+        eccentricity_mean_thr=eccentricity_mean_thr,
+        star_trail_strength_thr=star_trail_strength_thr,
+    )
+
+    progress_graph, df_summary = get_progress_graph(
+        df0,
         date_string=date_string,
-        profile_list=profile_list,
         days_ago=progress_days_ago,
         targets=targets,
+        apply_rejection_criteria=apply_rejection_criteria,
     )
 
     df_combined_group = df_combined_group.reset_index()
@@ -1254,12 +1309,109 @@ def update_target_graph(
     return target_graph, progress_graph, target_table
 
 
+def add_rejection_criteria(
+    df0,
+    z_score_thr=2,
+    iqr_scale=1.5,
+    eccentricity_mean_thr=0.6,
+    star_trail_strength_thr=5,
+    min_star_reduction=0.5,
+    new_cols=False,
+):
+    # TODO: add rejection criteria callback
+
+    df0["log_n_stars"] = np.log(df0["n_stars"])
+    group_cols = ["OBJECT", "FILTER", "Instrument", "Binning", "Focal Length"]
+    group = df0.groupby(group_cols, dropna=True)
+    df1 = df0.set_index(group_cols)
+
+    # Calculate z-score
+    df1 = df1.join(group["log_n_stars"].max().to_frame("log_n_stars_max"))
+    df1 = df1.join(group["log_n_stars"].mean().to_frame("log_n_stars_mean"))
+    df1 = df1.join(group["log_n_stars"].std().to_frame("log_n_stars_std"))
+
+    df1 = df1.join(group["fwhm_mean"].mean().to_frame("fwhm_mean_mean"))
+    df1 = df1.join(group["fwhm_mean"].std().to_frame("fwhm_mean_std"))
+
+    # Calculate IQR outliers
+    df1 = df1.join(group["log_n_stars"].quantile(0.25).to_frame("log_n_stars_q1"))
+    df1 = df1.join(group["log_n_stars"].quantile(0.75).to_frame("log_n_stars_q3"))
+    df1 = df1.join(group["fwhm_mean"].quantile(0.25).to_frame("fwhm_mean_q1"))
+    df1 = df1.join(group["fwhm_mean"].quantile(0.75).to_frame("fwhm_mean_q3"))
+    df1["log_n_stars_iqr"] = df1["log_n_stars_q3"] - df1["log_n_stars_q1"]
+    df1["fwhm_mean_iqr"] = df1["fwhm_mean_q3"] - df1["fwhm_mean_q1"]
+    df1 = df1.reset_index()
+
+    df1["star_count_iqr_outlier"] = (
+        df1["log_n_stars"] < df1["log_n_stars_q1"] - iqr_scale * df1["log_n_stars_iqr"]
+    )
+    df1["star_count_z_score"] = (df1["log_n_stars"] - df1["log_n_stars_mean"]) / df1[
+        "log_n_stars_std"
+    ]
+
+    df1["fwhm_iqr_outlier"] = (
+        df1["fwhm_mean"] > df1["fwhm_mean_q3"] + iqr_scale * df1["fwhm_mean_iqr"]
+    )
+    df1["fwhm_z_score"] = (df1["fwhm_mean"] - df1["fwhm_mean_mean"]) / df1[
+        "fwhm_mean_std"
+    ]
+
+    df1["star_count_fraction"] = np.exp(df1["log_n_stars"] - df1["log_n_stars_max"])
+    df1["low_star_count_fraction"] = df1["star_count_fraction"] < min_star_reduction
+
+    df1["bad_fwhm_z_score"] = df1["fwhm_z_score"] > z_score_thr
+
+    df1["bad_star_count_z_score"] = df1["star_count_z_score"] < -z_score_thr
+    df1["low_star_count"] = (
+        df1["star_count_iqr_outlier"]
+        | df1["bad_star_count_z_score"]
+        | df1["low_star_count_fraction"]
+    )
+
+    df1["high_fwhm"] = df1["bad_fwhm_z_score"] | df1["fwhm_iqr_outlier"]
+
+    df0 = df1.copy()
+
+    df0["high_ecc"] = df0["eccentricity_mean"] > eccentricity_mean_thr
+    df0["trailing_stars"] = df0["star_trail_strength"] > star_trail_strength_thr
+
+    df0["bad_star_shape"] = df0["high_ecc"] | df0["trailing_stars"]
+
+    df0["is_ok"] = 1
+    df0.loc[
+        df0["bad_star_shape"] | df0["low_star_count"] | df0["bad_fwhm_z_score"], "is_ok"
+    ] = 0
+
+    if new_cols:
+        return df0[
+            [
+                "filename",
+                "star_count_iqr_outlier",
+                "star_count_z_score",
+                "fwhm_iqr_outlier",
+                "fwhm_z_score",
+                "high_ecc",
+                "high_fwhm",
+                "star_count_fraction",
+                "bad_star_count_z_score",
+                "bad_fwhm_z_score",
+                "trailing_stars",
+                "low_star_count_fraction",
+                "low_star_count",
+                "bad_star_shape",
+                "is_ok",
+            ]
+        ]
+
+    return df0
+
+
 @app.callback(
     [
         Output("files-table", "children"),
         Output("summary-table", "children"),
         Output("header-col-match", "options"),
-        Output("target-match", "options"),
+        Output("target-matches", "options"),
         Output("x-axis-field", "options"),
         Output("y-axis-field", "options"),
         Output("scatter-size-field", "options"),
@@ -1267,21 +1419,23 @@ def update_target_graph(
     [
         Input("store-target-data", "data"),
         Input("header-col-match", "value"),
-        Input("target-match", "value"),
+        Input("target-matches", "value"),
     ],
 )
-def update_files_table(target_data, header_col_match, target_match):
+def update_files_table(target_data, header_col_match, target_matches):
     global df_target_status
     global df_combined
     global df_stars_headers
+    global df_stored_data
 
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
-    df0 = df_stars_headers.copy()
-    if target_match:
+    df0 = add_rejection_criteria(df_stored_data, new_cols=True)
+    df0 = pd.merge(df_stars_headers, df0, on="filename", how="left")
+    if target_matches:
         log.info("Selecting target match")
-        df0 = df_stars_headers[df_stars_headers["OBJECT"] == target_match]
+        df0 = df0[df0["OBJECT"].isin(target_matches)]
     log.info("Done with queries")
 
     columns = []
@@ -1312,7 +1466,7 @@ def update_files_table(target_data, header_col_match, target_match):
     for col in fits_cols:
         entry = {"name": col, "id": col, "deletable": False, "selectable": True}
         columns.append(entry)
-    # df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
+    df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
     df0["FILTER_indx"] = df0["FILTER"].map(
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
     )
@@ -1452,81 +1606,227 @@ def update_scatter_axes(value):
 
 
 @app.callback(
-    Output("target-scatter-graph", "figure"),
+    [Output("inspector-dates", "options"), Output("inspector-dates", "value")],
+    [Input("store-target-data", "data"), Input("target-matches", "value")],
+    [State("inspector-dates", "value")],
+)
+def update_inspector_dates(target_data, target_matches, selected_dates):
+    global df_target_status
+    global df_combined
+    global df_stars_headers
+    global df_stored_data
+
+    df0 = df_stored_data.copy()
+
+    if target_matches:
+        normalized_target_matches = [normalize_target_name(t) for t in target_matches]
+        df0 = df_stored_data[df_stored_data["OBJECT"].isin(normalized_target_matches)]
+
+    log.info(df0.columns)
+    all_dates = sorted(df0["date_night_of"].unique(), reverse=True)
+    options = make_options(all_dates)
+
+    default_dates = None
+    if selected_dates:
+        default_dates = selected_dates
+
+    return options, default_dates
+
+
+@app.callback(
+    [
+        Output("target-scatter-graph", "figure"),
+        Output("single-target-progress-graph", "children"),
+    ],
     [
         Input("store-target-data", "data"),
-        Input("target-match", "value"),
+        Input("inspector-dates", "value"),
+        Input("target-matches", "value"),
         Input("x-axis-field", "value"),
         Input("y-axis-field", "value"),
         Input("scatter-size-field", "value"),
+        Input("z-score-field", "value"),
+        Input("iqr-scale-field", "value"),
+        Input("ecc-thr-field", "value"),
+        Input("trail-thr-field", "value"),
+        Input("star-frac-thr-field", "value"),
     ],
 )
-def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
+def update_scatter_plot(
+    target_data,
+    inspector_dates,
+    target_matches,
+    x_col,
+    y_col,
+    size_col,
+    z_score_thr,
+    iqr_scale,
+    eccentricity_mean_thr,
+    star_trail_strength_thr,
+    min_star_reduction,
+):
     global df_stars_headers
+    global df_stored_data
 
-    df0 = df_stars_headers[(df_stars_headers["OBJECT"] == target_match)]
+    df_rej = add_rejection_criteria(
+        df_stored_data,
+        new_cols=True,
+        z_score_thr=z_score_thr,
+        iqr_scale=iqr_scale,
+        eccentricity_mean_thr=eccentricity_mean_thr,
+        star_trail_strength_thr=star_trail_strength_thr,
+        min_star_reduction=min_star_reduction,
+    )
+
+    df_rej_all = add_rejection_criteria(
+        df_stored_data,
+        z_score_thr=z_score_thr,
+        iqr_scale=iqr_scale,
+        eccentricity_mean_thr=eccentricity_mean_thr,
+        star_trail_strength_thr=star_trail_strength_thr,
+        min_star_reduction=min_star_reduction,
+    )
+
+    p = go.Figure()
+    df0 = df_stars_headers.copy()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
+    df0 = pd.merge(df0, df_rej, on="filename", how="left")
+    if inspector_dates:
+        df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
+        df_rej_all = df_rej_all[
+            df_rej_all["date_night_of"].astype(str).isin(inspector_dates)
+        ]
+    if not target_matches:
+        target_matches = sorted(df0["OBJECT"].unique())
+    df0 = df0[df0["OBJECT"].isin(target_matches)]
     filters = df0["FILTER"].unique()
     if not x_col:
         x_col = "fwhm_mean_arcsec"
     if not y_col:
         y_col = "eccentricity_mean"
-    p = go.Figure()
-    sizeref = float(2.0 * df0[size_col].max() / (5 ** 2))
 
-    for i_filter, filter in enumerate(filters):
-        df1 = df0[df0["FILTER"] == filter].reset_index()
+    normalized_target_matches = [normalize_target_name(t) for t in target_matches]
+    progress_graph, df_summary = get_progress_graph(
+        df_rej_all,
+        date_string="2020-01-01",
+        days_ago=0,
+        targets=normalized_target_matches,
+        apply_rejection_criteria=True,
+    )
 
-        df1["text"] = df1.apply(
-            lambda row: "<br>Date: "
-            + str(row["DATE-OBS"])
-            + f"<br>Star count: {row['n_stars']}"
-            + f"<br>FWHM: {row['fwhm_mean']:.2f}"
-            + f"<br>Eccentricity: {row['eccentricity_mean']:.2f}"
-            + f"<br>{size_col}: {row[size_col]:.2f}",
-            axis=1,
-        )
-        default_size = df1[size_col].median()
-        if np.isnan(default_size):
-            default_size = 1
-        size = df1[size_col].fillna(default_size)
+    for status_is_ok in [True, False]:
+        for low_star_count in [True, False]:
+            for high_fwhm in [True, False]:
+                for i_filter, filter in enumerate(filters):
+                    selection = df0["FILTER"] == filter
+                    selection &= df0["is_ok"] == status_is_ok
+                    selection &= df0["low_star_count"] == low_star_count
+                    selection &= df0["bad_fwhm_z_score"] == high_fwhm
+                    if selection.sum() == 0:
+                        continue
+                    df1 = df0[selection].reset_index()
 
-        if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
-            symbol = "diamond"
-        elif filter in [L_FILTER, R_FILTER, G_FILTER, B_FILTER]:
-            symbol = "circle"
-        else:
-            symbol = "star"
+                    sizeref = 1
+                    size = 10
+                    if size_col:
+                        sizeref = float(2.0 * df1[size_col].max() / (5 ** 2))
+                        default_size = df1[size_col].median()
+                        if np.isnan(default_size):
+                            default_size = 1
+                        size = df1[size_col].fillna(default_size)
 
-        if filter in COLORS:
-            color = COLORS[filter]
-        else:
-            color = sns.color_palette(n_colors=len(filters)).as_hex()[i_filter]
+                    status_map = {False: "&#10004;", True: "&#10006;"}
 
-        p.add_trace(
-            go.Scatter(
-                x=df1[x_col],
-                y=df1[y_col],
-                mode="markers",
-                name=filter,
-                hovertemplate="<b>%{text}</b><br>"
-                + f"{x_col}: "
-                + "%{x:.2f}<br>"
-                + f"{y_col}: "
-                + "%{y:.2f}<br>",
-                text=df1["text"],
-                marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
-                customdata=df1["filename"],
-            )
-        )
+                    df1["fwhm_status"] = df1["high_fwhm"].replace(status_map)
+                    df1["ecc_status"] = df1["high_ecc"].replace(status_map)
+                    df1["star_trail_status"] = df1["trailing_stars"].replace(status_map)
+                    df1["iqr_status"] = df1["star_count_iqr_outlier"].replace(
+                        status_map
+                    )
+                    df1["star_z_score_status"] = df1["bad_star_count_z_score"].replace(
+                        status_map
+                    )
+                    df1["fwhm_z_score_status"] = df1["bad_fwhm_z_score"].replace(
+                        status_map
+                    )
+                    df1["star_count_fraction_status"] = df1[
+                        "low_star_count_fraction"
+                    ].replace(status_map)
+
+                    df1["text"] = df1.apply(
+                        lambda row: "<br>Object: "
+                        + str(row["OBJECT"])
+                        + f"<br>Date: {row['DATE-OBS']}"
+                        + f"<br>Star count: {row['n_stars']}"
+                        + (f"<br>{size_col}: {row[size_col]:.2f}" if size_col else "")
+                        + f"<br>{row['fwhm_status']} FWHM: {row['fwhm_mean']:.2f}"
+                        + f"<br>{row['fwhm_z_score_status']} FWHM Z-score: {row['fwhm_z_score']:.2f}"
+                        + f"<br>{row['ecc_status']} Eccentricity: {row['eccentricity_mean']:.2f}"
+                        + f"<br>{row['star_trail_status']} Star trail metric: {row['star_trail_strength']:.2f}"
+                        + f"<br>{row['star_count_fraction_status']} Star count fraction: {row['star_count_fraction']:.2f}"
+                        + f"<br>{row['iqr_status']} Star IQR reject: {row['star_count_iqr_outlier']}"
+                        + f"<br>{row['star_z_score_status']} Star Z-score: {row['star_count_z_score']:.2f}"
+                        + f"<br>Accept frame: {row['is_ok']==1}",
+                        axis=1,
+                    )
+
+                    legend_name = filter
+                    if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
+                        symbol = "diamond"
+                    elif filter in [L_FILTER, R_FILTER, G_FILTER, B_FILTER]:
+                        symbol = "circle"
+                    else:
+                        symbol = "star"
+
+                    if status_is_ok:
+                        legend_name = f"{legend_name} &#10004; "
+                    else:
+                        symbol = "x"
+                        if low_star_count:
+                            symbol = f"{symbol}-open"
+                            legend_name = f"{legend_name} &#10006; - star count"
+                        elif high_fwhm:
+                            symbol = f"{symbol}-dot"
+                            legend_name = f"{legend_name} &#10006; - star bloat"
+                        else:
+                            symbol = f"{symbol}-open-dot"
+                            legend_name = f"{legend_name} &#10006; - star shape"
+
+                    if filter in COLORS:
+                        color = COLORS[filter]
+                    else:
+                        color = sns.color_palette(n_colors=len(filters)).as_hex()[
+                            i_filter
+                        ]
+
+                    p.add_trace(
+                        go.Scatter(
+                            x=df1[x_col],
+                            y=df1[y_col],
+                            mode="markers",
+                            name=legend_name,
+                            hovertemplate="<b>%{text}</b><br>"
+                            + f"{x_col}: "
+                            + "%{x:.2f}<br>"
+                            + f"{y_col}: "
+                            + "%{y:.2f}<br>",
+                            # + f"{size_col}: "
+                            # + "%{size:.2f}<br>",
+                            text=df1["text"],
+                            marker=dict(
+                                color=color, size=size, sizeref=sizeref, symbol=symbol
+                            ),
+                            customdata=df1["filename"],
+                        )
+                    )
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
-        title=f"Subframe data for {target_match}",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        title=f"Subframe data for {', '.join(normalized_target_matches)}",
+        legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="left", x=0.02),
     )
 
-    return p
+    return p, progress_graph
 
 
 @app.callback(
@@ -1534,6 +1834,7 @@ def update_scatter_plot(target_data, target_match, x_col, y_col, size_col):
         Output("radial-frame-graph", "figure"),
         Output("xy-frame-graph", "figure"),
         Output("inspector-frame", "figure"),
+        Output("loading-output-click", "children"),
     ],
     [
         Input("target-scatter-graph", "clickData"),
@@ -1547,17 +1848,17 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
     p2 = p0
 
     if data is None:
-        return p0, p1, p2
+        return p0, p1, p2, ""
     base_filename = data["points"][0]["customdata"]
     if not base_filename:
-        return p0, p1, p2
+        return p0, p1, p2, ""
 
     file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
     if file_full_path.shape[0] == 1:
         log.info(file_full_path)
         filename = file_full_path["file_full_path"].values[0]
     else:
-        return p0, p1, p2
+        return p0, p1, p2, ""
 
     t0 = time.time()
     radial_query = (
@@ -1581,7 +1882,7 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
     p0 = show_fwhm_ellipticity_vs_r(df_radial, filename)
     p1 = show_frame_analysis(df_xy, filename=filename, feature_col=frame_heatmap_col)
 
-    return p0, p1, p2
+    return p0, p1, p2, ""
 
 
 @app.callback(
@@ -1638,4 +1939,4 @@ if __name__ == "__main__":
     host = "0.0.0.0"
     if localhost_only:
         host = "localhost"
-    app.run_server(debug=debug, host=host)
+    app.run_server(debug=True, host=host, dev_tools_serve_dev_bundles=True)

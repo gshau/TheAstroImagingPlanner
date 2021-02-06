@@ -271,9 +271,7 @@ def serve_layout():
             html.Div(
                 [
                     html.Label("Marker Size", style={"textAlign": "center"}),
-                    dcc.Dropdown(
-                        id="scatter-size-field", options=[], value="fwhm_mean"
-                    ),
+                    dcc.Dropdown(id="scatter-size-field", options=[], value=""),
                 ],
                 className="dash-bootstrap",
             ),
@@ -284,7 +282,7 @@ def serve_layout():
         [
             html.Div(
                 [
-                    html.Label("Quick Options", style={"textAlign": "center"}),
+                    html.Label("Quick Options:", style={"textAlign": "center"}),
                     dcc.RadioItems(
                         id="scatter-radio-selection",
                         options=[
@@ -301,10 +299,10 @@ def serve_layout():
                                 "label": "Focus position vs. temperature",
                                 "value": "FOCUSTEM vs. FOCUSPOS",
                             },
-                            {
-                                "label": "FWHM std. vs. FWHM mean",
-                                "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
-                            },
+                            # {
+                            #     "label": "FWHM std. vs. FWHM mean",
+                            #     "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
+                            # },
                             {
                                 "label": "Alt. vs. Background",
                                 "value": "OBJCTALT vs. bkg_val",
@@ -312,6 +310,10 @@ def serve_layout():
                             {
                                 "label": "Star Trailing vs. Spacing Metric",
                                 "value": "star_trail_strength vs. star_orientation_score",
+                            },
+                            {
+                                "label": "Star Trailing vs. Eccentricity",
+                                "value": "star_trail_strength vs. eccentricity_mean",
                             },
                         ],
                         labelStyle={"display": "block"},
@@ -691,12 +693,116 @@ def serve_layout():
             html.Div(
                 [
                     html.Label("Select Target", style={"textAlign": "center"},),
-                    dcc.Dropdown(id="target-match", options=[]),
+                    dcc.Dropdown(id="target-matches", options=[], multi=True),
                 ],
                 className="dash-bootstrap",
-            )
+            ),
+            html.Br(),
+            html.Div(
+                [
+                    html.Label("Select Date", style={"textAlign": "center"},),
+                    dcc.Dropdown(id="inspector-dates", options=[], multi=True),
+                ],
+                className="dash-bootstrap",
+            ),
         ]
     )
+
+    frame_acceptance_criteria = dbc.Col(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label(
+                            "Frame Acceptance Criteria:  ", style={"textAlign": "left"},
+                        ),
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.Label("Z score:  ", style={"textAlign": "left"},),),
+                    dbc.Col(
+                        dcc.Input(
+                            id="z-score-field",
+                            debounce=True,
+                            placeholder=5,
+                            value=5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(html.Label("IQR scale:  ", style={"textAlign": "left"},),),
+                    dbc.Col(
+                        dcc.Input(
+                            id="iqr-scale-field",
+                            debounce=True,
+                            placeholder=1.5,
+                            value=1.5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label(
+                            "Eccentricity threshold:  ", style={"textAlign": "left"},
+                        ),
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id="ecc-thr-field",
+                            debounce=True,
+                            placeholder=0.6,
+                            value=0.6,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label("Trail threshold:  ", style={"textAlign": "left"},),
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id="trail-thr-field",
+                            debounce=True,
+                            placeholder=5,
+                            value=5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label(
+                            "Min Star Fraction:  ", style={"textAlign": "left"},
+                        ),
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id="star-frac-thr-field",
+                            debounce=True,
+                            placeholder=0.5,
+                            value=0.5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+        ]
+    )
+
+    single_target_progress = html.Div(id="single-target-progress-graph")
 
     filter_targets_check = dbc.FormGroup(
         [
@@ -721,11 +827,36 @@ def serve_layout():
                                 [
                                     dbc.Container(
                                         fluid=True,
-                                        style={"width": "95%"},
+                                        style={"width": "100%"},
                                         children=[
                                             dbc.Row(
                                                 [
-                                                    dbc.Col(target_picker, width=3),
+                                                    dbc.Col(
+                                                        [
+                                                            target_picker,
+                                                            html.Br(),
+                                                            frame_acceptance_criteria,
+                                                        ],
+                                                        width=4,
+                                                    ),
+                                                    dbc.Col(
+                                                        [single_target_progress],
+                                                        width=8,
+                                                    ),
+                                                ]
+                                            )
+                                        ],
+                                    )
+                                ],
+                            ),
+                            dbc.Row(
+                                [
+                                    dbc.Container(
+                                        fluid=True,
+                                        style={"width": "100%"},
+                                        children=[
+                                            dbc.Row(
+                                                [
                                                     dbc.Col(
                                                         scatter_col_picker, width=3,
                                                     ),
@@ -738,7 +869,7 @@ def serve_layout():
                                                             filter_targets_check,
                                                             glossary_modal,
                                                         ],
-                                                        width=3,
+                                                        width=2,
                                                     ),
                                                 ]
                                             )
@@ -747,7 +878,7 @@ def serve_layout():
                                 ],
                             ),
                         ],
-                        width=10,
+                        width=12,
                     ),
                 ]
             ),
@@ -853,6 +984,16 @@ def serve_layout():
         style={},
     )
 
+    loading = dcc.Loading(
+        id="loading-2",
+        children=[
+            html.Div(
+                [html.Div(id="loading-output"), html.Div(id="loading-output-click")]
+            )
+        ],
+        type="default",
+    )
+
     tabs = dbc.Tabs(
         id="tabs",
         active_tab="tab-target",
@@ -897,6 +1038,8 @@ def serve_layout():
             tabs,
             html.Br(),
             alerts,
+            loading,
+            html.Br(),
             data_table_container,
             target_container,
             config_container,

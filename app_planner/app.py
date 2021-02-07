@@ -1108,6 +1108,7 @@ def update_contrast(
 
     all_target_coords = add_contrast(
         all_target_coords,
+        n_thread=6,
         filter_bandwidth=filter_bandwidth,
         mpsas=local_mpsas,
         include_airmass=True,
@@ -1342,8 +1343,6 @@ def add_rejection_criteria(
     min_star_reduction=0.5,
     new_cols=False,
 ):
-    # TODO: add rejection criteria callback
-
     df0["log_n_stars"] = np.log(df0["n_stars"])
     group_cols = ["OBJECT", "FILTER", "Instrument", "Binning", "Focal Length"]
     group = df0.groupby(group_cols, dropna=True)

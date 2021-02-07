@@ -1,5 +1,8 @@
 import time
 import numpy as np
+from functools import partial
+from multiprocessing import Pool
+
 from .ephemeris import get_sun, get_moon
 from .logger import log
 
@@ -136,32 +139,73 @@ def get_contrast(
     return contrast_ratio, sky_bkg, moon_separation
 
 
+def _add_contrast(
+    l,
+    # df,
+    df_loc=None,
+    filter_bandwidth=300,
+    include_airmass=True,
+    mpsas=20.2,
+    k_ext=0.2,
+    t0=0,
+):
+
+    target, df = l
+    log.info(f"Adding Contrast: {target}: {time.time() - t0:.3f}")
+    if target in ["moon", "sun"]:
+        return target, df
+    df_contrast, sky_bkg, moon_separation = get_contrast(
+        df_loc,
+        target,
+        filter_bandwidth=filter_bandwidth,
+        include_airmass=include_airmass,
+        mpsas=mpsas,
+        k_ext=k_ext,
+    )
+    df0 = df_loc[target]
+    for col in ["contrast"]:
+        if col in df0.columns:
+            df0 = df0.drop(col, axis=1)
+    df0 = df0.join(df_contrast.to_frame("contrast"))
+    df0 = df0.join(sky_bkg.to_frame("sky_mpsas"))
+    df0 = df0.join(moon_separation.to_frame("moon_distance"))
+    return target, df0
+
+
 def add_contrast(
-    df_loc, filter_bandwidth=300, include_airmass=True, mpsas=20.2, k_ext=0.2,
+    df_loc,
+    n_thread=4,
+    filter_bandwidth=300,
+    include_airmass=True,
+    mpsas=20.2,
+    k_ext=0.2,
 ):
     result = {}
     t0 = time.time()
-    # TODO: make parallel
-    for target, df in df_loc.items():
-        log.info(f"Adding Contrast: {target}: {time.time() - t0:.3f}")
-        if target in ["moon", "sun"]:
-            result[target] = df
-            continue
-        df_contrast, sky_bkg, moon_separation = get_contrast(
-            df_loc,
-            target,
+
+    if n_thread > 1:
+        func = partial(
+            _add_contrast,
+            df_loc=df_loc,
             filter_bandwidth=filter_bandwidth,
             include_airmass=include_airmass,
             mpsas=mpsas,
             k_ext=k_ext,
+            t0=t0,
         )
-        df0 = df_loc[target]
-        for col in ["contrast"]:
-            if col in df0.columns:
-                df0 = df0.drop(col, axis=1)
-        df0 = df0.join(df_contrast.to_frame("contrast"))
-        df0 = df0.join(sky_bkg.to_frame("sky_mpsas"))
-        df0 = df0.join(moon_separation.to_frame("moon_distance"))
-        result[target] = df0
+        with Pool(n_thread) as pool:
+            result = dict(pool.map(func, df_loc.items()))
+    else:
+        for target, df in df_loc.items():
+            target, df0 = _add_contrast(
+                [target, df],
+                df_loc=df_loc,
+                filter_bandwidth=filter_bandwidth,
+                include_airmass=include_airmass,
+                mpsas=mpsas,
+                k_ext=k_ext,
+                t0=t0,
+            )
+            result[target] = df0
 
     return result

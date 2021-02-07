@@ -299,10 +299,6 @@ def serve_layout():
                                 "label": "Focus position vs. temperature",
                                 "value": "FOCUSTEM vs. FOCUSPOS",
                             },
-                            # {
-                            #     "label": "FWHM std. vs. FWHM mean",
-                            #     "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
-                            # },
                             {
                                 "label": "Alt. vs. Background",
                                 "value": "OBJCTALT vs. bkg_val",

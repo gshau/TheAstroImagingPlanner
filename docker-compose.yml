@@ -47,16 +47,19 @@ services:
         ports:
             - "5432:5432"
         environment:
+            PGDATA: /var/lib/postgresql/data/pgdata
             POSTGRES_USER: astro_user
             POSTGRES_PASSWORD: andromeda
             POSTGRES_DB: fits_files
             PGPORT: 5432
+        volumes:
+            - ${PG_PATH}:/var/lib/postgresql/data
         logging:
             options:
                 max-size: 10m
                 max-file: "3"                
     mqtt:
-        image: eclipse-mosquitto
+        image: toke/mosquitto
         container_name: mqtt
         expose:
             - 1883

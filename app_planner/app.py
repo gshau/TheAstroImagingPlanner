@@ -74,9 +74,9 @@ warnings.simplefilter("ignore", category=AstropyWarning)
 
 server = flask.Flask(__name__)
 
-BS = "https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/cosmo/bootstrap.min.css"
-BS = dbc.themes.FLATLY
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.COSMO], server=server)
+theme = dbc.themes.COSMO
+# theme = dbc.themes.YETI
+app = dash.Dash(__name__, external_stylesheets=[theme], server=server)
 
 app.title = "The AstroImaging Planner"
 
@@ -315,6 +315,7 @@ def pull_target_data():
         return None
 
     object_data = Objects()
+    # object_data.load_from_df(df_objects.head(20))
     object_data.load_from_df(df_objects)
 
 
@@ -692,7 +693,7 @@ def get_progress_graph(
     )
 
     objects_sorted = (
-        df0.dropna()
+        df0.dropna(subset=["OBJECT", "ra_order"])
         .groupby("OBJECT")
         .agg({"ra_order": "mean"})
         .sort_values(by="ra_order")
@@ -1420,9 +1421,10 @@ def add_rejection_criteria(
         Input("store-target-data", "data"),
         Input("header-col-match", "value"),
         Input("target-matches", "value"),
+        Input("inspector-dates", "value"),
     ],
 )
-def update_files_table(target_data, header_col_match, target_matches):
+def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
     global df_target_status
     global df_combined
     global df_stars_headers
@@ -1436,6 +1438,10 @@ def update_files_table(target_data, header_col_match, target_matches):
     if target_matches:
         log.info("Selecting target match")
         df0 = df0[df0["OBJECT"].isin(target_matches)]
+    if inspector_dates:
+        log.info("Selecting dates")
+        df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
+
     log.info("Done with queries")
 
     columns = []
@@ -1541,7 +1547,9 @@ def update_files_table(target_data, header_col_match, target_matches):
     df_agg["FILTER_indx"] = df_agg["FILTER"].map(
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
     )
-    df_agg = df_agg.sort_values(by=["FILTER_indx"]).drop("FILTER_indx", axis=1)
+    df_agg = df_agg.sort_values(by=["OBJECT", "FILTER_indx"]).drop(
+        "FILTER_indx", axis=1
+    )
     data = df_agg.round(2).to_dict("records")
 
     columns = []
@@ -1622,8 +1630,7 @@ def update_inspector_dates(target_data, target_matches, selected_dates):
         normalized_target_matches = [normalize_target_name(t) for t in target_matches]
         df0 = df_stored_data[df_stored_data["OBJECT"].isin(normalized_target_matches)]
 
-    log.info(df0.columns)
-    all_dates = sorted(df0["date_night_of"].unique(), reverse=True)
+    all_dates = list(sorted(df0["date_night_of"].dropna().unique(), reverse=True))
     options = make_options(all_dates)
 
     default_dates = None

@@ -1217,14 +1217,8 @@ def update_target_graph(
     profile_list,
     status_list,
     date,
-    z_score_thr=2,
-    iqr_scale=1.5,
-    eccentricity_mean_thr=0.6,
-    star_trail_strength_thr=5,
-    apply_rejection_criteria=True,
 ):
     df_target_status = get_df_from_redis("df_target_status")
-    # df_stored_data = get_df_from_redis("df_stored_data")
     df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
 
@@ -1285,20 +1279,12 @@ def update_target_graph(
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
 
-    # df0 = add_rejection_criteria(
-    #     df_stored_data,
-    #     z_score_thr=z_score_thr,
-    #     iqr_scale=iqr_scale,
-    #     eccentricity_mean_thr=eccentricity_mean_thr,
-    #     star_trail_strength_thr=star_trail_strength_thr,
-    # )
-
     progress_graph, df_summary = get_progress_graph(
         df_reject_criteria,
         date_string=date_string,
         days_ago=progress_days_ago,
         targets=targets,
-        apply_rejection_criteria=apply_rejection_criteria,
+        apply_rejection_criteria=True,
     )
 
     df_combined_group = df_combined_group.reset_index()
@@ -1462,14 +1448,12 @@ def add_rejection_criteria(
     ],
 )
 def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
-    # df_stored_data = get_df_from_redis("df_stored_data")
     df_stars_headers = get_df_from_redis("df_stars_headers")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
 
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
-    # df0 = add_rejection_criteria(df_stored_data, new_cols=True)
     df0 = pd.merge(df_stars_headers, df_reject_criteria, on="filename", how="left")
     if target_matches:
         log.info("Selecting target match")
@@ -1731,27 +1715,11 @@ def rejection_criteria_callback(
         Input("y-axis-field", "value"),
         Input("scatter-size-field", "value"),
         Input("dummy-rejection-criteria-id", "children"),
-        # Input("iqr-scale-field", "value"),
-        # Input("ecc-thr-field", "value"),
-        # Input("trail-thr-field", "value"),
-        # Input("star-frac-thr-field", "value"),
     ],
 )
 def update_scatter_plot(
-    target_data,
-    inspector_dates,
-    target_matches,
-    x_col,
-    y_col,
-    size_col,
-    dummy
-    # z_score_thr,
-    # iqr_scale,
-    # eccentricity_mean_thr,
-    # star_trail_strength_thr,
-    # min_star_reduction,
+    target_data, inspector_dates, target_matches, x_col, y_col, size_col, dummy
 ):
-    # df_stored_data = get_df_from_redis("df_stored_data")
     df_stars_headers = get_df_from_redis("df_stars_headers")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
     df_reject_criteria_all = get_df_from_redis("df_reject_criteria_all")

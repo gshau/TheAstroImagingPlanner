@@ -1049,17 +1049,12 @@ def serve_layout():
     layout = html.Div(
         [
             body,
-            dcc.Store(id="store-target-data"),
-            dcc.Store(id="store-target-coordinate-data"),
-            dcc.Store(id="store-target-list"),
             dcc.Store(id="store-site-data", data={}),
-            dcc.Store(id="store-goal-data", data="{}"),
-            dcc.Store(id="store-progress-data", data="{}"),
-            dcc.Store(id="store-target-goals", data={}),
-            dcc.Store(id="store-target-metadata"),
+            dcc.Store(id="store-target-data"),
             dcc.Store(id="store-target-status"),
-            dcc.Store(id="store-placeholder"),
-            dcc.Store(id="dark-sky-duration"),
+            dcc.Store(id="store-target-list"),
+            dcc.Store(id="store-target-metadata"),
+            dcc.Store(id="store-dark-sky-duration"),
         ]
     )
     return layout

@@ -21,6 +21,7 @@ services:
             - db
             - watchdog
             - mqtt
+            - redis
     watchdog:
         image: gshau/astroimaging-planner:latest
         restart: always
@@ -61,8 +62,7 @@ services:
     mqtt:
         image: toke/mosquitto
         container_name: mqtt
-        expose:
-            - 1883
-        ports:
-            - 1883:1883
-        restart: unless-stopped                                
+        restart: unless-stopped                                       
+    redis:
+        image: "redis:alpine"
+        container_name: redis

@@ -5,6 +5,10 @@ import os
 import sqlalchemy
 from distutils.util import strtobool
 
+import pyarrow as pa
+import redis
+
+
 import dash
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
@@ -187,21 +191,34 @@ TRANSLATED_FILTERS = {
     "lum": ["luminance"],
 }
 
-
-# load main data
-object_data = None
-df_combined = pd.DataFrame()
-df_target_status = pd.DataFrame()
-df_stored_data = pd.DataFrame()
-df_stars_headers = pd.DataFrame()
 all_target_coords = pd.DataFrame()
 all_targets = []
 
 
+REDIS = redis.Redis(host="redis", port=6379, db=0)
+
+
+def push_df_to_redis(df, key):
+    t0 = time.time()
+    context = pa.default_serialization_context()
+    REDIS.set(key, context.serialize(df).to_buffer().to_pybytes())
+    t_elapsed = time.time() - t0
+    log.debug(f"Pushing for {key:30s} took {t_elapsed:.3f} seconds")
+
+
+def get_df_from_redis(key):
+    t0 = time.time()
+    context = pa.default_serialization_context()
+    df = context.deserialize(REDIS.get(key))
+    t_elapsed = time.time() - t0
+    log.debug(f"Reading for {key:30s} took {t_elapsed:.3f} seconds")
+    return df
+
+
 def set_date_cols(df, utc_offset):
-    df["date"] = pd.to_datetime(df["DATE-OBS"])
+    df["date"] = df["DATE-OBS"].values
     df["date_night_of"] = (
-        pd.to_datetime(df["date"]) + pd.Timedelta(hours=utc_offset - 12)
+        pd.to_datetime(df["DATE-OBS"]) + pd.Timedelta(hours=utc_offset - 12)
     ).dt.date
 
     return df
@@ -209,7 +226,6 @@ def set_date_cols(df, utc_offset):
 
 # TODO: streamline data flow among callbacks
 def pull_inspector_data():
-    global df_stars_headers
 
     query = "select fh.*, asm.* from fits_headers fh left join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
 
@@ -241,11 +257,10 @@ def pull_inspector_data():
 
     df_stars_headers = df_stars_headers_.copy()
     df_stars_headers = set_date_cols(df_stars_headers, utc_offset=DEFAULT_UTC_OFFSET)
+    return df_stars_headers
 
 
 def pull_stored_data():
-    global df_stored_data
-
     log.debug("Checking for new data")
 
     stored_data_query = """
@@ -291,11 +306,10 @@ def pull_stored_data():
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
     df_stored_data = set_date_cols(df_stored_data, utc_offset=DEFAULT_UTC_OFFSET)
+    return df_stored_data
 
 
 def pull_target_data():
-    global object_data
-
     target_query = """select filename,
         "TARGET",
         "GROUP",
@@ -315,35 +329,47 @@ def pull_target_data():
         return None
 
     object_data = Objects()
-    # object_data.load_from_df(df_objects.head(20))
     object_data.load_from_df(df_objects)
+    return object_data, df_objects
 
 
-def merge_target_with_stored_data():
-    global df_stored_data
-    global df_target_status
-    global df_combined
+def get_object_data():
+    df_objects = get_df_from_redis("df_objects")
+    object_data = Objects()
+    object_data.load_from_df(df_objects)
+    return object_data
 
+
+def merge_target_with_stored_data(df_stored_data, df_objects):
     default_status = CONFIG.get("default_target_status", "")
     df_combined = merge_targets_with_stored_metadata(
-        df_stored_data,
-        object_data.df_objects,
-        EQUIPMENT,
-        default_status=default_status,
+        df_stored_data, df_objects, EQUIPMENT, default_status=default_status,
     )
+    return df_combined
 
+
+def get_target_status(df_combined):
+    default_status = CONFIG.get("default_target_status", "")
     df_target_status = load_target_status_from_file()
     df_combined = set_target_status(df_combined, df_target_status)
     if df_combined["status"].isnull().sum() > 0:
         df_combined["status"] = df_combined["status"].fillna(default_status)
         dump_target_status_to_file(df_combined)
+    return df_target_status
 
 
 def update_data():
-    pull_stored_data()
-    pull_target_data()
-    pull_inspector_data()
-    merge_target_with_stored_data()
+    df_stored_data = pull_stored_data()
+    object_data, df_objects = pull_target_data()
+    df_stars_headers = pull_inspector_data()
+    df_combined = merge_target_with_stored_data(df_stored_data, df_objects)
+    df_target_status = get_target_status(df_combined)
+
+    push_df_to_redis(df_stored_data, "df_stored_data")
+    push_df_to_redis(df_combined, "df_combined")
+    push_df_to_redis(df_stars_headers, "df_stars_headers")
+    push_df_to_redis(df_objects, "df_objects")
+    push_df_to_redis(df_target_status, "df_target_status")
 
 
 update_data()
@@ -543,7 +569,6 @@ def get_data(
 
 
 def parse_loaded_contents(contents, filename, date):
-    global object_data
     content_type, content_string = contents.split(",")
     decoded = base64.b64decode(content_string)
     try:
@@ -742,12 +767,16 @@ app.layout = serve_layout
 
 @app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
 def set_date(utc_offset):
-    global df_stored_data, df_stars_headers
+    df_stars_headers = get_df_from_redis("df_stars_headers")
+    df_stored_data = get_df_from_redis("df_stored_data")
     if utc_offset is None:
         utc_offset = DEFAULT_UTC_OFFSET
     date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
     df_stars_headers = set_date_cols(df_stars_headers, utc_offset=utc_offset)
     df_stored_data = set_date_cols(df_stored_data, utc_offset=utc_offset)
+
+    push_df_to_redis(df_stars_headers, "df_stars_headers")
+    push_df_to_redis(df_stored_data, "df_stored_data")
 
     return date
 
@@ -775,8 +804,7 @@ def toggle_modal_callback(n1, n2, is_open):
 def update_output_callback(
     list_of_contents, list_of_names, list_of_dates, profiles_selected
 ):
-    global object_data
-
+    object_data = get_object_data()
     if not object_data:
         return [{}], [{}]
     if not object_data.profiles:
@@ -854,6 +882,7 @@ def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
     [State("status-match", "value")],
 )
 def update_target_for_status_callback(profile_list, status_match):
+    df_combined = get_df_from_redis("df_combined")
     df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
     targets = df_combined_group.index.values
     return make_options(targets), ""
@@ -867,7 +896,7 @@ def update_target_for_status_callback(profile_list, status_match):
 def update_radio_status_for_targets_callback(
     targets, target_status_store, profile_list
 ):
-    global df_target_status
+    df_target_status = get_df_from_redis("df_target_status")
     status_set = set()
     status = df_target_status.set_index(["OBJECT", "GROUP"])
     for target in targets:
@@ -893,11 +922,13 @@ def update_radio_status_for_targets_callback(
 def update_target_with_status_callback(
     status, targets, target_status_store, profile_list
 ):
-    global df_combined
-    global df_target_status
+    df_combined = get_df_from_redis("df_combined")
     df_combined, df_target_status = update_targets_with_status(
         targets, status, df_combined, profile_list
     )
+
+    push_df_to_redis(df_target_status, "df_target_status")
+    push_df_to_redis(df_combined, "df_combined")
     return ""
 
 
@@ -995,7 +1026,7 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
 
 
 def store_target_coordinate_data(date_string, site_data):
-    global df_combined, object_data, all_target_coords
+    object_data = get_object_data()
 
     t0 = time.time()
     site = update_site(
@@ -1021,8 +1052,8 @@ def store_target_coordinate_data(date_string, site_data):
 def filter_targets_for_matches_and_filters(
     targets, status_matches, filters, profile_list
 ):
-    global df_combined
-    global object_data
+    df_combined = get_df_from_redis("df_combined")
+    object_data = get_object_data()
 
     targets = []
     for profile in profile_list:
@@ -1092,7 +1123,7 @@ def update_contrast(
         Output("store-target-data", "data"),
         Output("store-target-list", "data"),
         Output("store-target-metadata", "data"),
-        Output("dark-sky-duration", "data"),
+        Output("store-dark-sky-duration", "data"),
         Output("loading-output", "children"),
     ],
     [
@@ -1117,7 +1148,11 @@ def store_data(
     profile_list,
 ):
 
-    global df_combined, object_data, all_target_coords, all_targets
+    global all_target_coords, all_targets
+
+    df_combined = get_df_from_redis("df_combined")
+    object_data = get_object_data()
+
     t0 = time.time()
 
     if min_moon_distance is None:
@@ -1167,7 +1202,7 @@ def store_data(
     [Input("store-target-data", "data")],
     [
         State("store-target-metadata", "data"),
-        State("dark-sky-duration", "data"),
+        State("store-dark-sky-duration", "data"),
         State("profile-selection", "value"),
         State("status-match", "value"),
         State("date-picker", "date"),
@@ -1186,10 +1221,9 @@ def update_target_graph(
     star_trail_strength_thr=5,
     apply_rejection_criteria=True,
 ):
-    global df_target_status
-    global df_combined
-    global df_stored_data
-    global df_stars_headers
+    df_target_status = get_df_from_redis("df_target_status")
+    df_stored_data = get_df_from_redis("df_stored_data")
+    df_combined = get_df_from_redis("df_combined")
 
     log.debug(f"Calling update_target_graph")
     if not metadata:
@@ -1425,10 +1459,8 @@ def add_rejection_criteria(
     ],
 )
 def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
-    global df_target_status
-    global df_combined
-    global df_stars_headers
-    global df_stored_data
+    df_stored_data = get_df_from_redis("df_stored_data")
+    df_stars_headers = get_df_from_redis("df_stars_headers")
 
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
@@ -1619,10 +1651,8 @@ def update_scatter_axes(value):
     [State("inspector-dates", "value")],
 )
 def update_inspector_dates(target_data, target_matches, selected_dates):
-    global df_target_status
-    global df_combined
-    global df_stars_headers
-    global df_stored_data
+
+    df_stored_data = get_df_from_redis("df_stored_data")
 
     df0 = df_stored_data.copy()
 
@@ -1672,8 +1702,8 @@ def update_scatter_plot(
     star_trail_strength_thr,
     min_star_reduction,
 ):
-    global df_stars_headers
-    global df_stored_data
+    df_stored_data = get_df_from_redis("df_stored_data")
+    df_stars_headers = get_df_from_redis("df_stars_headers")
 
     df_rej = add_rejection_criteria(
         df_stored_data,
@@ -1850,6 +1880,9 @@ def update_scatter_plot(
     ],
 )
 def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
+
+    df_stars_headers = get_df_from_redis("df_stars_headers")
+
     p0 = go.Figure()
     p1 = p0
     p2 = p0
@@ -1902,7 +1935,9 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
     [Input("interval-component", "n_intervals")],
 )
 def toggle_alert(n):
-    global df_stars_headers
+
+    df_stars_headers = get_df_from_redis("df_stars_headers")
+
     df_old = df_stars_headers.copy()
     update_data()
     df_new = df_stars_headers.drop(df_old.index)

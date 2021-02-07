@@ -1043,6 +1043,7 @@ def serve_layout():
             html.Div(id="dummy-id", style={"display": "none"}),
             html.Div(id="dummy-id-target-data", style={"display": "none"}),
             html.Div(id="dummy-id-contrast-data", style={"display": "none"}),
+            html.Div(id="dummy-rejection-criteria-id", style={"display": "none"}),
         ],
     )
 

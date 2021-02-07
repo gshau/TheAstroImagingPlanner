@@ -224,7 +224,6 @@ def set_date_cols(df, utc_offset):
     return df
 
 
-# TODO: streamline data flow among callbacks
 def pull_inspector_data():
 
     query = "select fh.*, asm.* from fits_headers fh left join aggregated_star_metrics asm on fh.filename  = asm.filename ;"
@@ -1151,7 +1150,6 @@ def store_data(
     global all_target_coords, all_targets
 
     df_combined = get_df_from_redis("df_combined")
-    object_data = get_object_data()
 
     t0 = time.time()
 
@@ -1199,7 +1197,10 @@ def store_data(
         Output("progress-graph", "children"),
         Output("data-table", "children"),
     ],
-    [Input("store-target-data", "data")],
+    [
+        Input("store-target-data", "data"),
+        Input("dummy-rejection-criteria-id", "children"),
+    ],
     [
         State("store-target-metadata", "data"),
         State("store-dark-sky-duration", "data"),
@@ -1210,6 +1211,7 @@ def store_data(
 )
 def update_target_graph(
     target_data,
+    rejection_criteria_change_input,
     metadata,
     dark_sky_duration,
     profile_list,
@@ -1222,8 +1224,9 @@ def update_target_graph(
     apply_rejection_criteria=True,
 ):
     df_target_status = get_df_from_redis("df_target_status")
-    df_stored_data = get_df_from_redis("df_stored_data")
+    # df_stored_data = get_df_from_redis("df_stored_data")
     df_combined = get_df_from_redis("df_combined")
+    df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
 
     log.debug(f"Calling update_target_graph")
     if not metadata:
@@ -1282,16 +1285,16 @@ def update_target_graph(
     targets = get_targets_with_status(df_combined_group, status_list=status_list)
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
 
-    df0 = add_rejection_criteria(
-        df_stored_data,
-        z_score_thr=z_score_thr,
-        iqr_scale=iqr_scale,
-        eccentricity_mean_thr=eccentricity_mean_thr,
-        star_trail_strength_thr=star_trail_strength_thr,
-    )
+    # df0 = add_rejection_criteria(
+    #     df_stored_data,
+    #     z_score_thr=z_score_thr,
+    #     iqr_scale=iqr_scale,
+    #     eccentricity_mean_thr=eccentricity_mean_thr,
+    #     star_trail_strength_thr=star_trail_strength_thr,
+    # )
 
     progress_graph, df_summary = get_progress_graph(
-        df0,
+        df_reject_criteria,
         date_string=date_string,
         days_ago=progress_days_ago,
         targets=targets,
@@ -1459,14 +1462,15 @@ def add_rejection_criteria(
     ],
 )
 def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
-    df_stored_data = get_df_from_redis("df_stored_data")
+    # df_stored_data = get_df_from_redis("df_stored_data")
     df_stars_headers = get_df_from_redis("df_stars_headers")
+    df_reject_criteria = get_df_from_redis("df_reject_criteria")
 
     targets = sorted(df_stars_headers["OBJECT"].unique())
     target_options = make_options(targets)
 
-    df0 = add_rejection_criteria(df_stored_data, new_cols=True)
-    df0 = pd.merge(df_stars_headers, df0, on="filename", how="left")
+    # df0 = add_rejection_criteria(df_stored_data, new_cols=True)
+    df0 = pd.merge(df_stars_headers, df_reject_criteria, on="filename", how="left")
     if target_matches:
         log.info("Selecting target match")
         df0 = df0[df0["OBJECT"].isin(target_matches)]
@@ -1671,6 +1675,50 @@ def update_inspector_dates(target_data, target_matches, selected_dates):
 
 
 @app.callback(
+    Output("dummy-rejection-criteria-id", "children"),
+    [
+        Input("z-score-field", "value"),
+        Input("iqr-scale-field", "value"),
+        Input("ecc-thr-field", "value"),
+        Input("trail-thr-field", "value"),
+        Input("star-frac-thr-field", "value"),
+    ],
+)
+def rejection_criteria_callback(
+    z_score_thr,
+    iqr_scale,
+    eccentricity_mean_thr,
+    star_trail_strength_thr,
+    min_star_reduction,
+):
+    df_stored_data = get_df_from_redis("df_stored_data")
+
+    df_reject_criteria = add_rejection_criteria(
+        df_stored_data,
+        new_cols=True,
+        z_score_thr=z_score_thr,
+        iqr_scale=iqr_scale,
+        eccentricity_mean_thr=eccentricity_mean_thr,
+        star_trail_strength_thr=star_trail_strength_thr,
+        min_star_reduction=min_star_reduction,
+    )
+
+    df_reject_criteria_all = add_rejection_criteria(
+        df_stored_data,
+        z_score_thr=z_score_thr,
+        iqr_scale=iqr_scale,
+        eccentricity_mean_thr=eccentricity_mean_thr,
+        star_trail_strength_thr=star_trail_strength_thr,
+        min_star_reduction=min_star_reduction,
+    )
+
+    push_df_to_redis(df_reject_criteria, "df_reject_criteria")
+    push_df_to_redis(df_reject_criteria_all, "df_reject_criteria_all")
+
+    return ""
+
+
+@app.callback(
     [
         Output("target-scatter-graph", "figure"),
         Output("single-target-progress-graph", "children"),
@@ -1682,11 +1730,11 @@ def update_inspector_dates(target_data, target_matches, selected_dates):
         Input("x-axis-field", "value"),
         Input("y-axis-field", "value"),
         Input("scatter-size-field", "value"),
-        Input("z-score-field", "value"),
-        Input("iqr-scale-field", "value"),
-        Input("ecc-thr-field", "value"),
-        Input("trail-thr-field", "value"),
-        Input("star-frac-thr-field", "value"),
+        Input("dummy-rejection-criteria-id", "children"),
+        # Input("iqr-scale-field", "value"),
+        # Input("ecc-thr-field", "value"),
+        # Input("trail-thr-field", "value"),
+        # Input("star-frac-thr-field", "value"),
     ],
 )
 def update_scatter_plot(
@@ -1696,42 +1744,26 @@ def update_scatter_plot(
     x_col,
     y_col,
     size_col,
-    z_score_thr,
-    iqr_scale,
-    eccentricity_mean_thr,
-    star_trail_strength_thr,
-    min_star_reduction,
+    dummy
+    # z_score_thr,
+    # iqr_scale,
+    # eccentricity_mean_thr,
+    # star_trail_strength_thr,
+    # min_star_reduction,
 ):
-    df_stored_data = get_df_from_redis("df_stored_data")
+    # df_stored_data = get_df_from_redis("df_stored_data")
     df_stars_headers = get_df_from_redis("df_stars_headers")
-
-    df_rej = add_rejection_criteria(
-        df_stored_data,
-        new_cols=True,
-        z_score_thr=z_score_thr,
-        iqr_scale=iqr_scale,
-        eccentricity_mean_thr=eccentricity_mean_thr,
-        star_trail_strength_thr=star_trail_strength_thr,
-        min_star_reduction=min_star_reduction,
-    )
-
-    df_rej_all = add_rejection_criteria(
-        df_stored_data,
-        z_score_thr=z_score_thr,
-        iqr_scale=iqr_scale,
-        eccentricity_mean_thr=eccentricity_mean_thr,
-        star_trail_strength_thr=star_trail_strength_thr,
-        min_star_reduction=min_star_reduction,
-    )
+    df_reject_criteria = get_df_from_redis("df_reject_criteria")
+    df_reject_criteria_all = get_df_from_redis("df_reject_criteria_all")
 
     p = go.Figure()
     df0 = df_stars_headers.copy()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
-    df0 = pd.merge(df0, df_rej, on="filename", how="left")
+    df0 = pd.merge(df0, df_reject_criteria, on="filename", how="left")
     if inspector_dates:
         df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
-        df_rej_all = df_rej_all[
-            df_rej_all["date_night_of"].astype(str).isin(inspector_dates)
+        df_reject_criteria_all = df_reject_criteria_all[
+            df_reject_criteria_all["date_night_of"].astype(str).isin(inspector_dates)
         ]
     if not target_matches:
         target_matches = sorted(df0["OBJECT"].unique())
@@ -1744,7 +1776,7 @@ def update_scatter_plot(
 
     normalized_target_matches = [normalize_target_name(t) for t in target_matches]
     progress_graph, df_summary = get_progress_graph(
-        df_rej_all,
+        df_reject_criteria_all,
         date_string="2020-01-01",
         days_ago=0,
         targets=normalized_target_matches,

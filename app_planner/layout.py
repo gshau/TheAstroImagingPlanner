@@ -665,15 +665,15 @@ def serve_layout():
                 dbc.Col(
                     [
                         dbc.Button(
-                            "Show File blacklist",
-                            id="button-show-file-blacklist",
+                            "Show File skiplist",
+                            id="button-show-file-skiplist",
                             color="primary",
                             block=True,
                             className="mr-1",
                         ),
                         dbc.Button(
-                            "Clear File blacklist",
-                            id="button-clear-file-blacklist",
+                            "Clear File skiplist",
+                            id="button-clear-file-skiplist",
                             color="primary",
                             block=True,
                             className="mr-1",
@@ -1039,7 +1039,7 @@ def serve_layout():
             ),
             dbc.Alert(
                 "",
-                id="alert-file-blacklist",
+                id="alert-file-skiplist",
                 is_open=False,
                 duration=1,
                 dismissable=True,

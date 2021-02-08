@@ -1950,37 +1950,37 @@ def toggle_alert(n):
 
 @app.callback(
     [
-        Output("alert-file-blacklist", "children"),
-        Output("alert-file-blacklist", "is_open"),
-        Output("alert-file-blacklist", "duration"),
-        Output("alert-file-blacklist", "color"),
+        Output("alert-file-skiplist", "children"),
+        Output("alert-file-skiplist", "is_open"),
+        Output("alert-file-skiplist", "duration"),
+        Output("alert-file-skiplist", "color"),
     ],
     [
-        Input("button-show-file-blacklist", "n_clicks"),
-        Input("button-clear-file-blacklist", "n_clicks"),
+        Input("button-show-file-skiplist", "n_clicks"),
+        Input("button-clear-file-skiplist", "n_clicks"),
     ],
 )
-def toggle_file_blacklist_alert(n_show, n_clear):
+def toggle_file_skiplist_alert(n_show, n_clear):
 
     ctx = dash.callback_context
 
     if ctx.triggered:
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]
-        if button_id == "button-show-file-blacklist":
-            file_blacklist = json.loads(REDIS.get("file_blacklist"))
-            if file_blacklist:
-                n_files = len(file_blacklist)
+        if button_id == "button-show-file-skiplist":
+            file_skiplist = json.loads(REDIS.get("file_skiplist"))
+            if file_skiplist:
+                n_files = len(file_skiplist)
                 response = [f"Skipped processing of {n_files} files:"]
-                for filename in file_blacklist:
+                for filename in file_skiplist:
                     response.append(html.Br())
                     response.append(filename)
                 is_open = True
                 duration = 60000
                 color = "warning"
                 return response, is_open, duration, color
-        if button_id == "button-clear-file-blacklist":
-            REDIS.set("file_blacklist", "[]")
-            response = [f"Clearing file blacklist, will re-process"]
+        if button_id == "button-clear-file-skiplist":
+            REDIS.set("file_skiplist", "[]")
+            response = [f"Clearing file skiplist, will re-process"]
             is_open = True
             duration = 5000
             color = "primary"

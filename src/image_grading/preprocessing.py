@@ -76,7 +76,7 @@ def get_list_from_redis(key):
     return result
 
 
-push_to_redis([], "file_blacklist")
+push_to_redis([], "file_skiplist")
 
 
 def get_fits_file_list(data_dir, config):
@@ -221,7 +221,7 @@ def process_header_from_fits(filename, skip_missing_entries=True):
             log.info(
                 f"Header for {filename} missing matching columns {missing_cols}, skipping this file..."
             )
-            append_to_list_on_redis(filename, "file_blacklist")
+            append_to_list_on_redis(filename, "file_skiplist")
             return pd.DataFrame()
 
         df_header["FILTER"] = df_header["FILTER"].fillna("NO_FILTER")
@@ -265,9 +265,9 @@ def process_headers(file_list, skip_missing_entries=True):
 
 def check_status(file_list, **status_args):
     df_status_list = []
-    file_blacklist = get_list_from_redis("file_blacklist")
+    file_skiplist = get_list_from_redis("file_skiplist")
     for filename in file_list:
-        if filename in file_blacklist:
+        if filename in file_skiplist:
             continue
         status_dict = {}
         file_base = os.path.basename(filename)
@@ -343,15 +343,15 @@ def process_stars(
 ):
     df_lists = defaultdict(list)
     for filename in file_list:
-        file_blacklist = get_list_from_redis("file_blacklist")
-        if filename in file_blacklist:
+        file_skiplist = get_list_from_redis("file_skiplist")
+        if filename in file_skiplist:
             continue
         log.info(f"Starting to process stars from {filename}")
         df_agg_stars, df_stars = process_stars_from_fits(
             filename, extract_thresh=extract_thresh
         )
-        file_blacklist = get_list_from_redis("file_blacklist")
-        if filename in file_blacklist:
+        file_skiplist = get_list_from_redis("file_skiplist")
+        if filename in file_skiplist:
             continue
 
         nx = df_stars["nx"].values[0]
@@ -441,17 +441,17 @@ def process_image_from_filename(
             data, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
         )
         if objects.shape[0] == 0:
-            log.info(f"No stars found for {filename}, adding to blacklist")
-            append_to_list_on_redis(filename, "file_blacklist")
+            log.info(f"No stars found for {filename}, adding to skiplist")
+            append_to_list_on_redis(filename, "file_skiplist")
         objects["filename_with_path"] = filename
         objects["filename"] = os.path.basename(filename)
         objects["nx"] = data.shape[0]
         objects["ny"] = data.shape[1]
     except:
         log.info(
-            f"Issue processing image {filename}, adding to blacklist", exc_info=True
+            f"Issue processing image {filename}, adding to skiplist", exc_info=True
         )
-        append_to_list_on_redis(filename, "file_blacklist")
+        append_to_list_on_redis(filename, "file_skiplist")
         return pd.DataFrame()
     return objects
 
@@ -488,8 +488,8 @@ def update_fits_status(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_status")
     files_with_data = get_file_list_with_data(new_files)
-    file_blacklist = get_list_from_redis("file_blacklist")
-    files_with_data = [f for f in files_with_data if f not in file_blacklist]
+    file_skiplist = get_list_from_redis("file_skiplist")
+    files_with_data = [f for f in files_with_data if f not in file_skiplist]
     if files_with_data:
         for filename in files_with_data:
             log.info(f"Checking status of new file: {filename}")
@@ -526,8 +526,8 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
     files_with_data = get_file_list_with_data(new_files)
-    file_blacklist = get_list_from_redis("file_blacklist")
-    files_with_data = [f for f in files_with_data if f not in file_blacklist]
+    file_skiplist = get_list_from_redis("file_skiplist")
+    files_with_data = [f for f in files_with_data if f not in file_skiplist]
     n_files = len(files_with_data)
     if n_files > 0:
         log.info(f"Found {n_files} new files for headers")
@@ -560,8 +560,8 @@ def update_star_metrics(
         file_list, POSTGRES_ENGINE, "aggregated_star_metrics"
     )
     files_with_data = get_file_list_with_data(new_files)
-    file_blacklist = get_list_from_redis("file_blacklist")
-    files_to_process = [f for f in files_with_data if f not in file_blacklist]
+    file_skiplist = get_list_from_redis("file_skiplist")
+    files_to_process = [f for f in files_with_data if f not in file_skiplist]
 
     n_threads = int(CONFIG.get("threads_for_star_processing", 1))
     multithread_fits_read = n_threads > 1

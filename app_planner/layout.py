@@ -622,7 +622,7 @@ def serve_layout():
                     [
                         dbc.Button(
                             html.A(
-                                "Download Planner log",
+                                "Download Planner Log",
                                 href="getLogs/planner.log",
                                 style={"color": "white"},
                             ),
@@ -632,7 +632,7 @@ def serve_layout():
                         ),
                         dbc.Button(
                             html.A(
-                                "Download Watchdog log",
+                                "Download Watchdog Log",
                                 href="getLogs/watchdog.log",
                                 style={"color": "white"},
                             ),
@@ -665,14 +665,14 @@ def serve_layout():
                 dbc.Col(
                     [
                         dbc.Button(
-                            "Show File skiplist",
+                            "Show File Skiplist",
                             id="button-show-file-skiplist",
                             color="primary",
                             block=True,
                             className="mr-1",
                         ),
                         dbc.Button(
-                            "Clear File skiplist",
+                            "Clear File Skiplist",
                             id="button-clear-file-skiplist",
                             color="primary",
                             block=True,

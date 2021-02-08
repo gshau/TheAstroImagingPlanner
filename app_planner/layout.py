@@ -662,6 +662,25 @@ def serve_layout():
                     ],
                     width=2,
                 ),
+                dbc.Col(
+                    [
+                        dbc.Button(
+                            "Show File blacklist",
+                            id="button-show-file-blacklist",
+                            color="primary",
+                            block=True,
+                            className="mr-1",
+                        ),
+                        dbc.Button(
+                            "Clear File blacklist",
+                            id="button-clear-file-blacklist",
+                            color="primary",
+                            block=True,
+                            className="mr-1",
+                        ),
+                    ],
+                    width=2,
+                ),
             ]
         ),
         id="tab-config-div",
@@ -1017,6 +1036,13 @@ def serve_layout():
         [
             dbc.Alert(
                 "", id="alert-auto", is_open=False, duration=1, dismissable=True,
+            ),
+            dbc.Alert(
+                "",
+                id="alert-file-blacklist",
+                is_open=False,
+                duration=1,
+                dismissable=True,
             ),
             dcc.Interval(
                 id="interval-component",

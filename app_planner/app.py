@@ -1,3 +1,4 @@
+import json
 import base64
 import time
 import io
@@ -79,7 +80,6 @@ warnings.simplefilter("ignore", category=AstropyWarning)
 server = flask.Flask(__name__)
 
 theme = dbc.themes.COSMO
-# theme = dbc.themes.YETI
 app = dash.Dash(__name__, external_stylesheets=[theme], server=server)
 
 app.title = "The AstroImaging Planner"
@@ -357,18 +357,23 @@ def get_target_status(df_combined):
     return df_target_status
 
 
+use_planner = True
+
+
 def update_data():
     df_stored_data = pull_stored_data()
-    object_data, df_objects = pull_target_data()
     df_stars_headers = pull_inspector_data()
-    df_combined = merge_target_with_stored_data(df_stored_data, df_objects)
-    df_target_status = get_target_status(df_combined)
+    if use_planner:
+        object_data, df_objects = pull_target_data()
+        df_combined = merge_target_with_stored_data(df_stored_data, df_objects)
+        df_target_status = get_target_status(df_combined)
 
     push_df_to_redis(df_stored_data, "df_stored_data")
     push_df_to_redis(df_combined, "df_combined")
     push_df_to_redis(df_stars_headers, "df_stars_headers")
-    push_df_to_redis(df_objects, "df_objects")
-    push_df_to_redis(df_target_status, "df_target_status")
+    if use_planner:
+        push_df_to_redis(df_objects, "df_objects")
+        push_df_to_redis(df_target_status, "df_target_status")
 
 
 update_data()
@@ -757,6 +762,69 @@ def get_progress_graph(
     return graph, df_summary
 
 
+def store_target_coordinate_data(date_string, site_data):
+    object_data = get_object_data()
+
+    t0 = time.time()
+    site = update_site(
+        site_data,
+        default_lat=DEFAULT_LAT,
+        default_lon=DEFAULT_LON,
+        default_utc_offset=DEFAULT_UTC_OFFSET,
+    )
+    targets = []
+    target_list = object_data.target_list
+    for profile in target_list:
+        targets += list(target_list[profile].values())
+
+    all_target_coords = get_coordinates(
+        targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
+    )
+
+    log.info(f"store_target_coordinate_data: {time.time() - t0:.3f}")
+
+    return all_target_coords, targets
+
+
+def filter_targets_for_matches_and_filters(
+    targets, status_matches, filters, profile_list
+):
+    df_combined = get_df_from_redis("df_combined")
+    object_data = get_object_data()
+
+    targets = []
+    for profile in profile_list:
+        if profile in object_data.target_list:
+            targets += list(object_data.target_list[profile].values())
+
+    if filters:
+        targets = target_filter(targets, filters)
+
+    if status_matches:
+        matching_targets = df_combined[df_combined["status"].isin(status_matches)].index
+        targets = [target for target in targets if target.name in matching_targets]
+
+    return targets
+
+
+def shutdown():
+    func = request.environ.get("werkzeug.server.shutdown")
+    if func is None:
+        raise RuntimeError("Not running with the Werkzeug Server")
+    func()
+
+
+@app.server.route("/getLogs/<file>")
+def download_log(file):
+    return flask.send_file(
+        f"/logs/{file}", attachment_filename=file, as_attachment=True, cache_timeout=-1
+    )
+
+
+def shutdown_watchdog():
+    mqtt_client.publish("watchdog", "restart")
+
+
 # Set layout
 app.layout = serve_layout
 
@@ -957,25 +1025,6 @@ def render_content(tab):
     return styles
 
 
-def shutdown():
-    func = request.environ.get("werkzeug.server.shutdown")
-    if func is None:
-        raise RuntimeError("Not running with the Werkzeug Server")
-    func()
-
-
-@app.server.route("/getLogs/<file>")
-def download_log(file):
-    return flask.send_file(
-        f"/logs/{file}", attachment_filename=file, as_attachment=True, cache_timeout=-1
-    )
-
-
-def shutdown_watchdog():
-    mqtt_client.publish("watchdog", "restart")
-
-
-# Callbacks
 @app.callback(
     Output("dummy-id", "children"),
     [
@@ -1022,51 +1071,6 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
             shutdown_watchdog()
 
     return ""
-
-
-def store_target_coordinate_data(date_string, site_data):
-    object_data = get_object_data()
-
-    t0 = time.time()
-    site = update_site(
-        site_data,
-        default_lat=DEFAULT_LAT,
-        default_lon=DEFAULT_LON,
-        default_utc_offset=DEFAULT_UTC_OFFSET,
-    )
-    targets = []
-    target_list = object_data.target_list
-    for profile in target_list:
-        targets += list(target_list[profile].values())
-
-    all_target_coords = get_coordinates(
-        targets, date_string, site, time_resolution_in_sec=DEFAULT_TIME_RESOLUTION
-    )
-
-    log.info(f"store_target_coordinate_data: {time.time() - t0:.3f}")
-
-    return all_target_coords, targets
-
-
-def filter_targets_for_matches_and_filters(
-    targets, status_matches, filters, profile_list
-):
-    df_combined = get_df_from_redis("df_combined")
-    object_data = get_object_data()
-
-    targets = []
-    for profile in profile_list:
-        if profile in object_data.target_list:
-            targets += list(object_data.target_list[profile].values())
-
-    if filters:
-        targets = target_filter(targets, filters)
-
-    if status_matches:
-        matching_targets = df_combined[df_combined["status"].isin(status_matches)].index
-        targets = [target for target in targets if target.name in matching_targets]
-
-    return targets
 
 
 @app.callback(
@@ -1405,27 +1409,6 @@ def add_rejection_criteria(
         df0["bad_star_shape"] | df0["low_star_count"] | df0["bad_fwhm_z_score"], "is_ok"
     ] = 0
 
-    if new_cols:
-        return df0[
-            [
-                "filename",
-                "star_count_iqr_outlier",
-                "star_count_z_score",
-                "fwhm_iqr_outlier",
-                "fwhm_z_score",
-                "high_ecc",
-                "high_fwhm",
-                "star_count_fraction",
-                "bad_star_count_z_score",
-                "bad_fwhm_z_score",
-                "trailing_stars",
-                "low_star_count_fraction",
-                "low_star_count",
-                "bad_star_shape",
-                "is_ok",
-            ]
-        ]
-
     return df0
 
 
@@ -1676,16 +1659,6 @@ def rejection_criteria_callback(
 ):
     df_stored_data = get_df_from_redis("df_stored_data")
 
-    df_reject_criteria = add_rejection_criteria(
-        df_stored_data,
-        new_cols=True,
-        z_score_thr=z_score_thr,
-        iqr_scale=iqr_scale,
-        eccentricity_mean_thr=eccentricity_mean_thr,
-        star_trail_strength_thr=star_trail_strength_thr,
-        min_star_reduction=min_star_reduction,
-    )
-
     df_reject_criteria_all = add_rejection_criteria(
         df_stored_data,
         z_score_thr=z_score_thr,
@@ -1694,6 +1667,26 @@ def rejection_criteria_callback(
         star_trail_strength_thr=star_trail_strength_thr,
         min_star_reduction=min_star_reduction,
     )
+
+    cols = [
+        "filename",
+        "star_count_iqr_outlier",
+        "star_count_z_score",
+        "fwhm_iqr_outlier",
+        "fwhm_z_score",
+        "high_ecc",
+        "high_fwhm",
+        "star_count_fraction",
+        "bad_star_count_z_score",
+        "bad_fwhm_z_score",
+        "trailing_stars",
+        "low_star_count_fraction",
+        "low_star_count",
+        "bad_star_shape",
+        "is_ok",
+    ]
+
+    df_reject_criteria = df_reject_criteria_all[cols]
 
     push_df_to_redis(df_reject_criteria, "df_reject_criteria")
     push_df_to_redis(df_reject_criteria_all, "df_reject_criteria_all")
@@ -1846,8 +1839,6 @@ def update_scatter_plot(
                             + "%{x:.2f}<br>"
                             + f"{y_col}: "
                             + "%{y:.2f}<br>",
-                            # + f"{size_col}: "
-                            # + "%{size:.2f}<br>",
                             text=df1["text"],
                             marker=dict(
                                 color=color, size=size, sizeref=sizeref, symbol=symbol
@@ -1954,6 +1945,46 @@ def toggle_alert(n):
         duration = 60000
         color = "primary"
         return response, is_open, duration, color
+    return "", False, 0, "primary"
+
+
+@app.callback(
+    [
+        Output("alert-file-blacklist", "children"),
+        Output("alert-file-blacklist", "is_open"),
+        Output("alert-file-blacklist", "duration"),
+        Output("alert-file-blacklist", "color"),
+    ],
+    [
+        Input("button-show-file-blacklist", "n_clicks"),
+        Input("button-clear-file-blacklist", "n_clicks"),
+    ],
+)
+def toggle_file_blacklist_alert(n_show, n_clear):
+
+    ctx = dash.callback_context
+
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "button-show-file-blacklist":
+            file_blacklist = json.loads(REDIS.get("file_blacklist"))
+            if file_blacklist:
+                n_files = len(file_blacklist)
+                response = [f"Skipped processing of {n_files} files:"]
+                for filename in file_blacklist:
+                    response.append(html.Br())
+                    response.append(filename)
+                is_open = True
+                duration = 60000
+                color = "warning"
+                return response, is_open, duration, color
+        if button_id == "button-clear-file-blacklist":
+            REDIS.set("file_blacklist", "[]")
+            response = [f"Clearing file blacklist, will re-process"]
+            is_open = True
+            duration = 5000
+            color = "primary"
+            return response, is_open, duration, color
     return "", False, 0, "primary"
 
 

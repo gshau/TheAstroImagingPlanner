@@ -1,3 +1,4 @@
+import time
 import glob
 import os
 import sep
@@ -5,6 +6,8 @@ import yaml
 import logging
 import sqlalchemy
 import warnings
+import redis
+import json
 
 import numpy as np
 import pandas as pd
@@ -48,7 +51,32 @@ TARGET_DIR = os.getenv("TARGET_DIR", "/targets")
 
 sep.set_extract_pixstack(1000000)
 
-file_blacklist = []
+
+REDIS = redis.Redis(host="redis", port=6379, db=0)
+
+
+def append_to_list_on_redis(element, key):
+    result = get_list_from_redis(key)
+    result.append(element)
+    push_to_redis(result, key)
+
+
+def push_to_redis(element, key):
+    t0 = time.time()
+    REDIS.set(key, json.dumps(element))
+    t_elapsed = time.time() - t0
+    log.debug(f"Pushing for {key:30s} took {t_elapsed:.3f} seconds")
+
+
+def get_list_from_redis(key):
+    t0 = time.time()
+    result = json.loads(REDIS.get(key))
+    t_elapsed = time.time() - t0
+    log.debug(f"Reading for {key:30s} took {t_elapsed:.3f} seconds")
+    return result
+
+
+push_to_redis([], "file_blacklist")
 
 
 def get_fits_file_list(data_dir, config):
@@ -193,7 +221,7 @@ def process_header_from_fits(filename, skip_missing_entries=True):
             log.info(
                 f"Header for {filename} missing matching columns {missing_cols}, skipping this file..."
             )
-            file_blacklist.append(filename)
+            append_to_list_on_redis(filename, "file_blacklist")
             return pd.DataFrame()
 
         df_header["FILTER"] = df_header["FILTER"].fillna("NO_FILTER")
@@ -237,6 +265,7 @@ def process_headers(file_list, skip_missing_entries=True):
 
 def check_status(file_list, **status_args):
     df_status_list = []
+    file_blacklist = get_list_from_redis("file_blacklist")
     for filename in file_list:
         if filename in file_blacklist:
             continue
@@ -313,12 +342,15 @@ def process_stars(
     file_list, multithread_fits_read=False, extract_thresh=1.5, xy_n_bins=None,
 ):
     df_lists = defaultdict(list)
-
     for filename in file_list:
+        file_blacklist = get_list_from_redis("file_blacklist")
+        if filename in file_blacklist:
+            continue
         log.info(f"Starting to process stars from {filename}")
         df_agg_stars, df_stars = process_stars_from_fits(
             filename, extract_thresh=extract_thresh
         )
+        file_blacklist = get_list_from_redis("file_blacklist")
         if filename in file_blacklist:
             continue
 
@@ -340,7 +372,6 @@ def process_stars(
             df_lists["agg_stars"].append(df_agg_stars)
             df_lists["radial_frame"].append(df_radial)
             df_lists["xy_frame"].append(df_xy)
-
             continue
         if not xy_n_bins:
             xy_n_bins = max(min(int(np.sqrt(n_stars) / 9), 10), 3)
@@ -404,16 +435,24 @@ def process_image_data(data, tnpix_threshold=4, extract_thresh=3, filter_kernel=
 def process_image_from_filename(
     filename, tnpix_threshold=6, extract_thresh=3, filter_kernel=None
 ):
-    data = fits.getdata(filename, header=False)
-    objects = process_image_data(
-        data, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
-    )
-    if objects.shape[0] == 0:
-        file_blacklist.append(filename)
-    objects["filename_with_path"] = filename
-    objects["filename"] = os.path.basename(filename)
-    objects["nx"] = data.shape[0]
-    objects["ny"] = data.shape[1]
+    try:
+        data = fits.getdata(filename, header=False)
+        objects = process_image_data(
+            data, tnpix_threshold, extract_thresh, filter_kernel=filter_kernel
+        )
+        if objects.shape[0] == 0:
+            log.info(f"No stars found for {filename}, adding to blacklist")
+            append_to_list_on_redis(filename, "file_blacklist")
+        objects["filename_with_path"] = filename
+        objects["filename"] = os.path.basename(filename)
+        objects["nx"] = data.shape[0]
+        objects["ny"] = data.shape[1]
+    except:
+        log.info(
+            f"Issue processing image {filename}, adding to blacklist", exc_info=True
+        )
+        append_to_list_on_redis(filename, "file_blacklist")
+        return pd.DataFrame()
     return objects
 
 
@@ -449,10 +488,11 @@ def update_fits_status(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_status")
     files_with_data = get_file_list_with_data(new_files)
+    file_blacklist = get_list_from_redis("file_blacklist")
     files_with_data = [f for f in files_with_data if f not in file_blacklist]
     if files_with_data:
         for filename in files_with_data:
-            log.info(f"Found new file: {filename}")
+            log.info(f"Checking status of new file: {filename}")
 
         df_status = check_status(files_with_data, reject=["reject"], cloud=["cloud"])
         df_status = to_numeric(df_status)
@@ -486,9 +526,8 @@ def update_fits_headers(config=CONFIG, data_dir=DATA_DIR, file_list=None):
         file_list = get_fits_file_list(data_dir, config)
     new_files = check_file_in_table(file_list, POSTGRES_ENGINE, "fits_headers")
     files_with_data = get_file_list_with_data(new_files)
-
+    file_blacklist = get_list_from_redis("file_blacklist")
     files_with_data = [f for f in files_with_data if f not in file_blacklist]
-
     n_files = len(files_with_data)
     if n_files > 0:
         log.info(f"Found {n_files} new files for headers")
@@ -521,7 +560,7 @@ def update_star_metrics(
         file_list, POSTGRES_ENGINE, "aggregated_star_metrics"
     )
     files_with_data = get_file_list_with_data(new_files)
-
+    file_blacklist = get_list_from_redis("file_blacklist")
     files_to_process = [f for f in files_with_data if f not in file_blacklist]
 
     n_threads = int(CONFIG.get("threads_for_star_processing", 1))

@@ -8,8 +8,6 @@ This glossary defines some of the data that's available either in table or graph
 
 - bkg_rms: RMS background level of image
 
-- frame_snr
-
 - star_trail_strength: Metric to determine if star elongation is due to consistent trailing across the frame (i.e. wind, tracking issues)
 
 - star_orientation_score: Metric to determine if star elongation is radial (metric is closer to 1), or azimuthal (metric is closer to 0)

@@ -140,8 +140,7 @@ def get_contrast(
 
 
 def _add_contrast(
-    l,
-    # df,
+    target_df,
     df_loc=None,
     filter_bandwidth=300,
     include_airmass=True,
@@ -150,7 +149,7 @@ def _add_contrast(
     t0=0,
 ):
 
-    target, df = l
+    target, df = target_df
     log.info(f"Adding Contrast: {target}: {time.time() - t0:.3f}")
     if target in ["moon", "sun"]:
         return target, df

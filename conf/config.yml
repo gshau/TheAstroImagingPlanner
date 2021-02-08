@@ -32,7 +32,7 @@ threads_for_star_processing: 4
 
 horizon_data:
   flat_horizon_alt: 10
-  horizon_file: "conf/custom_horizon.txt"
+  # horizon_file: "conf/custom_horizon.txt" 
   alt_az_seperator: " "
   header_length: 3
 

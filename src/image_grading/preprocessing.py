@@ -93,6 +93,8 @@ def get_fits_file_list(data_dir, config):
 
 
 def aggregate_stars(df_stars):
+    if df_stars.shape[0] == 0:
+        return pd.DataFrame()
     df_stars["log_flux"] = np.log10(df_stars["flux"])
     df0 = (
         df_stars[

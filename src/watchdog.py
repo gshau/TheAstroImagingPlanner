@@ -8,7 +8,6 @@ import pandas as pd
 
 import paho.mqtt.client as mqtt
 
-
 from image_grading.preprocessing import (
     update_db_with_matching_files,
     POSTGRES_ENGINE,
@@ -20,7 +19,7 @@ from image_grading.preprocessing import (
     DATA_DIR,
 )
 
-from astro_planner.target import object_file_reader
+from astro_planner.target import object_file_reader, normalize_target_name
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
 log = logging.getLogger(__name__)
@@ -47,12 +46,39 @@ client.subscribe("watchdog", 0)
 def update_db_with_targets(config=CONFIG, target_dir=TARGET_DIR, file_list=None):
     log.debug("Checking for new targets")
     update_targets(config, target_dir, file_list)
+    init_target_status()
+
+
+def init_target_status():
+    status_query = """
+    CREATE TABLE IF NOT EXISTS target_status
+        ("TARGET" varchar(512), "GROUP" varchar(512), status varchar(512));
+    ALTER TABLE target_status DROP CONSTRAINT IF EXISTS target_group_uq;
+    ALTER TABLE target_status
+        ADD CONSTRAINT target_group_uq
+        UNIQUE ("TARGET", "GROUP") ;
+        """
+    with POSTGRES_ENGINE.connect() as con:
+        con.execute(status_query)
+
+    # Set initial status as "pending"
+    df_targets = pd.read_sql("select * from targets;", POSTGRES_ENGINE)
+    df0 = df_targets.reset_index()[["TARGET", "GROUP"]]
+    df0["TARGET"] = df0["TARGET"].apply(normalize_target_name)
+    df0["status"] = "pending"
+    data = list(df0.values)
+
+    query_template = """INSERT INTO target_status
+        ("TARGET", "GROUP", status)
+        VALUES (%s, %s, %s)
+        ON CONFLICT ("TARGET", "GROUP") DO NOTHING;"""
+    with POSTGRES_ENGINE.connect() as con:
+        con.execute(query_template, data)
 
 
 def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
     if not file_list:
         file_list = []
-
         for extension in ["mdb", "sgf", "xml", "ninaTargetSet"]:
             file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
     new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))

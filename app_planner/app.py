@@ -50,11 +50,6 @@ from image_grading.preprocessing import clear_tables, init_tables
 from astro_planner.data_merge import (
     compute_ra_order,
     merge_targets_with_stored_metadata,
-    get_targets_with_status,
-    dump_target_status_to_file,
-    load_target_status_from_file,
-    set_target_status,
-    update_targets_with_status,
 )
 
 from image_grading.frame_analysis import (
@@ -320,6 +315,7 @@ def pull_target_data():
 
     try:
         df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+        df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
             f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
@@ -329,7 +325,7 @@ def pull_target_data():
 
     object_data = Objects()
     object_data.load_from_df(df_objects)
-    return object_data, df_objects
+    return object_data, df_objects, df_target_status
 
 
 def get_object_data():
@@ -340,20 +336,35 @@ def get_object_data():
 
 
 def merge_target_with_stored_data(df_stored_data, df_objects):
-    default_status = CONFIG.get("default_target_status", "")
     df_combined = merge_targets_with_stored_metadata(
-        df_stored_data, df_objects, EQUIPMENT, default_status=default_status,
+        df_stored_data, df_objects, EQUIPMENT
     )
     return df_combined
 
 
-def get_target_status(df_combined):
-    default_status = CONFIG.get("default_target_status", "")
-    df_target_status = load_target_status_from_file()
-    df_combined = set_target_status(df_combined, df_target_status)
-    if df_combined["status"].isnull().sum() > 0:
-        df_combined["status"] = df_combined["status"].fillna(default_status)
-        dump_target_status_to_file(df_combined)
+VALID_STATUS = ["pending", "active", "acquired", "closed"]
+
+
+def update_targets_with_status(target_names, status, df_combined, profile_list):
+
+    query_template = """INSERT INTO target_status
+    ("TARGET", "GROUP", status)
+    VALUES (%s, %s, %s)
+    ON CONFLICT ("TARGET", "GROUP") DO UPDATE set status = EXCLUDED.status;"""
+
+    df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
+    if status in VALID_STATUS:
+        selection = df_target_status["GROUP"].isin(profile_list)
+        normalized_target_matches = [normalize_target_name(t) for t in target_names]
+        selection &= df_target_status["TARGET"].isin(normalized_target_matches)
+        df0 = df_target_status[selection][["TARGET", "GROUP"]]
+        df0["status"] = status
+        if df0.shape[0] > 0:
+            data = list(df0.values)
+            with POSTGRES_ENGINE.connect() as con:
+                con.execute(query_template, data)
+        df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
+
     return df_target_status
 
 
@@ -364,14 +375,13 @@ def update_data():
     df_stored_data = pull_stored_data()
     df_stars_headers = pull_inspector_data()
     if use_planner:
-        object_data, df_objects = pull_target_data()
+        object_data, df_objects, df_target_status = pull_target_data()
         df_combined = merge_target_with_stored_data(df_stored_data, df_objects)
-        df_target_status = get_target_status(df_combined)
 
     push_df_to_redis(df_stored_data, "df_stored_data")
-    push_df_to_redis(df_combined, "df_combined")
     push_df_to_redis(df_stars_headers, "df_stars_headers")
     if use_planner:
+        push_df_to_redis(df_combined, "df_combined")
         push_df_to_redis(df_objects, "df_objects")
         push_df_to_redis(df_target_status, "df_target_status")
 
@@ -789,7 +799,7 @@ def store_target_coordinate_data(date_string, site_data):
 def filter_targets_for_matches_and_filters(
     targets, status_matches, filters, profile_list
 ):
-    df_combined = get_df_from_redis("df_combined")
+    df_target_status = get_df_from_redis("df_target_status")
     object_data = get_object_data()
 
     targets = []
@@ -801,8 +811,12 @@ def filter_targets_for_matches_and_filters(
         targets = target_filter(targets, filters)
 
     if status_matches:
-        matching_targets = df_combined[df_combined["status"].isin(status_matches)].index
+        matching_targets = df_target_status[
+            df_target_status["status"].isin(status_matches)
+        ]["TARGET"].values
         targets = [target for target in targets if target.name in matching_targets]
+
+        log.debug(f"Target matching status {status_matches}: {targets}")
 
     return targets
 
@@ -944,15 +958,20 @@ def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
 
 
 @app.callback(
-    [Output("target-status-match", "options"), Output("target-status-match", "value")],
+    [
+        Output("target-status-match", "options"),
+        Output("target-status-match", "value"),
+        Output("status-match", "value"),
+    ],
     [Input("profile-selection", "value")],
     [State("status-match", "value")],
 )
 def update_target_for_status_callback(profile_list, status_match):
-    df_combined = get_df_from_redis("df_combined")
-    df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
-    targets = df_combined_group.index.values
-    return make_options(targets), ""
+    df_target_status = get_df_from_redis("df_target_status")
+    df_target_status = df_target_status[df_target_status["GROUP"].isin(profile_list)]
+    targets = sorted(list(df_target_status["TARGET"].values))
+    status_match = CONFIG.get("default_target_status", None)
+    return make_options(targets), "", status_match
 
 
 @app.callback(
@@ -964,38 +983,33 @@ def update_radio_status_for_targets_callback(
     targets, target_status_store, profile_list
 ):
     df_target_status = get_df_from_redis("df_target_status")
-    status_set = set()
-    status = df_target_status.set_index(["OBJECT", "GROUP"])
-    for target in targets:
-        status_values = [status.loc[target].loc[profile_list]["status"]]
-        status_set = status_set.union(set(status_values))
-    if len(status_set) == 1:
-        log.debug(f"Fetching targets: {targets} with status of {status_set}")
-        return list(status_set)[0]
-    else:
-        log.debug(f"Conflict fetching targets: {targets} with status of {status_set}")
-        return ""
+    if targets and profile_list:
+        selection = df_target_status["TARGET"].isin(targets)
+        selection &= df_target_status["GROUP"].isin(profile_list)
+        status_set = df_target_status[selection]["status"].unique()
+        if len(status_set) == 1:
+            log.debug(f"Fetching targets: {targets} with status of {status_set}")
+            return list(status_set)[0]
+        else:
+            log.debug(
+                f"Conflict fetching targets: {targets} with status of {status_set}"
+            )
 
 
 @app.callback(
     Output("store-target-status", "data"),
     [Input("target-status-selector", "value")],
-    [
-        State("target-status-match", "value"),
-        State("store-target-status", "data"),
-        State("profile-selection", "value"),
-    ],
+    [State("target-status-match", "value"), State("profile-selection", "value")],
 )
-def update_target_with_status_callback(
-    status, targets, target_status_store, profile_list
-):
-    df_combined = get_df_from_redis("df_combined")
-    df_combined, df_target_status = update_targets_with_status(
-        targets, status, df_combined, profile_list
-    )
+def update_target_with_status_callback(status, targets, profile_list):
 
+    df_target_status = get_df_from_redis("df_target_status")
+    if status:
+        df_combined = get_df_from_redis("df_combined")
+        df_target_status = update_targets_with_status(
+            targets, status, df_combined, profile_list
+        )
     push_df_to_redis(df_target_status, "df_target_status")
-    push_df_to_redis(df_combined, "df_combined")
     return ""
 
 
@@ -1075,7 +1089,8 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
 
 @app.callback(
     Output("dummy-id-target-data", "children"),
-    [Input("date-picker", "date"), Input("store-site-data", "data")],
+    [Input("date-picker", "date")],
+    [State("store-site-data", "data")],
 )
 def get_target_data(
     date_string, site_data,
@@ -1266,13 +1281,6 @@ def update_target_graph(
                 paper_bgcolor="#fff",
                 hovermode="closest",
                 transition={"duration": 50},
-                legend={
-                    "orientation": "h",
-                    "yanchor": "top",
-                    "y": -0.15,
-                    "xanchor": "left",
-                    "x": 0.02,
-                },
             ),
         },
     )
@@ -1280,8 +1288,11 @@ def update_target_graph(
     if profile_list:
         df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
 
-    df_combined_group = set_target_status(df_combined_group, df_target_status)
-    targets = get_targets_with_status(df_combined_group, status_list=status_list)
+    selection = df_target_status["GROUP"].isin(profile_list)
+    if status_list:
+        selection &= df_target_status["status"].isin(status_list)
+    targets = list(df_target_status[selection]["TARGET"].values)
+
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
 
     progress_graph, df_summary = get_progress_graph(
@@ -1978,6 +1989,7 @@ def toggle_file_skiplist_alert(n_show, n_clear):
                 duration = 60000
                 color = "warning"
                 return response, is_open, duration, color
+            return [f"No files skipped"], True, 5000, "info"
         if button_id == "button-clear-file-skiplist":
             REDIS.set("file_skiplist", "[]")
             response = [f"Clearing file skiplist, will re-process"]

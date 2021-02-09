@@ -10,7 +10,10 @@ fits_file_patterns:
     - "skip"
 
 # Default target status when initially parsing data
-default_target_status: ''
+default_target_status: 
+  - 'acquired'
+  - 'active'
+  - 'pending'
 
 # Default profiles to start new session with
 default_profiles: 

@@ -729,36 +729,10 @@ def serve_layout():
                 [
                     dbc.Col(
                         html.Label(
-                            "Frame Acceptance Criteria:  ", style={"textAlign": "left"},
+                            "Frame Acceptance Criteria:  ",
+                            id="frame-acceptance-label",
+                            style={"textAlign": "left"},
                         ),
-                    ),
-                ]
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(html.Label("Z score:  ", style={"textAlign": "left"},),),
-                    dbc.Col(
-                        dcc.Input(
-                            id="z-score-field",
-                            debounce=True,
-                            placeholder=5,
-                            value=5,
-                            type="number",
-                        )
-                    ),
-                ]
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(html.Label("IQR scale:  ", style={"textAlign": "left"},),),
-                    dbc.Col(
-                        dcc.Input(
-                            id="iqr-scale-field",
-                            debounce=True,
-                            placeholder=1.5,
-                            value=1.5,
-                            type="number",
-                        )
                     ),
                 ]
             ),
@@ -766,7 +740,9 @@ def serve_layout():
                 [
                     dbc.Col(
                         html.Label(
-                            "Eccentricity threshold:  ", style={"textAlign": "left"},
+                            "Eccentricity threshold:  ",
+                            id="ecc-label",
+                            style={"textAlign": "left"},
                         ),
                     ),
                     dbc.Col(
@@ -783,24 +759,10 @@ def serve_layout():
             dbc.Row(
                 [
                     dbc.Col(
-                        html.Label("Trail threshold:  ", style={"textAlign": "left"},),
-                    ),
-                    dbc.Col(
-                        dcc.Input(
-                            id="trail-thr-field",
-                            debounce=True,
-                            placeholder=5,
-                            value=5,
-                            type="number",
-                        )
-                    ),
-                ]
-            ),
-            dbc.Row(
-                [
-                    dbc.Col(
                         html.Label(
-                            "Min Star Fraction:  ", style={"textAlign": "left"},
+                            "Min Star Fraction:  ",
+                            id="min-star-label",
+                            style={"textAlign": "left"},
                         ),
                     ),
                     dbc.Col(
@@ -813,6 +775,100 @@ def serve_layout():
                         )
                     ),
                 ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label(
+                            "z score:  ",
+                            id="z-score-label",
+                            style={"textAlign": "left"},
+                        ),
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id="z-score-field",
+                            debounce=True,
+                            placeholder=5,
+                            value=5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label(
+                            "IQR scale:  ",
+                            id="iqr-scale-label",
+                            style={"textAlign": "left"},
+                        ),
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id="iqr-scale-field",
+                            debounce=True,
+                            placeholder=1.5,
+                            value=1.5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+            dbc.Row(
+                [
+                    dbc.Col(
+                        html.Label(
+                            "Trail threshold:  ",
+                            id="trail-label",
+                            style={"textAlign": "left"},
+                        ),
+                    ),
+                    dbc.Col(
+                        dcc.Input(
+                            id="trail-thr-field",
+                            debounce=True,
+                            placeholder=5,
+                            value=5,
+                            type="number",
+                        )
+                    ),
+                ]
+            ),
+        ]
+    )
+
+    tooltips = html.Div(
+        [
+            dbc.Tooltip(
+                """Criteria for acceptance of subframes within a group.  
+                Each group is defined by unique target, sensor, optic, filter and binning.""",
+                target="frame-acceptance-label",
+                placement="left",
+            ),
+            dbc.Tooltip(
+                """Threshold value of the z score `(x - mean(x)) / std(x)` for fwhm and star count in comparison to the group. 
+            For fwhm, only frames with a z score below the positive threshold value are used.
+            For star count, only frames with a z score above the negative threshold value are used.""",
+                target="z-score-label",
+                placement="left",
+            ),
+            dbc.Tooltip("IQR scale", target="iqr-scale-label", placement="left"),
+            dbc.Tooltip(
+                "Maximum average eccentricity allowed",
+                target="ecc-label",
+                placement="left",
+            ),
+            dbc.Tooltip(
+                "Maximum star traling metric allowed",
+                target="trail-label",
+                placement="left",
+            ),
+            dbc.Tooltip(
+                "Minimum star count allowed, as a fraction compared to the maximum star count of a frame in the group",
+                target="min-star-label",
+                placement="left",
             ),
         ]
     )
@@ -1076,6 +1132,7 @@ def serve_layout():
     layout = html.Div(
         [
             body,
+            tooltips,
             dcc.Store(id="store-site-data", data={}),
             dcc.Store(id="store-target-data"),
             dcc.Store(id="store-target-status"),

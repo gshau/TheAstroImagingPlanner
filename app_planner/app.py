@@ -1437,7 +1437,7 @@ def add_rejection_criteria(
 
     df0["is_ok"] = 1
     df0.loc[
-        df0["bad_star_shape"] | df0["low_star_count"] | df0["bad_fwhm_z_score"], "is_ok"
+        df0["bad_star_shape"] | df0["low_star_count"] | df0["high_fwhm"], "is_ok"
     ] = 0
 
     return df0
@@ -1781,7 +1781,7 @@ def update_scatter_plot(
                     selection = df0["FILTER"] == filter
                     selection &= df0["is_ok"] == status_is_ok
                     selection &= df0["low_star_count"] == low_star_count
-                    selection &= df0["bad_fwhm_z_score"] == high_fwhm
+                    selection &= df0["high_fwhm"] == high_fwhm
                     if selection.sum() == 0:
                         continue
                     df1 = df0[selection].reset_index()

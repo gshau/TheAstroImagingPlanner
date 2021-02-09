@@ -11,3 +11,11 @@ __pycache__
 *.xml
 
 *.log
+*-dev.*
+*_dev.*
+
+dev.sh
+clear-docker.sh
+
+
+todo.md

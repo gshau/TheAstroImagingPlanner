@@ -1284,10 +1284,6 @@ def update_target_graph(
             ),
         },
     )
-    df_combined_group = df_combined.copy()
-    if profile_list:
-        df_combined_group = df_combined[df_combined["GROUP"].isin(profile_list)]
-
     selection = df_target_status["GROUP"].isin(profile_list)
     if status_list:
         selection &= df_target_status["status"].isin(status_list)
@@ -1303,14 +1299,38 @@ def update_target_graph(
         apply_rejection_criteria=True,
     )
 
-    df_combined_group = df_combined_group.reset_index()
+    df_combined = df_combined.reset_index()
+
+    df_combined = pd.merge(df_combined, df_target_status, on=["GROUP", "TARGET"])
+
+    cols = [
+        "OBJECT",
+        "TARGET",
+        "GROUP",
+        "status",
+        "L",
+        "R",
+        "G",
+        "B",
+        "Ha",
+        "OIII",
+        "SII",
+        "Instrument",
+        "Focal Length",
+        "Binning",
+        "NOTE",
+        "RAJ2000",
+        "DECJ2000",
+    ]
+
     columns = []
-    for col in df_combined_group.columns:
-        entry = {"name": col, "id": col, "deletable": False, "selectable": True}
-        columns.append(entry)
+    for col in cols:
+        if col in df_combined.columns:
+            entry = {"name": col, "id": col, "deletable": False, "selectable": True}
+            columns.append(entry)
 
     # target table
-    data = df_combined.reset_index().to_dict("records")
+    data = df_combined.to_dict("records")
     target_table = html.Div(
         [
             dash_table.DataTable(

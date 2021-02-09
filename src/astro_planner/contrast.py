@@ -162,7 +162,7 @@ def _add_contrast(
         k_ext=k_ext,
     )
     df0 = df_loc[target]
-    for col in ["contrast"]:
+    for col in ["contrast", "sky_mpsas", "moon_distance"]:
         if col in df0.columns:
             df0 = df0.drop(col, axis=1)
     df0 = df0.join(df_contrast.to_frame("contrast"))

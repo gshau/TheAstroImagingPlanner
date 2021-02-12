@@ -67,7 +67,7 @@ def serve_layout():
                 [
                     html.Label("Marker Size", style={"textAlign": "center"}),
                     dcc.Dropdown(
-                        id="scatter-size-field", options=[], value="fwhm_mean"
+                        id="scatter-size-field", options=[], value="fwhm_median"
                     ),
                 ],
                 className="dash-bootstrap",
@@ -85,7 +85,7 @@ def serve_layout():
                         options=[
                             {
                                 "label": "FWHM vs. Eccentricity",
-                                "value": "fwhm_mean_arcsec vs. eccentricity_mean",
+                                "value": "fwhm_median vs. eccentricity_median",
                             },
                             {"label": "Az. vs Alt", "value": "OBJCTAZ vs. OBJCTALT"},
                             {
@@ -98,7 +98,7 @@ def serve_layout():
                             },
                             {
                                 "label": "FWHM std. vs. FWHM mean",
-                                "value": "fwhm_std_arcsec vs. fwhm_mean_arcsec",
+                                "value": "fwhm_std vs. fwhm_median",
                             },
                             {
                                 "label": "Alt. vs. Background",

@@ -44,6 +44,7 @@ from astro_planner.data_parser import (
     FOCALLENGTH_COL,
     BINNING_COL,
 )
+from astro_planner.utils import timer
 
 from image_grading.preprocessing import clear_tables, init_tables
 
@@ -238,6 +239,9 @@ def pull_inspector_data():
     df_stars_headers_["fwhm_mean_arcsec"] = (
         df_stars_headers_["fwhm_mean"] * df_stars_headers_["arcsec_per_pixel"]
     )
+    df_stars_headers_["fwhm_median"] = (
+        df_stars_headers_["fwhm_median"] * df_stars_headers_["arcsec_per_pixel"]
+    )
     df_stars_headers_["fwhm_std_arcsec"] = (
         df_stars_headers_["fwhm_std"] * df_stars_headers_["arcsec_per_pixel"]
     )
@@ -251,7 +255,7 @@ def pull_inspector_data():
 
     df_stars_headers = df_stars_headers_.copy()
     df_stars_headers = set_date_cols(df_stars_headers, utc_offset=DEFAULT_UTC_OFFSET)
-    return df_stars_headers
+    return df_stars_headers.drop_duplicates(subset=["filename"])
 
 
 def pull_stored_data():
@@ -274,7 +278,9 @@ def pull_stored_data():
         cast(fh."XBINNING" as float) as "Binning",
         date(fh."DATE-OBS") as "date",
         asm.fwhm_mean,
+        asm.fwhm_median,
         asm.eccentricity_mean,
+        asm.eccentricity_median,
         asm.n_stars,
         asm.star_trail_strength,
         asm.star_orientation_score,
@@ -300,7 +306,7 @@ def pull_stored_data():
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].fillna(root_name)
     df_stored_data["OBJECT"] = df_stored_data["OBJECT"].apply(normalize_target_name)
     df_stored_data = set_date_cols(df_stored_data, utc_offset=DEFAULT_UTC_OFFSET)
-    return df_stored_data
+    return df_stored_data.drop_duplicates(subset=["filename"])
 
 
 def pull_target_data():
@@ -690,6 +696,7 @@ def target_filter(targets, filters):
     return list(set(targets_with_filter))
 
 
+@timer
 def get_progress_graph(
     df, date_string, days_ago, targets=[], apply_rejection_criteria=True
 ):
@@ -706,15 +713,26 @@ def get_progress_graph(
     df0 = df[selection]
     df0 = df0.reset_index()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
+    df0 = df0.dropna(
+        subset=[
+            "OBJECT",
+            "FILTER",
+            BINNING_COL,
+            FOCALLENGTH_COL,
+            INSTRUMENT_COL,
+            "is_ok",
+            EXPOSURE_COL,
+            "OBJCTRA",
+        ]
+    )
 
     p = go.Figure()
     if df0.shape[0] == 0:
         return dcc.Graph(figure=p), pd.DataFrame()
-
     exposure_col = EXPOSURE_COL
     if "is_ok" in df0.columns and apply_rejection_criteria:
-        df0["exposure_ok"] = df0[EXPOSURE_COL] * (2 * df0["is_ok"].astype(int) - 1)
         exposure_col = "exposure_ok"
+        df0[exposure_col] = df0[EXPOSURE_COL] * (2 * df0["is_ok"].astype(int) - 1)
 
     df_summary = (
         df0.groupby(
@@ -723,7 +741,10 @@ def get_progress_graph(
         .agg({exposure_col: "sum"})
         .dropna()
     )
-    df_summary = df_summary.unstack(1).fillna(0)[exposure_col] / 3600
+
+    df_summary = df_summary.unstack(1).fillna(0)
+    df_summary = df_summary[exposure_col] / 3600
+
     cols = ["OBJECT"] + FILTER_LIST
     df_summary = df_summary[[col for col in cols if col in df_summary.columns]]
 
@@ -743,7 +764,7 @@ def get_progress_graph(
     bin = df0[BINNING_COL].astype(int).astype(str)
     fl = df0[FOCALLENGTH_COL].astype(int).astype(str)
     df0["text"] = df0[INSTRUMENT_COL] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
-    df_summary = df0.set_index("OBJECT").loc[objects_sorted]
+    df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index("OBJECT")
     for filter in [col for col in COLORS if col in df_summary.columns]:
         p.add_trace(
             go.Bar(
@@ -1373,8 +1394,8 @@ def add_rejection_criteria(
     df0,
     z_score_thr=2,
     iqr_scale=1.5,
-    eccentricity_mean_thr=0.6,
-    star_trail_strength_thr=5,
+    eccentricity_median_thr=0.6,
+    star_trail_strength_thr=25,
     min_star_reduction=0.5,
     new_cols=False,
 ):
@@ -1388,16 +1409,16 @@ def add_rejection_criteria(
     df1 = df1.join(group["log_n_stars"].mean().to_frame("log_n_stars_mean"))
     df1 = df1.join(group["log_n_stars"].std().to_frame("log_n_stars_std"))
 
-    df1 = df1.join(group["fwhm_mean"].mean().to_frame("fwhm_mean_mean"))
-    df1 = df1.join(group["fwhm_mean"].std().to_frame("fwhm_mean_std"))
+    df1 = df1.join(group["fwhm_median"].mean().to_frame("fwhm_median_mean"))
+    df1 = df1.join(group["fwhm_median"].std().to_frame("fwhm_median_std"))
 
     # Calculate IQR outliers
     df1 = df1.join(group["log_n_stars"].quantile(0.25).to_frame("log_n_stars_q1"))
     df1 = df1.join(group["log_n_stars"].quantile(0.75).to_frame("log_n_stars_q3"))
-    df1 = df1.join(group["fwhm_mean"].quantile(0.25).to_frame("fwhm_mean_q1"))
-    df1 = df1.join(group["fwhm_mean"].quantile(0.75).to_frame("fwhm_mean_q3"))
+    df1 = df1.join(group["fwhm_median"].quantile(0.25).to_frame("fwhm_median_q1"))
+    df1 = df1.join(group["fwhm_median"].quantile(0.75).to_frame("fwhm_median_q3"))
     df1["log_n_stars_iqr"] = df1["log_n_stars_q3"] - df1["log_n_stars_q1"]
-    df1["fwhm_mean_iqr"] = df1["fwhm_mean_q3"] - df1["fwhm_mean_q1"]
+    df1["fwhm_median_iqr"] = df1["fwhm_median_q3"] - df1["fwhm_median_q1"]
     df1 = df1.reset_index()
 
     df1["star_count_iqr_outlier"] = (
@@ -1408,10 +1429,10 @@ def add_rejection_criteria(
     ]
 
     df1["fwhm_iqr_outlier"] = (
-        df1["fwhm_mean"] > df1["fwhm_mean_q3"] + iqr_scale * df1["fwhm_mean_iqr"]
+        df1["fwhm_median"] > df1["fwhm_median_q3"] + iqr_scale * df1["fwhm_median_iqr"]
     )
-    df1["fwhm_z_score"] = (df1["fwhm_mean"] - df1["fwhm_mean_mean"]) / df1[
-        "fwhm_mean_std"
+    df1["fwhm_z_score"] = (df1["fwhm_median"] - df1["fwhm_median_mean"]) / df1[
+        "fwhm_median_std"
     ]
 
     df1["star_count_fraction"] = np.exp(df1["log_n_stars"] - df1["log_n_stars_max"])
@@ -1430,7 +1451,7 @@ def add_rejection_criteria(
 
     df0 = df1.copy()
 
-    df0["high_ecc"] = df0["eccentricity_mean"] > eccentricity_mean_thr
+    df0["high_ecc"] = df0["eccentricity_median"] > eccentricity_median_thr
     df0["trailing_stars"] = df0["star_trail_strength"] > star_trail_strength_thr
 
     df0["bad_star_shape"] = df0["high_ecc"] | df0["trailing_stars"]
@@ -1487,9 +1508,11 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
         "FOCALLEN",
         "arcsec_per_pixel",
         "CCD-TEMP",
-        "fwhm_mean_arcsec",
+        "fwhm_median",
         "eccentricity_mean",
         "star_trail_strength",
+        "star_orientation_score",
+        "is_ok",
     ]
     if "rejected" in df0.columns:
         default_cols += ["rejected"]
@@ -1639,8 +1662,8 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
     [Input("scatter-radio-selection", "value")],
 )
 def update_scatter_axes(value):
-    x_col = "fwhm_mean_arcsec"
-    y_col = "eccentricity_mean"
+    x_col = "fwhm_median"
+    y_col = "eccentricity_median"
     if value:
         x_col, y_col = value.split(" vs. ")
     return x_col, y_col
@@ -1684,7 +1707,7 @@ def update_inspector_dates(target_data, target_matches, selected_dates):
 def rejection_criteria_callback(
     z_score_thr,
     iqr_scale,
-    eccentricity_mean_thr,
+    eccentricity_median_thr,
     star_trail_strength_thr,
     min_star_reduction,
 ):
@@ -1694,10 +1717,34 @@ def rejection_criteria_callback(
         df_stored_data,
         z_score_thr=z_score_thr,
         iqr_scale=iqr_scale,
-        eccentricity_mean_thr=eccentricity_mean_thr,
+        eccentricity_median_thr=eccentricity_median_thr,
         star_trail_strength_thr=star_trail_strength_thr,
         min_star_reduction=min_star_reduction,
     )
+
+    status_map = {False: "&#10004;", True: "&#10006;"}
+
+    df_reject_criteria_all["fwhm_status"] = df_reject_criteria_all["high_fwhm"].replace(
+        status_map
+    )
+    df_reject_criteria_all["ecc_status"] = df_reject_criteria_all["high_ecc"].replace(
+        status_map
+    )
+    df_reject_criteria_all["star_trail_status"] = df_reject_criteria_all[
+        "trailing_stars"
+    ].replace(status_map)
+    df_reject_criteria_all["iqr_status"] = df_reject_criteria_all[
+        "star_count_iqr_outlier"
+    ].replace(status_map)
+    df_reject_criteria_all["star_z_score_status"] = df_reject_criteria_all[
+        "bad_star_count_z_score"
+    ].replace(status_map)
+    df_reject_criteria_all["fwhm_z_score_status"] = df_reject_criteria_all[
+        "bad_fwhm_z_score"
+    ].replace(status_map)
+    df_reject_criteria_all["star_count_fraction_status"] = df_reject_criteria_all[
+        "low_star_count_fraction"
+    ].replace(status_map)
 
     cols = [
         "filename",
@@ -1715,6 +1762,13 @@ def rejection_criteria_callback(
         "low_star_count",
         "bad_star_shape",
         "is_ok",
+        "fwhm_status",
+        "ecc_status",
+        "star_trail_status",
+        "iqr_status",
+        "star_z_score_status",
+        "fwhm_z_score_status",
+        "star_count_fraction_status",
     ]
 
     df_reject_criteria = df_reject_criteria_all[cols]
@@ -1740,6 +1794,7 @@ def rejection_criteria_callback(
         Input("dummy-rejection-criteria-id", "children"),
     ],
 )
+@timer
 def update_scatter_plot(
     target_data, inspector_dates, target_matches, x_col, y_col, size_col, dummy
 ):
@@ -1761,9 +1816,9 @@ def update_scatter_plot(
     df0 = df0[df0["OBJECT"].isin(target_matches)]
     filters = df0["FILTER"].unique()
     if not x_col:
-        x_col = "fwhm_mean_arcsec"
+        x_col = "fwhm_median"
     if not y_col:
-        y_col = "eccentricity_mean"
+        y_col = "eccentricity_median"
 
     normalized_target_matches = [normalize_target_name(t) for t in target_matches]
     progress_graph, df_summary = get_progress_graph(
@@ -1774,109 +1829,98 @@ def update_scatter_plot(
         apply_rejection_criteria=True,
     )
 
-    for status_is_ok in [True, False]:
-        for low_star_count in [True, False]:
-            for high_fwhm in [True, False]:
-                for i_filter, filter in enumerate(filters):
-                    selection = df0["FILTER"] == filter
-                    selection &= df0["is_ok"] == status_is_ok
-                    selection &= df0["low_star_count"] == low_star_count
-                    selection &= df0["high_fwhm"] == high_fwhm
-                    if selection.sum() == 0:
-                        continue
-                    df1 = df0[selection].reset_index()
+    df0["text"] = df0.apply(
+        lambda row: "<br>Object: "
+        + str(row["OBJECT"])
+        + f"<br>Date: {row['DATE-OBS']}"
+        + f"<br>Star count: {row['n_stars']}"
+        + (f"<br>{size_col}: {row[size_col]:.2f}" if size_col else "")
+        + f"<br>{row['fwhm_status']} FWHM: {row['fwhm_median']:.2f}"
+        + f"<br>{row['fwhm_z_score_status']} FWHM Z-score: {row['fwhm_z_score']:.2f}"
+        + f"<br>{row['ecc_status']} Eccentricity: {row['eccentricity_median']:.2f}"
+        + f"<br>{row['star_trail_status']} Star trail metric: {row['star_trail_strength']:.2f}"
+        + f"<br>{row['star_count_fraction_status']} Star count fraction: {row['star_count_fraction']:.2f}"
+        + f"<br>{row['iqr_status']} Star IQR reject: {row['star_count_iqr_outlier']}"
+        + f"<br>{row['star_z_score_status']} Star Z-score: {row['star_count_z_score']:.2f}"
+        + f"<br>Accept frame: {row['is_ok']==1}",
+        axis=1,
+    )
 
-                    sizeref = 1
-                    size = 10
-                    if size_col:
-                        sizeref = float(2.0 * df1[size_col].max() / (5 ** 2))
-                        default_size = df1[size_col].median()
-                        if np.isnan(default_size):
-                            default_size = 1
-                        size = df1[size_col].fillna(default_size)
+    group_cols = ["FILTER", "is_ok", "low_star_count", "high_fwhm"]
+    inputs = (
+        (df0[group_cols].drop_duplicates())
+        .sort_values(by=group_cols, ascending=[True, False, False, False])
+        .values
+    )
 
-                    status_map = {False: "&#10004;", True: "&#10006;"}
+    i_filter = 0
 
-                    df1["fwhm_status"] = df1["high_fwhm"].replace(status_map)
-                    df1["ecc_status"] = df1["high_ecc"].replace(status_map)
-                    df1["star_trail_status"] = df1["trailing_stars"].replace(status_map)
-                    df1["iqr_status"] = df1["star_count_iqr_outlier"].replace(
-                        status_map
-                    )
-                    df1["star_z_score_status"] = df1["bad_star_count_z_score"].replace(
-                        status_map
-                    )
-                    df1["fwhm_z_score_status"] = df1["bad_fwhm_z_score"].replace(
-                        status_map
-                    )
-                    df1["star_count_fraction_status"] = df1[
-                        "low_star_count_fraction"
-                    ].replace(status_map)
+    t0 = time.time()
+    for filter, status_is_ok, low_star_count, high_fwhm in inputs:
 
-                    df1["text"] = df1.apply(
-                        lambda row: "<br>Object: "
-                        + str(row["OBJECT"])
-                        + f"<br>Date: {row['DATE-OBS']}"
-                        + f"<br>Star count: {row['n_stars']}"
-                        + (f"<br>{size_col}: {row[size_col]:.2f}" if size_col else "")
-                        + f"<br>{row['fwhm_status']} FWHM: {row['fwhm_mean']:.2f}"
-                        + f"<br>{row['fwhm_z_score_status']} FWHM Z-score: {row['fwhm_z_score']:.2f}"
-                        + f"<br>{row['ecc_status']} Eccentricity: {row['eccentricity_mean']:.2f}"
-                        + f"<br>{row['star_trail_status']} Star trail metric: {row['star_trail_strength']:.2f}"
-                        + f"<br>{row['star_count_fraction_status']} Star count fraction: {row['star_count_fraction']:.2f}"
-                        + f"<br>{row['iqr_status']} Star IQR reject: {row['star_count_iqr_outlier']}"
-                        + f"<br>{row['star_z_score_status']} Star Z-score: {row['star_count_z_score']:.2f}"
-                        + f"<br>Accept frame: {row['is_ok']==1}",
-                        axis=1,
-                    )
+        log.info(
+            f"{status_is_ok}, {low_star_count}, {high_fwhm}, {filter}: {time.time() - t0:.3f}"
+        )
+        # t0 = time.time()
+        selection = df0["FILTER"] == filter
+        selection &= df0["is_ok"] == status_is_ok
+        selection &= df0["low_star_count"] == low_star_count
+        selection &= df0["high_fwhm"] == high_fwhm
+        df1 = df0[selection].reset_index()
 
-                    legend_name = filter
-                    if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
-                        symbol = "diamond"
-                    elif filter in [L_FILTER, R_FILTER, G_FILTER, B_FILTER]:
-                        symbol = "circle"
-                    else:
-                        symbol = "star"
+        sizeref = 1
+        size = 10
+        if size_col:
+            sizeref = float(2.0 * df1[size_col].max() / (5 ** 2))
+            default_size = df1[size_col].median()
+            if np.isnan(default_size):
+                default_size = 1
+            size = df1[size_col].fillna(default_size)
 
-                    if status_is_ok:
-                        legend_name = f"{legend_name} &#10004; "
-                    else:
-                        symbol = "x"
-                        if low_star_count:
-                            symbol = f"{symbol}-open"
-                            legend_name = f"{legend_name} &#10006; - star count"
-                        elif high_fwhm:
-                            symbol = f"{symbol}-dot"
-                            legend_name = f"{legend_name} &#10006; - star bloat"
-                        else:
-                            symbol = f"{symbol}-open-dot"
-                            legend_name = f"{legend_name} &#10006; - star shape"
+        legend_name = filter
+        if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
+            symbol = "diamond"
+        elif filter in [L_FILTER, R_FILTER, G_FILTER, B_FILTER]:
+            symbol = "circle"
+        else:
+            symbol = "star"
 
-                    if filter in COLORS:
-                        color = COLORS[filter]
-                    else:
-                        color = sns.color_palette(n_colors=len(filters)).as_hex()[
-                            i_filter
-                        ]
+        if status_is_ok:
+            legend_name = f"{legend_name} &#10004; "
+        else:
+            symbol = "x"
+            if low_star_count:
+                symbol = f"{symbol}-open"
+                legend_name = f"{legend_name} &#10006; - star count"
+            elif high_fwhm:
+                symbol = f"{symbol}-dot"
+                legend_name = f"{legend_name} &#10006; - star bloat"
+            else:
+                symbol = f"{symbol}-open-dot"
+                legend_name = f"{legend_name} &#10006; - star shape"
 
-                    p.add_trace(
-                        go.Scatter(
-                            x=df1[x_col],
-                            y=df1[y_col],
-                            mode="markers",
-                            name=legend_name,
-                            hovertemplate="<b>%{text}</b><br>"
-                            + f"{x_col}: "
-                            + "%{x:.2f}<br>"
-                            + f"{y_col}: "
-                            + "%{y:.2f}<br>",
-                            text=df1["text"],
-                            marker=dict(
-                                color=color, size=size, sizeref=sizeref, symbol=symbol
-                            ),
-                            customdata=df1["filename"],
-                        )
-                    )
+        if filter in COLORS:
+            color = COLORS[filter]
+        else:
+            color = sns.color_palette(n_colors=len(filters)).as_hex()[i_filter]
+            i_filter += 0
+
+        p.add_trace(
+            go.Scatter(
+                x=df1[x_col],
+                y=df1[y_col],
+                mode="markers",
+                name=legend_name,
+                hovertemplate="<b>%{text}</b><br>"
+                + f"{x_col}: "
+                + "%{x:.2f}<br>"
+                + f"{y_col}: "
+                + "%{y:.2f}<br>",
+                text=df1["text"],
+                marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
+                customdata=df1["filename"],
+            )
+        )
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
@@ -1909,16 +1953,19 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
     p2 = p0
 
     if data is None:
+        log.info("No data")
         return p0, p1, p2, ""
     base_filename = data["points"][0]["customdata"]
     if not base_filename:
+        log.info(f"No base filename found")
         return p0, p1, p2, ""
 
     file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
-    if file_full_path.shape[0] == 1:
+    if file_full_path.shape[0] != 0:
         log.info(file_full_path)
         filename = file_full_path["file_full_path"].values[0]
     else:
+        log.info(f"No full path found for {base_filename}")
         return p0, p1, p2, ""
 
     t0 = time.time()
@@ -1929,6 +1976,8 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
 
     xy_query = f"""select * from xy_frame_metrics where filename = '{base_filename}';"""
     df_xy = pd.read_sql(xy_query, POSTGRES_ENGINE)
+    df_xy.drop_duplicates(subset=["filename", "x_bin", "y_bin"], inplace=True)
+
     log.info(f"Time for query: {time.time() - t0:.2f} seconds")
 
     p2, canvas = show_inspector_image(

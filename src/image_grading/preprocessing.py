@@ -109,7 +109,7 @@ def aggregate_stars(df_stars):
             ]
         ]
         .groupby(["filename"])
-        .agg(["mean", "std"])
+        .agg(["mean", "std", "median"])
     )
     df0.columns = ["_".join(col).strip() for col in df0.columns.values]
     df1 = df_stars[["filename", "bkg_val", "bkg_rms"]].groupby(["filename"]).mean()
@@ -172,7 +172,7 @@ def coord_str_to_float(coord_string):
     return result
 
 
-def process_header_from_fits(filename, skip_missing_entries=True):
+def process_header_from_fits(filename, skip_missing_entries):
     try:
         hdul = fits.open(filename)
         header = dict(hdul[0].header)
@@ -218,13 +218,15 @@ def process_header_from_fits(filename, skip_missing_entries=True):
                             df_header[col] = value
                 if not found_col:
                     df_header[col] = np.nan
+                    missing_cols.append(col)
 
-        if missing_cols and skip_missing_entries:
-            log.info(
-                f"Header for {filename} missing matching columns {missing_cols}, skipping this file..."
-            )
-            append_to_list_on_redis(filename, "file_skiplist")
-            return pd.DataFrame()
+        if missing_cols:
+            log.warn(f"Header for {filename} missing matching columns {missing_cols}!")
+
+            if skip_missing_entries:
+                log.warn(f"Skipping this file: {filename}")
+                append_to_list_on_redis(filename, "file_skiplist")
+                return pd.DataFrame()
 
         df_header["FILTER"] = df_header["FILTER"].fillna("NO_FILTER")
         if "COMMENT" in df_header.columns:
@@ -249,18 +251,21 @@ def process_headers(file_list, skip_missing_entries=True):
     df_headers = pd.DataFrame()
     if df_header_list:
         df_headers = pd.concat(df_header_list)
+        if df_headers.shape[0] == 0:
+            return df_headers
+        df_headers = to_numeric(df_headers)
 
-    df_headers = to_numeric(df_headers)
+        for col in ["OBJCTRA", "OBJCTDEC", "OBJCTALT", "OBJCTAZ"]:
+            if col in df_headers.columns:
+                df_headers[col] = df_headers[col].apply(coord_str_to_float)
+                if col == "OBJCTALT":
+                    df_headers["AIRMASS"] = 1.0 / np.cos(
+                        df_headers["OBJCTALT"] * np.pi / 180.0
+                    )
 
-    for col in ["OBJCTRA", "OBJCTDEC", "OBJCTALT", "OBJCTAZ"]:
-        if col in df_headers.columns:
-            df_headers[col] = df_headers[col].apply(coord_str_to_float)
-            if col == "OBJCTALT":
-                df_headers["AIRMASS"] = 1.0 / np.cos(
-                    df_headers["OBJCTALT"] * np.pi / 180.0
-                )
-
-    df_headers["arcsec_per_pixel"] = df_headers["XPIXSZ"] * 206 / df_headers["FOCALLEN"]
+        df_headers["arcsec_per_pixel"] = (
+            df_headers["XPIXSZ"] * 206 / df_headers["FOCALLEN"]
+        )
 
     return df_headers
 
@@ -352,17 +357,12 @@ def process_stars(
         df_agg_stars, df_stars = process_stars_from_fits(
             filename, extract_thresh=extract_thresh
         )
+        n_stars = df_stars.shape[0]
         file_skiplist = get_list_from_redis("file_skiplist")
         if filename in file_skiplist:
             continue
 
-        nx = df_stars["nx"].values[0]
-        ny = df_stars["ny"].values[0]
-
-        n_stars = df_stars.shape[0]
         log.info(f"For {filename}: N-stars = {n_stars}")
-
-        n_stars = df_stars.shape[0]
         if n_stars == 0:
             base_filename = os.path.basename(filename)
             df_stars["filename"] = base_filename
@@ -377,6 +377,9 @@ def process_stars(
             continue
         if not xy_n_bins:
             xy_n_bins = max(min(int(np.sqrt(n_stars) / 9), 10), 3)
+
+        nx = df_stars["nx"].values[0]
+        ny = df_stars["ny"].values[0]
         df_stars = preprocess_stars(df_stars, xy_n_bins=xy_n_bins, nx=nx, ny=ny)
 
         df_radial, df_xy = bin_stars(df_stars, filename)
@@ -463,6 +466,7 @@ def init_tables():
         [
             "fits_headers",
             "fits_status",
+            # "star_metrics",
             "aggregated_star_metrics",
             "xy_frame_metrics",
             "radial_frame_metrics",
@@ -554,7 +558,7 @@ def chunks(lst, n):
 
 
 def update_star_metrics(
-    config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=16, extract_thresh=0.25
+    config=CONFIG, data_dir=DATA_DIR, file_list=None, n_chunk=8, extract_thresh=0.5
 ):
     if not file_list:
         file_list = get_fits_file_list(data_dir, config)
@@ -563,7 +567,7 @@ def update_star_metrics(
     )
     files_with_data = get_file_list_with_data(new_files)
     file_skiplist = get_list_from_redis("file_skiplist")
-    files_to_process = [f for f in files_with_data if f not in file_skiplist]
+    files_to_process = sorted([f for f in files_with_data if f not in file_skiplist])
 
     n_threads = int(CONFIG.get("threads_for_star_processing", 1))
     multithread_fits_read = n_threads > 1
@@ -594,6 +598,13 @@ def update_star_metrics(
             n_stars = result["stars"].shape[0]
 
             log.info(f"New stars: {n_stars}")
+
+            # push_rows_to_table(
+            #     result["stars"],
+            #     POSTGRES_ENGINE,
+            #     table_name="star_metrics",
+            #     if_exists="append",
+            # )
 
             # Aggregate star metrics table
             push_rows_to_table(
@@ -631,7 +642,7 @@ def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=No
     log.debug("Checking for new files")
     update_fits_headers(config, data_dir, file_list)
     update_fits_status(config, data_dir, file_list)
-    update_star_metrics(config, data_dir, file_list)
+    update_star_metrics(config, data_dir, file_list, n_chunk=10)
 
 
 def lower_cols(df):

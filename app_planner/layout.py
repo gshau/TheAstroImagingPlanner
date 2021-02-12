@@ -288,7 +288,7 @@ def serve_layout():
                         options=[
                             {
                                 "label": "FWHM vs. Eccentricity",
-                                "value": "fwhm_mean_arcsec vs. eccentricity_mean",
+                                "value": "fwhm_median vs. eccentricity_median",
                             },
                             {"label": "Az. vs Alt", "value": "OBJCTAZ vs. OBJCTALT"},
                             {
@@ -829,8 +829,8 @@ def serve_layout():
                         dcc.Input(
                             id="trail-thr-field",
                             debounce=True,
-                            placeholder=5,
-                            value=5,
+                            placeholder=8,
+                            value=8,
                             type="number",
                         )
                     ),

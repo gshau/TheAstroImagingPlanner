@@ -9,7 +9,7 @@ from multiprocessing import Pool
 from functools import partial
 
 from .logger import log
-
+from .utils import timer
 
 iers.conf.auto_download = False
 
@@ -55,6 +55,7 @@ def get_sun_moon_loc(dates, location):
     return result
 
 
+@timer
 def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
     log.debug("Starting get_coords")
 

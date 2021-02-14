@@ -139,10 +139,11 @@ def update_output_callback(
         df_stars = result["agg_stars"]
 
         df_stars_headers = pd.merge(df_header, df_stars, on="filename", how="left")
-        log.info(list(df_stars_headers["filename"].unique()))
-        log.info(list(df_stars_headers.columns))
         df_stars_headers["fwhm_mean_arcsec"] = (
             df_stars_headers["fwhm_mean"] * df_stars_headers["arcsec_per_pixel"]
+        )
+        df_stars_headers["fwhm_median_arcsec"] = (
+            df_stars_headers["fwhm_median"] * df_stars_headers["arcsec_per_pixel"]
         )
         df_stars_headers["fwhm_std_arcsec"] = (
             df_stars_headers["fwhm_std"] * df_stars_headers["arcsec_per_pixel"]
@@ -165,8 +166,8 @@ def update_output_callback(
             "FOCALLEN",
             "arcsec_per_pixel",
             "CCD-TEMP",
-            "fwhm_mean_arcsec",
-            "eccentricity_mean",
+            "fwhm_median_arcsec",
+            "eccentricity_median",
             "star_trail_strength",
         ]
         fits_cols = [
@@ -219,7 +220,6 @@ def update_output_callback(
             ]
         )
         df_stars_headers["DATE-OBS"] = pd.to_datetime(df_stars_headers["DATE-OBS"])
-        log.info(df_stars_headers["DATE-OBS"].dtype)
         df_numeric = df_stars_headers.select_dtypes(
             include=[
                 "int16",
@@ -288,9 +288,6 @@ def update_output_callback(
             ]
         )
 
-        log.info(result["radial_frame"].head())
-        log.info(result.keys())
-
     return (
         files_table,
         summary_table,
@@ -333,9 +330,9 @@ def update_scatter_plot(x_col, y_col, size_col, header_options):
 
     filters = df0["FILTER"].unique()
     if not x_col:
-        x_col = "fwhm_mean_arcsec"
+        x_col = "fwhm_median_arcsec"
     if not y_col:
-        y_col = "eccentricity_mean"
+        y_col = "eccentricity_median"
     sizeref = float(2.0 * df0[size_col].max() / (5 ** 2))
     for filter in FILTER_LIST:
         if filter not in filters:
@@ -346,8 +343,8 @@ def update_scatter_plot(x_col, y_col, size_col, header_options):
             lambda row: "<br>Date: "
             + str(row["DATE-OBS"])
             + f"<br>Star count: {row['n_stars']}"
-            + f"<br>FWHM: {row['fwhm_mean']:.2f}"
-            + f"<br>Eccentricity: {row['eccentricity_mean']:.2f}"
+            + f"<br>FWHM: {row['fwhm_median']:.2f}"
+            + f"<br>Eccentricity: {row['eccentricity_median']:.2f}"
             + f"<br>{size_col}: {row[size_col]:.2f}",
             axis=1,
         )

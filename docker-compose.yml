@@ -66,6 +66,7 @@ services:
     redis:
         image: "redis:alpine"
         container_name: redis
+        restart: unless-stopped    
 volumes:
   pgdata:
     external: true            

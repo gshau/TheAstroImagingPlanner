@@ -239,7 +239,7 @@ def pull_inspector_data():
     df_stars_headers_["fwhm_mean_arcsec"] = (
         df_stars_headers_["fwhm_mean"] * df_stars_headers_["arcsec_per_pixel"]
     )
-    df_stars_headers_["fwhm_median"] = (
+    df_stars_headers_["fwhm_median_arcsec"] = (
         df_stars_headers_["fwhm_median"] * df_stars_headers_["arcsec_per_pixel"]
     )
     df_stars_headers_["fwhm_std_arcsec"] = (

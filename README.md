@@ -124,7 +124,7 @@ docker pull gshau/astroimaging-planner:latest
   "FOCALLEN"
   "EXPOSURE"
   "XBINNING"
-  "DATE-OBS"
+  "XPIXSZ"
 ```
 
 ## Docker configuration

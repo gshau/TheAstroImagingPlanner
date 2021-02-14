@@ -139,8 +139,6 @@ def update_output_callback(
         df_stars = result["agg_stars"]
 
         df_stars_headers = pd.merge(df_header, df_stars, on="filename", how="left")
-        log.info(list(df_stars_headers["filename"].unique()))
-        log.info(list(df_stars_headers.columns))
         df_stars_headers["fwhm_mean_arcsec"] = (
             df_stars_headers["fwhm_mean"] * df_stars_headers["arcsec_per_pixel"]
         )
@@ -222,7 +220,6 @@ def update_output_callback(
             ]
         )
         df_stars_headers["DATE-OBS"] = pd.to_datetime(df_stars_headers["DATE-OBS"])
-        log.info(df_stars_headers["DATE-OBS"].dtype)
         df_numeric = df_stars_headers.select_dtypes(
             include=[
                 "int16",
@@ -290,9 +287,6 @@ def update_output_callback(
                 )
             ]
         )
-
-        log.info(result["radial_frame"].head())
-        log.info(result.keys())
 
     return (
         files_table,

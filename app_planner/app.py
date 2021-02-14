@@ -6,9 +6,7 @@ import os
 import sqlalchemy
 from distutils.util import strtobool
 
-import pyarrow as pa
-import redis
-
+from direct_redis import DirectRedis
 
 import dash
 import dash_core_components as dcc
@@ -120,7 +118,7 @@ POSTGRES_ENGINE = sqlalchemy.create_engine(
 
 
 USE_CONTRAST = strtobool(os.getenv("USE_CONTRAST", "True")) == 1
-log.info(f"use contrast: {USE_CONTRAST}")
+log.debug(f"use contrast: {USE_CONTRAST}")
 styles = {}
 if not USE_CONTRAST:
     styles["k-ext"] = {"display": "none"}
@@ -190,22 +188,19 @@ TRANSLATED_FILTERS = {
 all_target_coords = pd.DataFrame()
 all_targets = []
 
-
-REDIS = redis.Redis(host="redis", port=6379, db=0)
+REDIS = DirectRedis(host="redis", port=6379, db=0)
 
 
 def push_df_to_redis(df, key):
     t0 = time.time()
-    context = pa.default_serialization_context()
-    REDIS.set(key, context.serialize(df).to_buffer().to_pybytes())
+    REDIS.set(key, df)
     t_elapsed = time.time() - t0
     log.debug(f"Pushing for {key:30s} took {t_elapsed:.3f} seconds")
 
 
 def get_df_from_redis(key):
     t0 = time.time()
-    context = pa.default_serialization_context()
-    df = context.deserialize(REDIS.get(key))
+    df = REDIS.get(key)
     t_elapsed = time.time() - t0
     log.debug(f"Reading for {key:30s} took {t_elapsed:.3f} seconds")
     return df
@@ -643,10 +638,7 @@ def update_weather(site):
 
     graph_data = [
         dcc.Graph(
-            config={
-                "displaylogo": False,
-                "modeBarButtonsToRemove": ["pan2d", "lasso2d"],
-            },
+            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"],},
             figure={
                 "data": data,
                 "layout": dict(
@@ -779,15 +771,15 @@ def get_progress_graph(
         )
     p.update_layout(
         barmode=CONFIG.get("progress_mode", "group"),
-        xaxis_title="Total Exposure (hr)",
+        yaxis_title="Total Exposure (hr)",
+        xaxis_title="Object",
         title="Acquired Data",
         height=600,
         legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0.02),
         title_x=0.5,
     )
     graph = dcc.Graph(
-        config={"displaylogo": False, "modeBarButtonsToRemove": ["pan2d", "lasso2d"]},
-        figure=p,
+        config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]}, figure=p,
     )
 
     return graph, df_summary
@@ -1148,7 +1140,7 @@ def update_contrast(
 
     all_target_coords = add_contrast(
         all_target_coords,
-        n_thread=6,
+        n_thread=12,
         filter_bandwidth=filter_bandwidth,
         mpsas=local_mpsas,
         include_airmass=True,
@@ -1289,7 +1281,7 @@ def update_target_graph(
         y_range = [0, 1]
 
     target_graph = dcc.Graph(
-        config={"displaylogo": False, "modeBarButtonsToRemove": ["pan2d", "lasso2d"]},
+        config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
         figure={
             "data": target_data,
             "layout": dict(
@@ -1829,6 +1821,8 @@ def update_scatter_plot(
         apply_rejection_criteria=True,
     )
 
+    progress_graph.figure.layout.height = 400
+
     df0["text"] = df0.apply(
         lambda row: "<br>Object: "
         + str(row["OBJECT"])
@@ -1858,7 +1852,7 @@ def update_scatter_plot(
     t0 = time.time()
     for filter, status_is_ok, low_star_count, high_fwhm in inputs:
 
-        log.info(
+        log.debug(
             f"{status_is_ok}, {low_star_count}, {high_fwhm}, {filter}: {time.time() - t0:.3f}"
         )
         # t0 = time.time()

@@ -962,6 +962,10 @@ def serve_layout():
                                 dcc.Graph(
                                     id="target-scatter-graph",
                                     style={"width": "100%", "height": "800px"},
+                                    config={
+                                        "displaylogo": False,
+                                        "modeBarButtonsToRemove": ["lasso2d"],
+                                    },
                                 )
                             ],
                         ),
@@ -972,6 +976,10 @@ def serve_layout():
                             dcc.Graph(
                                 id="inspector-frame",
                                 style={"width": "100%", "height": "800px"},
+                                config={
+                                    "displaylogo": False,
+                                    "modeBarButtonsToRemove": ["lasso2d"],
+                                },
                             ),
                         ],
                         width=6,
@@ -1009,6 +1017,10 @@ def serve_layout():
                             dcc.Graph(
                                 id="xy-frame-graph",
                                 style={"width": "100%", "height": "600px"},
+                                config={
+                                    "displaylogo": False,
+                                    "modeBarButtonsToRemove": ["lasso2d"],
+                                },
                             ),
                         ],
                         width=6,
@@ -1017,6 +1029,10 @@ def serve_layout():
                         dcc.Graph(
                             id="radial-frame-graph",
                             style={"width": "100%", "height": "600px"},
+                            config={
+                                "displaylogo": False,
+                                "modeBarButtonsToRemove": ["lasso2d"],
+                            },
                         ),
                         width=6,
                     ),

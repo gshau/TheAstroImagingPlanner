@@ -1,10 +1,12 @@
 import time
 import numpy as np
+import pandas as pd
 from functools import partial
 from multiprocessing import Pool
 
 from .ephemeris import get_sun, get_moon
 from .logger import log
+
 
 RADIANS_PER_DEGREE = np.pi / 180.0
 
@@ -54,12 +56,12 @@ class SkyBackgroundModel:
 def distance(target_1, target_2, lat_key="alt", long_key="az"):
     deg_to_radian = np.pi / 180.0
     # haversine formula
-    dlon = target_1[long_key] - target_2[long_key]
-    dlat = target_2[lat_key] - target_1[lat_key]
+    dlon = target_1[long_key].values - target_2[long_key].values
+    dlat = target_2[lat_key].values - target_1[lat_key].values
     a = (
         np.sin(dlat / 2 * deg_to_radian) ** 2
-        + np.cos(target_1[lat_key] * deg_to_radian)
-        * np.cos(target_2[lat_key] * deg_to_radian)
+        + np.cos(target_1[lat_key].values * deg_to_radian)
+        * np.cos(target_2[lat_key].values * deg_to_radian)
         * np.sin(dlon * deg_to_radian / 2) ** 2
     )
     c = 2 * np.arcsin(np.sqrt(a))
@@ -78,36 +80,41 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     df_moon = df_locs["moon"]
     df_sun = df_locs["sun"]
-    phase = (distance(df_moon, df_sun, lat_key="dec", long_key="ra") + 360) % 360 - 180
-    moon_separation = distance(df_moon, df_target)
+    moon_separation = pd.Series(distance(df_moon, df_target), index=df_target.index)
 
-    b_moon = sbm._bmoon(phase, moon_separation, df_moon["alt"], df_target["alt"])
+    b_moon = sbm._bmoon(
+        df_locs["moon"]["phase"].values,
+        moon_separation.values,
+        df_moon["alt"].values,
+        df_target["alt"].values,
+    )
+
     b_moon *= df_moon["alt"] > 0
     # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
 
     # Ad-hoc extinguish moon light near horizon
-    b_moon *= logistic(np.clip(df_moon["airmass"], 1, 1e3), 10, 5)
+    b_moon *= logistic(np.clip(df_moon["airmass"].values, 1, 1e3), 10, 5)
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
     A0 = sbm._mpsas_to_b(11) / np.exp(-5)
     b_sun = A0 * np.exp(df_sun["alt"]) / 1.15
 
     b_zenith_lp = sbm._mpsas_to_b(mpsas)
-    b_altitude_lp = b_zenith_lp * 2.512 ** (df_target["airmass"] * k_ext - 0.16)
+    b_altitude_lp = b_zenith_lp * 2.512 ** (df_target["airmass"].values * k_ext - 0.16)
 
     b_all_terms = b_moon
     b_all_terms += b_altitude_lp
     b_all_terms += b_sun
 
-    sky_bkg = sbm._b_to_mpsas(b_all_terms)
+    sky_bkg = pd.Series(sbm._b_to_mpsas(b_all_terms), index=df_target.index)
     sky_bkg.index = time_index
-
-    sky_bkg[df_target["alt"] < 0] = np.nan
-    sky_bkg[sky_bkg < 0] = np.nan
-
-    moon_separation[df_target["alt"] < 0] = np.nan
-    moon_separation[sky_bkg < 0] = np.nan
     moon_separation.index = time_index
+
+    sky_bkg.loc[df_target["alt"] < 0] = np.nan
+    sky_bkg.loc[sky_bkg < 0] = np.nan
+
+    moon_separation.loc[df_target["alt"] < 0] = np.nan
+    moon_separation.loc[sky_bkg < 0] = np.nan
 
     return sky_bkg.dropna(), moon_separation.dropna()
 
@@ -181,6 +188,9 @@ def add_contrast(
 ):
     result = {}
     t0 = time.time()
+    df_loc["moon"]["phase"] = (
+        distance(df_loc["moon"], df_loc["sun"], lat_key="dec", long_key="ra") + 360
+    ) % 360 - 180
 
     if n_thread > 1:
         func = partial(
@@ -208,3 +218,4 @@ def add_contrast(
             result[target] = df0
 
     return result
+

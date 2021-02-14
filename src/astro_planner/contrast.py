@@ -100,7 +100,9 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     b_sun = A0 * np.exp(df_sun["alt"]) / 1.15
 
     b_zenith_lp = sbm._mpsas_to_b(mpsas)
-    b_altitude_lp = b_zenith_lp * 2.512 ** (df_target["airmass"].values * k_ext - 0.16)
+    b_altitude_lp = b_zenith_lp * 2.512 ** (
+        np.clip(df_target["airmass"].values * k_ext - 0.16, None, 20)
+    )
 
     b_all_terms = b_moon
     b_all_terms += b_altitude_lp

@@ -64,7 +64,7 @@ def init_target_status():
     # Set initial status as "pending"
     df_targets = pd.read_sql("select * from targets;", POSTGRES_ENGINE)
     df0 = df_targets.reset_index()[["TARGET", "GROUP"]]
-    df0["TARGET"] = df0["TARGET"].apply(normalize_target_name)
+
     df0["status"] = "pending"
     data = list(df0.values)
 
@@ -107,10 +107,10 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
 
 
 if __name__ == "__main__":
-    log.info(f"Starting watchdog on data directory")
+    log.info("Starting watchdog on data directory")
     client.publish("watchdog", "running")
     t_last_update = time.time()
-    update_frequency = 60
+    update_frequency = 5
     update = True
     while True:
         client.loop()

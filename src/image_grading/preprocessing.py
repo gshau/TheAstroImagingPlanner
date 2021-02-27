@@ -6,13 +6,13 @@ import yaml
 import logging
 import sqlalchemy
 import warnings
-import redis
 import json
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from direct_redis import DirectRedis
 from collections import defaultdict
 from sqlalchemy import Table, MetaData
 from astropy.io import fits
@@ -51,8 +51,8 @@ TARGET_DIR = os.getenv("TARGET_DIR", "/targets")
 
 sep.set_extract_pixstack(1000000)
 
-
-REDIS = redis.Redis(host="redis", port=6379, db=0)
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS = DirectRedis(host=REDIS_HOST, port=6379, db=0)
 
 
 def append_to_list_on_redis(element, key):

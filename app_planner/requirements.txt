@@ -17,3 +17,4 @@ paho-mqtt==1.5.1
 pyarrow==1.0.1
 redis==3.4.1
 direct_redis==0.3.1
+dash_daq==0.5.0

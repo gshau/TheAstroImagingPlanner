@@ -909,20 +909,21 @@ def filter_targets_for_matches_and_filters(
     object_data = get_object_data()
 
     targets = []
-    for profile in profile_list:
-        if profile in object_data.target_list:
-            targets += list(object_data.target_list[profile].values())
+    if len(object_data.target_list) > 0:
+        for profile in profile_list:
+            if profile in object_data.target_list:
+                targets += list(object_data.target_list[profile].values())
 
-    if filters:
-        targets = target_filter(targets, filters)
+        if filters:
+            targets = target_filter(targets, filters)
 
-    if status_matches:
-        matching_targets = df_target_status[
-            df_target_status["status"].isin(status_matches)
-        ]["TARGET"].values
-        targets = [target for target in targets if target.name in matching_targets]
+        if status_matches:
+            matching_targets = df_target_status[
+                df_target_status["status"].isin(status_matches)
+            ]["TARGET"].values
+            targets = [target for target in targets if target.name in matching_targets]
 
-        log.debug(f"Target matching status {status_matches}: {targets}")
+            log.debug(f"Target matching status {status_matches}: {targets}")
 
     return targets
 
@@ -980,7 +981,11 @@ def toggle_modal_callback(n1, n2, is_open):
 
 
 @app.callback(
-    [Output("profile-selection", "options"), Output("profile-selection", "value")],
+    [
+        Output("profile-selection", "options"),
+        Output("profile-selection", "value"),
+        Output("profile-selection", "disabled"),
+    ],
     [Input("upload-data", "contents")],
     [
         State("upload-data", "filename"),
@@ -992,11 +997,16 @@ def update_output_callback(
     list_of_contents, list_of_names, list_of_dates, profiles_selected
 ):
     object_data = get_object_data()
+    i = "None"
+    disabled = True
     if not object_data:
-        return [{}], [{}]
+        return [{"label": i, "value": i}], [], disabled
     if not object_data.profiles:
-        return [{}], [{}]
+        return [{"label": i, "value": i}], [], disabled
+    if len(object_data.profiles) == 0:
+        return [{"label": i, "value": i}], [], disabled
 
+    disabled = False
     profile = object_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
@@ -1019,8 +1029,8 @@ def update_output_callback(
                 for profile in object_data.profiles:
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
-        return options, default_options
-    return options, default_options
+        return options, default_options, disabled
+    return options, default_options, disabled
 
 
 @app.callback(
@@ -1138,11 +1148,60 @@ def render_content(tab):
     ]
 
     styles = [{"display": "none"}] * len(tab_names)
-
     indx = tab_names.index(tab)
 
     styles[indx] = {}
     return styles
+
+
+@app.callback(
+    [
+        Output("tabs", "active_tab"),
+        Output("tab-target-review", "disabled"),
+        Output("tab-target-review", "label"),
+        Output("tab-target-review", "labelClassName"),
+        Output("tab-targets-table", "disabled"),
+        Output("tab-targets-table", "label"),
+        Output("tab-targets-table", "labelClassName"),
+    ],
+    [Input("dummy-id", "children")],
+    [
+        State("tabs", "active_tab"),
+        State("tab-target-review", "label"),
+        State("tab-target-review", "labelClassName"),
+        State("tab-targets-table", "label"),
+        State("tab-targets-table", "labelClassName"),
+    ],
+)
+def set_target_review_status(
+    dummy_id,
+    tab,
+    tab_review_name,
+    tab_review_label_style,
+    tab_table_name,
+    tab_table_label_style,
+):
+
+    disabled = False
+    df_objects = get_df_from_redis("df_objects")
+    if df_objects.shape[0] == 0:
+        disabled = True
+        tab_review_name = "Target Planning (disabled)"
+        tab_review_label_style = None
+        tab_table_name = "Targets Table (disabled)"
+        tab_table_label_style = None
+        if tab == "tab-target" or tab == "tab-data-table":
+            tab = "tab-files-table"
+
+    return (
+        tab,
+        disabled,
+        tab_review_name,
+        tab_review_label_style,
+        disabled,
+        tab_table_name,
+        tab_table_label_style,
+    )
 
 
 @app.callback(

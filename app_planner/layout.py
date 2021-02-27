@@ -362,7 +362,6 @@ def serve_layout():
         ]
     )
 
-
     weather_graph = html.Div(
         id="weather-graph", children=[dbc.Spinner(color="warning")]
     )
@@ -879,7 +878,7 @@ def serve_layout():
                 [
                     daq.BooleanSwitch(
                         id="monitor-mode",
-                        on=False,
+                        on=True,
                         label="Monitor Mode",
                         labelPosition="bottom",
                         color=switch_color,
@@ -1103,7 +1102,8 @@ def serve_layout():
         active_tab="tab-target",
         children=[
             dbc.Tab(
-                label="Target Review",
+                id="tab-target-review",
+                label="Target Planning",
                 tab_id="tab-target",
                 labelClassName="text-primary",
                 label_style={"font-size": 16},
@@ -1115,13 +1115,14 @@ def serve_layout():
                 label_style={"font-size": 16},
             ),
             dbc.Tab(
-                label="Review Stored Targets",
+                id="tab-targets-table",
+                label="Targets Table",
                 tab_id="tab-data-table",
                 labelClassName="text-success",
                 label_style={"font-size": 16},
             ),
             dbc.Tab(
-                label="Utils",
+                label="Utilities",
                 tab_id="tab-config",
                 labelClassName="text-danger",
                 label_style={"font-size": 16},

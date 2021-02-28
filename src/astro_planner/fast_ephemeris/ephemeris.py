@@ -3,9 +3,6 @@ import numpy as np
 import pandas as pd
 from .time import get_local_sidereal_time
 
-from multiprocessing import Pool
-from functools import partial, lru_cache
-
 
 DEGREE_TO_RADIAN = np.pi / 180.0
 

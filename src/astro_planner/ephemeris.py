@@ -1,7 +1,3 @@
-import numpy as np
-from astropy.time import Time
-from astropy.coordinates import AltAz
-from astropy.coordinates import get_sun, get_moon
 import pandas as pd
 
 from astropy.utils import iers
@@ -13,7 +9,6 @@ from .fast_ephemeris.ephemeris import (
     get_moon_data,
     get_sun_data,
     get_alt_az,
-    get_airmass,
 )
 
 iers.conf.auto_download = False
@@ -55,7 +50,7 @@ def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
             ra=target.ra.value,
             dec=target.dec.value,
         )
-
+        df.index = local_dates
         ephem_dict[target.name] = df
 
     return ephem_dict

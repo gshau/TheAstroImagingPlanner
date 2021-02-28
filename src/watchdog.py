@@ -19,7 +19,7 @@ from image_grading.preprocessing import (
     DATA_DIR,
 )
 
-from astro_planner.target import object_file_reader, normalize_target_name
+from astro_planner.target import object_file_reader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
 log = logging.getLogger(__name__)

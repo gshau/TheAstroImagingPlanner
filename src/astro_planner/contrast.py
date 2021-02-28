@@ -4,7 +4,7 @@ import pandas as pd
 from functools import partial
 from multiprocessing import Pool
 
-from .ephemeris import get_sun, get_moon
+from astropy.coordinates import get_sun, get_moon
 from .logger import log
 
 
@@ -55,6 +55,10 @@ class SkyBackgroundModel:
 
 def distance(target_1, target_2, lat_key="alt", long_key="az"):
     deg_to_radian = np.pi / 180.0
+    hour_to_radian = 2 * np.pi / 24
+    lon_scale = deg_to_radian
+    if long_key == "ra":
+        lon_scale = hour_to_radian
     # haversine formula
     dlon = target_1[long_key].values - target_2[long_key].values
     dlat = target_2[lat_key].values - target_1[lat_key].values
@@ -62,7 +66,7 @@ def distance(target_1, target_2, lat_key="alt", long_key="az"):
         np.sin(dlat / 2 * deg_to_radian) ** 2
         + np.cos(target_1[lat_key].values * deg_to_radian)
         * np.cos(target_2[lat_key].values * deg_to_radian)
-        * np.sin(dlon * deg_to_radian / 2) ** 2
+        * np.sin(dlon * lon_scale / 2) ** 2
     )
     c = 2 * np.arcsin(np.sqrt(a))
     return c / deg_to_radian
@@ -93,7 +97,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
 
     # Ad-hoc extinguish moon light near horizon
-    b_moon *= logistic(np.clip(df_moon["airmass"].values, 1, 1e3), 10, 5)
+    b_moon *= logistic(np.clip(df_moon["airmass"].fillna(1e3).values, 1, 1e3), 10, 5)
 
     # opposition effect increase to _+35%
     # http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
@@ -117,6 +121,8 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     airglow_airmass_dependence = -2.5 * np.log(
         (1 - f) + f * df_target["airmass"].values
     ) + k_ext * (df_target["airmass"].values - 1)
+
+    airglow_airmass_dependence = 0
 
     sky_bkg = pd.Series(
         sbm._b_to_mpsas(b_altitude_lp + b_moon + b_sun), index=df_target.index
@@ -264,4 +270,3 @@ def add_contrast(
             result[target] = df0
 
     return result
-

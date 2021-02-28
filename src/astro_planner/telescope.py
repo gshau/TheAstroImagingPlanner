@@ -40,4 +40,3 @@ class Telescope:
 
     def __repr__(self):
         return f"{self.name} {self.aperture}mm aperture @ f/{self.focal_ratio:.2f}"
-

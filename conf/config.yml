@@ -59,7 +59,7 @@ bandwidth: 120
 k_extinction: 0.2
 
 # Time resolution of target figure on first tab
-time_resolution: 300
+time_resolution: 60
 
 # Minimum Target-moon distance
 min_moon_distance: 30

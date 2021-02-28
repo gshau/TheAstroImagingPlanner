@@ -831,13 +831,13 @@ def serve_layout():
                 placement="left",
             ),
             dbc.Tooltip(
-                """Criteria for acceptance of subframes within a group.  
+                """Criteria for acceptance of subframes within a group.
                 Each group is defined by unique target, sensor, optic, filter and binning.""",
                 target="frame-acceptance-label",
                 placement="left",
             ),
             dbc.Tooltip(
-                """Threshold value of the z score `(x - mean(x)) / std(x)` for fwhm and star count in comparison to the group. 
+                """Threshold value of the z score `(x - mean(x)) / std(x)` for fwhm and star count in comparison to the group.
             For fwhm, only frames with a z score below the positive threshold value are used.
             For star count, only frames with a z score above the negative threshold value are used.""",
                 target="z-score-label",
@@ -937,7 +937,7 @@ def serve_layout():
                                                 width=6,
                                             ),
                                             dbc.Col(
-                                                [frame_acceptance_criteria,], width=6,
+                                                [frame_acceptance_criteria], width=6,
                                             ),
                                         ]
                                     )

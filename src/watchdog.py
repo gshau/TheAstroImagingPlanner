@@ -121,7 +121,7 @@ if __name__ == "__main__":
     log.info("Starting watchdog on data directory")
     client.publish("watchdog", "running")
     t_last_update = time.time()
-    update_frequency = 5
+    update_frequency = CONFIG.get("watchdog_update_frequency", 15)
     update = True
     while True:
         client.loop()

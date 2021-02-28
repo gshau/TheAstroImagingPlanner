@@ -319,9 +319,6 @@ def pull_target_data():
 
     try:
         df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
-        object_list = ["m1", "ic_1805", "lbn_438", "m31", "m51", "m63"]
-        log.info(df_objects.columns)
-        df_objects = df_objects[df_objects["TARGET"].isin(object_list)]
         df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
@@ -1390,6 +1387,7 @@ def store_data(
     [
         Input("store-target-data", "data"),
         Input("dummy-rejection-criteria-id", "children"),
+        Input("dummy-interval-update", "children"),
     ],
     [
         State("store-target-metadata", "data"),
@@ -1399,15 +1397,27 @@ def store_data(
         State("date-picker", "date"),
     ],
 )
+@timer
 def update_target_graph(
     target_data,
     rejection_criteria_change_input,
+    refresh_plots,
     metadata,
     dark_sky_duration,
     profile_list,
     status_list,
     date,
 ):
+
+    ctx = dash.callback_context
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "dummy-interval-update":
+            log.info("Checking...")
+            if refresh_plots != "new":
+                raise PreventUpdate
+            log.info("Doing update")
+
     df_target_status = get_df_from_redis("df_target_status")
     df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
@@ -1473,18 +1483,10 @@ def update_target_graph(
 
     df_combined = pd.merge(df_combined, df_target_status, on=["GROUP", "TARGET"])
 
-    cols = [
-        "OBJECT",
-        "TARGET",
-        "GROUP",
-        "status",
-        "L",
-        "R",
-        "G",
-        "B",
-        "Ha",
-        "OIII",
-        "SII",
+    cols = ["OBJECT", "TARGET", "GROUP", "status"]
+
+    cols += [f for f in df_combined.columns if f in FILTER_LIST]
+    cols += [
         "Instrument",
         "Focal Length",
         "Binning",
@@ -2064,10 +2066,15 @@ def update_scatter_plot(
                 customdata=df1["filename"],
             )
         )
+    max_targets_in_list = 5
+    target_list = ", ".join(normalized_target_matches[:max_targets_in_list])
+    if len(normalized_target_matches) > max_targets_in_list:
+        target_list = f"{target_list} and {len(normalized_target_matches) - max_targets_in_list} other targets"
+
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
-        title=f"Subframe data for {', '.join(normalized_target_matches)}",
+        title=f"Subframe data for {target_list}",
         legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="left", x=0.02),
     )
 
@@ -2083,7 +2090,7 @@ def update_scatter_plot(
     ],
     [
         Input("target-scatter-graph", "clickData"),
-        Input("aberration-preview", "checked"),
+        Input("aberration-preview", "on"),
         Input("frame-heatmap-dropdown", "value"),
     ],
 )
@@ -2145,18 +2152,22 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
         Output("alert-auto", "duration"),
         Output("alert-auto", "color"),
         Output("dummy-interval-update", "children"),
+        Output("interval-component", "interval"),
     ],
     [Input("interval-component", "n_intervals")],
 )
 def toggle_alert(n):
 
-    df_old = get_df_from_redis("df_stars_headers").dropna()
+    df_old = get_df_from_redis("df_stars_headers").dropna(subset=["n_stars"])
     update_data()
-    df_stars_headers = get_df_from_redis("df_stars_headers").dropna()
+    df_stars_headers = get_df_from_redis("df_stars_headers").dropna(subset=["n_stars"])
     df_new = df_stars_headers[~df_stars_headers["filename"].isin(df_old["filename"])]
+    total_row_count = df_stars_headers.shape[0]
     new_row_count = df_new.shape[0]
 
     new_files_available = new_row_count > 0
+
+    update_frequency = CONFIG.get("monitor_mode_update_frequency", 15) * 1000
 
     if new_files_available:
         filenames = df_new["filename"].values
@@ -2170,8 +2181,9 @@ def toggle_alert(n):
         duration = 60000
         color = "primary"
         log.info(f"Found new files: {filenames}")
-        return response, is_open, duration, color, "new"
-    return "", False, 0, "primary", "old"
+        response += [html.Br(), html.Br(), f"Total file count: {total_row_count}"]
+        return response, is_open, duration, color, "new", update_frequency
+    return "", False, 0, "primary", "old", update_frequency
 
 
 @app.callback(

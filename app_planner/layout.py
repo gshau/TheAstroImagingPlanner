@@ -861,13 +861,12 @@ def serve_layout():
 
     filter_targets_check = dbc.FormGroup(
         [
-            dbc.Checkbox(
-                id="aberration-preview", className="form-check-input", checked=True
-            ),
-            dbc.Label(
-                "As Aberration Inspector View",
-                html_for="standalone-checkbox",
-                className="form-check-label",
+            daq.BooleanSwitch(
+                id="aberration-preview",
+                on=True,
+                label="As Abberation Inspector View",
+                labelPosition="bottom",
+                color=switch_color,
             ),
         ]
     )

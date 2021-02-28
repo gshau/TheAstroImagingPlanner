@@ -996,15 +996,15 @@ def update_output_callback(
 ):
     object_data = get_object_data()
     i = "None"
-    disabled = True
+    profile_dropdown_is_disabled = True
     if not object_data:
-        return [{"label": i, "value": i}], [], disabled
+        return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
     if not object_data.profiles:
-        return [{"label": i, "value": i}], [], disabled
+        return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
     if len(object_data.profiles) == 0:
-        return [{"label": i, "value": i}], [], disabled
+        return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
 
-    disabled = False
+    profile_dropdown_is_disabled = False
     profile = object_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
@@ -1027,8 +1027,8 @@ def update_output_callback(
                 for profile in object_data.profiles:
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
-        return options, default_options, disabled
-    return options, default_options, disabled
+        return options, default_options, profile_dropdown_is_disabled
+    return options, default_options, profile_dropdown_is_disabled
 
 
 @app.callback(
@@ -1133,6 +1133,7 @@ def update_target_with_status_callback(status, targets, profile_list):
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
         Output("tab-config-div", "style"),
+        # Output("tab-about-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
@@ -1143,6 +1144,7 @@ def render_content(tab):
         "tab-data-table",
         "tab-files-table",
         "tab-config",
+        # "tab-about",
     ]
 
     styles = [{"display": "none"}] * len(tab_names)
@@ -1290,7 +1292,7 @@ def update_contrast(
 
     all_target_coords = add_contrast(
         all_target_coords,
-        n_thread=12,
+        n_thread=1,
         filter_bandwidth=filter_bandwidth,
         mpsas=local_mpsas,
         include_airmass=True,
@@ -1396,6 +1398,7 @@ def store_data(
         State("profile-selection", "value"),
         State("status-match", "value"),
         State("date-picker", "date"),
+        State("monitor-mode-interval", "disabled"),
     ],
 )
 @timer
@@ -1408,10 +1411,11 @@ def update_target_graph(
     profile_list,
     status_list,
     date,
+    monitor_mode_off,
 ):
 
     ctx = dash.callback_context
-    if ctx.triggered:
+    if ctx.triggered and not monitor_mode_off:
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]
         if button_id == "dummy-interval-update":
             log.info("Checking...")
@@ -1824,7 +1828,7 @@ def update_scatter_axes(value):
         Output("inspector-dates", "options"),
         Output("inspector-dates", "value"),
         Output("scatter-radio-selection", "value"),
-        Output("interval-component", "disabled"),
+        Output("monitor-mode-interval", "disabled"),
     ],
     [
         Input("store-target-data", "data"),
@@ -1912,6 +1916,7 @@ def rejection_criteria_callback(
         State("ecc-thr-field", "value"),
         State("trail-thr-field", "value"),
         State("star-frac-thr-field", "value"),
+        State("monitor-mode-interval", "disabled"),
     ],
 )
 @timer
@@ -1929,9 +1934,10 @@ def update_scatter_plot(
     eccentricity_median_thr,
     star_trail_strength_thr,
     min_star_reduction,
+    monitor_mode_off,
 ):
     ctx = dash.callback_context
-    if ctx.triggered:
+    if ctx.triggered and not monitor_mode_off:
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]
         if button_id == "dummy-interval-update":
             log.info("Checking...")
@@ -2081,7 +2087,7 @@ def update_scatter_plot(
         xaxis_title=x_col,
         yaxis_title=y_col,
         title=f"Subframe data for {target_list}",
-        legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="left", x=0.02),
+        legend=dict(orientation="v"),
         transition={"duration": 250},
     )
 
@@ -2159,9 +2165,9 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
         Output("alert-auto", "duration"),
         Output("alert-auto", "color"),
         Output("dummy-interval-update", "children"),
-        Output("interval-component", "interval"),
+        Output("monitor-mode-interval", "interval"),
     ],
-    [Input("interval-component", "n_intervals")],
+    [Input("monitor-mode-interval", "n_intervals")],
 )
 def toggle_alert(n):
 
@@ -2176,6 +2182,7 @@ def toggle_alert(n):
 
     update_frequency = CONFIG.get("monitor_mode_update_frequency", 15) * 1000
 
+    color = "primary"
     if new_files_available:
         filenames = df_new["filename"].values
         response = [f"Recently processed {new_row_count} new file:"]
@@ -2186,11 +2193,10 @@ def toggle_alert(n):
             response.append(filename)
         is_open = True
         duration = 60000
-        color = "primary"
         log.info(f"Found new files: {filenames}")
         response += [html.Br(), html.Br(), f"Total file count: {total_row_count}"]
         return response, is_open, duration, color, "new", update_frequency
-    return "", False, 0, "primary", "old", update_frequency
+    return "", False, 0, color, "old", update_frequency
 
 
 @app.callback(

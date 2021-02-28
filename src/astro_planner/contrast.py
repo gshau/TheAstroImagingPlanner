@@ -89,7 +89,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
         df_target["alt"].values,
     )
 
-    b_moon *= df_moon["alt"] > 0
+    b_moon *= df_moon["alt"].values > 0
     # b_moon *= np.exp(-(df_moon['airmass'] - 1) / 4)
 
     # Ad-hoc extinguish moon light near horizon
@@ -97,11 +97,13 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
 
     # opposition effect increase to _+35%
     # http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
-    b_moon *= 1 + np.exp(-((np.abs(df_moon["phase"])) ** 2) / (2 * 3 ** 2)) * 0.35
+    b_moon *= (
+        1 + np.exp(-((np.abs(df_moon["phase"].values)) ** 2) / (2 * 3 ** 2)) * 0.35
+    )
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
     A0 = sbm._mpsas_to_b(11) / np.exp(-5)
-    b_sun = A0 * np.exp(df_sun["alt"]) / 1.15
+    b_sun = A0 * np.exp(df_sun["alt"].values) / 1.15
 
     b_zenith_lp = sbm._mpsas_to_b(mpsas)
     b_altitude_lp = b_zenith_lp * 2.512 ** (
@@ -113,8 +115,8 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     # https://arxiv.org/pdf/0709.0813.pdf
     f = 0.6
     airglow_airmass_dependence = -2.5 * np.log(
-        (1 - f) + f * df_target["airmass"]
-    ) + k_ext * (df_target["airmass"] - 1)
+        (1 - f) + f * df_target["airmass"].values
+    ) + k_ext * (df_target["airmass"].values - 1)
 
     sky_bkg = pd.Series(
         sbm._b_to_mpsas(b_altitude_lp + b_moon + b_sun), index=df_target.index

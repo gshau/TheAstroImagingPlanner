@@ -455,6 +455,10 @@ def serve_layout():
                         id="scatter-radio-selection",
                         options=[
                             {
+                                "label": "Date vs. FWHM",
+                                "value": "DATE-OBS vs. fwhm_median",
+                            },
+                            {
                                 "label": "FWHM vs. Eccentricity",
                                 "value": "fwhm_median vs. eccentricity_median",
                             },
@@ -478,10 +482,6 @@ def serve_layout():
                             {
                                 "label": "Star Trailing vs. Eccentricity",
                                 "value": "star_trail_strength vs. eccentricity_mean",
-                            },
-                            {
-                                "label": "Date vs. FWHM",
-                                "value": "DATE-OBS vs. fwhm_median",
                             },
                         ],
                         labelStyle={"display": "block"},
@@ -660,6 +660,16 @@ def serve_layout():
         fluid=True,
         style={},
     )
+
+    # with open("/app/docs/about.md", "r") as f:
+    #     about_markdown = " ".join(f.readlines())
+
+    # about_container = dbc.Container(
+    #     children=[dcc.Markdown(about_markdown)],
+    #     id="tab-about-div",
+    #     fluid=True,
+    #     style={},
+    # )
 
     data_table_container = dbc.Container(
         dbc.Row(
@@ -872,7 +882,7 @@ def serve_layout():
                 [
                     daq.BooleanSwitch(
                         id="monitor-mode",
-                        on=True,
+                        on=False,
                         label="Monitor Mode",
                         labelPosition="bottom",
                         color=switch_color,
@@ -1121,6 +1131,13 @@ def serve_layout():
                 labelClassName="text-danger",
                 label_style={"font-size": 16},
             ),
+            # dbc.Tab(
+            #     label="About",
+            #     tab_id="tab-about",
+            #     labelClassName="text-secondary",
+            #     label_style={"font-size": 16},
+            #     style={"display": "none"},
+            # ),
         ],
     )
 
@@ -1137,7 +1154,7 @@ def serve_layout():
                 dismissable=True,
             ),
             dcc.Interval(
-                id="interval-component",
+                id="monitor-mode-interval",
                 interval=5 * 1000,
                 n_intervals=0,
                 disabled=True,
@@ -1158,6 +1175,7 @@ def serve_layout():
             data_table_container,
             target_container,
             config_container,
+            # about_container,
             data_files_table_container,
             html.Div(id="dummy-id", style={"display": "none"}),
             html.Div(id="dummy-id-target-data", style={"display": "none"}),

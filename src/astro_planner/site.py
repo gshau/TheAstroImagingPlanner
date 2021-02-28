@@ -40,10 +40,9 @@ class ObservingSite:
 
         if type(latitude) == str:
             self.lon = parse_latlon_string(longitude)
-        self.utc_offset = utc_offset
 
         self.location = EarthLocation(
             lat=self.lat * u.deg, lon=self.lon * u.deg, height=290 * u.m
         )
-        self.utc_offset = utc_offset * u.hour
-        self.tz = TimezoneInfo(utc_offset=self.utc_offset)  # UTC+1
+        self.utc_offset = utc_offset
+        self.tz = TimezoneInfo(utc_offset=self.utc_offset * u.hour)  # UTC+1

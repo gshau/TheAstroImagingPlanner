@@ -791,6 +791,7 @@ def get_progress_graph(
         height=600,
         legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
         title_x=0.5,
+        transition={"duration": 250},
     )
     graph = dcc.Graph(
         config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]}, figure=p,
@@ -1855,6 +1856,11 @@ def update_inspector_dates(
         interval_disabled = False
     if selected_dates:
         default_dates = selected_dates
+    ctx = dash.callback_context
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "target-matches":
+            default_dates = None
 
     return options, default_dates, radio_selection, interval_disabled
 
@@ -2005,7 +2011,7 @@ def update_scatter_plot(
         log.debug(
             f"{status_is_ok}, {low_star_count}, {high_fwhm}, {filter}: {time.time() - t0:.3f}"
         )
-        # t0 = time.time()
+
         selection = df0["FILTER"] == filter
         selection &= df0["is_ok"] == status_is_ok
         selection &= df0["low_star_count"] == low_star_count
@@ -2076,6 +2082,7 @@ def update_scatter_plot(
         yaxis_title=y_col,
         title=f"Subframe data for {target_list}",
         legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="left", x=0.02),
+        transition={"duration": 250},
     )
 
     return p, progress_graph

@@ -114,7 +114,6 @@ def serve_layout():
 
     target_status_selector = dbc.FormGroup(
         [
-            dbc.Label("Status", html_for="target-status-selector", width=2),
             dbc.Col(
                 dbc.RadioItems(
                     options=[
@@ -124,6 +123,7 @@ def serve_layout():
                         {"label": "Closed", "value": "closed"},
                     ],
                     labelStyle={"display": "block"},
+                    inputStyle={"margin-right": "10px"},
                     id="target-status-selector",
                 ),
                 width=10,
@@ -297,6 +297,7 @@ def serve_layout():
                         children=MIN_MOON_DISTANCE,
                         placeholder=MIN_MOON_DISTANCE,
                         type="number",
+                        debounce=True,
                     ),
                 ]
             ),
@@ -308,6 +309,7 @@ def serve_layout():
                         children=DEFAULT_LAT,
                         placeholder=DEFAULT_LAT,
                         type="number",
+                        debounce=True,
                     ),
                 ]
             ),
@@ -319,6 +321,7 @@ def serve_layout():
                         children=DEFAULT_LON,
                         placeholder=DEFAULT_LON,
                         type="number",
+                        debounce=True,
                     ),
                 ]
             ),
@@ -330,6 +333,7 @@ def serve_layout():
                         children=DEFAULT_UTC_OFFSET,
                         placeholder=DEFAULT_UTC_OFFSET,
                         type="number",
+                        debounce=True,
                     ),
                 ]
             ),
@@ -343,6 +347,7 @@ def serve_layout():
                         children=DEFAULT_MPSAS,
                         placeholder=DEFAULT_MPSAS,
                         type="number",
+                        debounce=True,
                     ),
                 ]
             ),
@@ -356,6 +361,7 @@ def serve_layout():
                         children=DEFAULT_K_EXTINCTION,
                         placeholder=DEFAULT_K_EXTINCTION,
                         type="number",
+                        debounce=True,
                     ),
                 ]
             ),
@@ -458,7 +464,7 @@ def serve_layout():
                                 "value": "bkg_val vs. n_stars",
                             },
                             {
-                                "label": "Focus position vs. temperature",
+                                "label": "Focus position vs. Temperature",
                                 "value": "FOCUSTEM vs. FOCUSPOS",
                             },
                             {
@@ -479,6 +485,7 @@ def serve_layout():
                             },
                         ],
                         labelStyle={"display": "block"},
+                        inputStyle={"margin-right": "10px"},
                     ),
                 ],
                 className="dash-bootstrap",
@@ -707,111 +714,99 @@ def serve_layout():
             ),
             dbc.Row(
                 [
-                    dbc.Col(
-                        html.Label(
-                            "Max Eccentricity:  ",
-                            id="ecc-label",
-                            style={"textAlign": "left"},
-                        ),
-                        width=6,
-                    ),
-                    dbc.Col(
-                        dcc.Input(
-                            id="ecc-thr-field",
-                            debounce=True,
-                            placeholder=0.6,
-                            value=0.6,
-                            type="number",
-                        ),
-                        width=6,
+                    dbc.InputGroup(
+                        [
+                            dbc.InputGroupAddon(
+                                "Max Eccentricity".ljust(20),
+                                addon_type="append",
+                                id="ecc-label",
+                            ),
+                            dbc.Input(
+                                id="ecc-thr-field",
+                                value=0.6,
+                                placeholder=0.6,
+                                type="number",
+                                debounce=True,
+                            ),
+                        ]
                     ),
                 ]
             ),
             dbc.Row(
                 [
-                    dbc.Col(
-                        html.Label(
-                            "Min Star Fraction:  ",
-                            id="min-star-label",
-                            style={"textAlign": "left"},
-                        ),
-                        width=6,
-                    ),
-                    dbc.Col(
-                        dcc.Input(
-                            id="star-frac-thr-field",
-                            debounce=True,
-                            placeholder=0.5,
-                            value=0.5,
-                            type="number",
-                        ),
-                        width=6,
+                    dbc.InputGroup(
+                        [
+                            dbc.InputGroupAddon(
+                                "Min Star Fraction:  ",
+                                addon_type="append",
+                                id="min-star-label",
+                            ),
+                            dbc.Input(
+                                id="star-frac-thr-field",
+                                debounce=True,
+                                placeholder=0.5,
+                                value=0.5,
+                                type="number",
+                            ),
+                        ]
                     ),
                 ]
             ),
             dbc.Row(
                 [
-                    dbc.Col(
-                        html.Label(
-                            "z score:  ",
-                            id="z-score-label",
-                            style={"textAlign": "left"},
-                        ),
-                        width=6,
-                    ),
-                    dbc.Col(
-                        dcc.Input(
-                            id="z-score-field",
-                            debounce=True,
-                            placeholder=5,
-                            value=5,
-                            type="number",
-                        ),
-                        width=6,
+                    dbc.InputGroup(
+                        [
+                            dbc.InputGroupAddon(
+                                "z score:  ", id="z-score-label", addon_type="append",
+                            ),
+                            dbc.Input(
+                                id="z-score-field",
+                                value=5,
+                                placeholder=5,
+                                type="number",
+                                debounce=True,
+                            ),
+                        ]
                     ),
                 ]
             ),
             dbc.Row(
                 [
-                    dbc.Col(
-                        html.Label(
-                            "IQR scale:  ",
-                            id="iqr-scale-label",
-                            style={"textAlign": "left"},
-                        ),
-                        width=6,
-                    ),
-                    dbc.Col(
-                        dcc.Input(
-                            id="iqr-scale-field",
-                            debounce=True,
-                            placeholder=1.5,
-                            value=1.5,
-                            type="number",
-                        ),
-                        width=6,
+                    dbc.InputGroup(
+                        [
+                            dbc.InputGroupAddon(
+                                "IQR Scale".ljust(20),
+                                addon_type="append",
+                                id="iqr-scale-label",
+                            ),
+                            dbc.Input(
+                                id="iqr-scale-field",
+                                value=1.5,
+                                placeholder=1.5,
+                                type="number",
+                                debounce=True,
+                            ),
+                        ]
                     ),
                 ]
             ),
             dbc.Row(
                 [
-                    dbc.Col(
-                        html.Label(
-                            "Trail threshold:  ",
-                            id="trail-label",
-                            style={"textAlign": "left"},
-                        ),
-                        width=6,
-                    ),
-                    dbc.Col(
-                        dcc.Input(
-                            id="trail-thr-field",
-                            debounce=True,
-                            placeholder=8,
-                            value=8,
-                            type="number",
-                        ),
-                        width=6,
+                    dbc.InputGroup(
+                        [
+                            dbc.InputGroupAddon(
+                                "Trail Threshold".ljust(20),
+                                addon_type="append",
+                                id="trail-label",
+                            ),
+                            dbc.Input(
+                                id="trail-thr-field",
+                                value=8,
+                                placeholder=8,
+                                type="number",
+                                debounce=True,
+                            ),
+                        ]
                     ),
                 ]
             ),
@@ -1176,6 +1171,22 @@ def serve_layout():
         [
             body,
             tooltips,
+            # dbc.Toast(
+            #     "",
+            #     id="alert-auto",
+            #     header="New data available!",
+            #     is_open=False,
+            #     dismissable=True,
+            #     icon="success",
+            #     style={
+            #         "position": "fixed",
+            #         "top": 66,
+            #         "right": 10,
+            #         "width": 1200,
+            #         "maxWidth": "600px",
+            #         # "background-color": "#72BC4F",
+            #     },
+            # ),
             dcc.Store(id="store-site-data", data={}),
             dcc.Store(id="store-target-data"),
             dcc.Store(id="store-target-status"),

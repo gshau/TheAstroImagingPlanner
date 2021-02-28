@@ -30,7 +30,7 @@ progress_mode: 'group'
 progress_days_ago: 0
 
 # Number of threads used when processing star data
-threads_for_star_processing: 4
+threads_for_star_processing: 2
 
 watchdog_update_frequency: 15
 monitor_mode_update_frequency: 15

@@ -1958,6 +1958,10 @@ def update_scatter_plot(
     p = go.Figure()
     df0 = df_stars_headers.copy()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
+    df0["FILTER_indx"] = df0["FILTER"].map(
+        dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
+    )
+
     df0 = pd.merge(df0, df_reject_criteria, on="filename", how="left")
     if inspector_dates:
         df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
@@ -2002,17 +2006,17 @@ def update_scatter_plot(
         axis=1,
     )
 
-    group_cols = ["FILTER", "is_ok", "low_star_count", "high_fwhm"]
+    group_cols = ["FILTER_indx", "FILTER", "is_ok", "low_star_count", "high_fwhm"]
     inputs = (
         (df0[group_cols].drop_duplicates())
-        .sort_values(by=group_cols, ascending=[True, False, False, False])
+        .sort_values(by=group_cols, ascending=[True, True, False, False, False])
         .values
     )
 
     i_filter = 0
 
     t0 = time.time()
-    for filter, status_is_ok, low_star_count, high_fwhm in inputs:
+    for filter_index, filter, status_is_ok, low_star_count, high_fwhm in inputs:
 
         log.debug(
             f"{status_is_ok}, {low_star_count}, {high_fwhm}, {filter}: {time.time() - t0:.3f}"
@@ -2173,9 +2177,10 @@ def toggle_alert(n):
 
     df_old = get_df_from_redis("df_stars_headers").dropna(subset=["n_stars"])
     update_data()
-    df_stars_headers = get_df_from_redis("df_stars_headers").dropna(subset=["n_stars"])
-    df_new = df_stars_headers[~df_stars_headers["filename"].isin(df_old["filename"])]
-    total_row_count = df_stars_headers.shape[0]
+    df_stars_headers = get_df_from_redis("df_stars_headers")
+    df0 = df_stars_headers.dropna(subset=["n_stars"])
+    df_new = df0[~df0["filename"].isin(df_old["filename"])]
+    total_row_count = df0.shape[0]
     new_row_count = df_new.shape[0]
 
     new_files_available = new_row_count > 0
@@ -2194,7 +2199,11 @@ def toggle_alert(n):
         is_open = True
         duration = 60000
         log.info(f"Found new files: {filenames}")
-        response += [html.Br(), html.Br(), f"Total file count: {total_row_count}"]
+        response += [
+            html.Br(),
+            html.Br(),
+            f"Total file count: {total_row_count} / {df_stars_headers.shape[0]}",
+        ]
         return response, is_open, duration, color, "new", update_frequency
     return "", False, 0, color, "old", update_frequency
 

@@ -19,7 +19,7 @@ from image_grading.preprocessing import (
     DATA_DIR,
 )
 
-from astro_planner.target import object_file_reader, normalize_target_name
+from astro_planner.target import object_file_reader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
 log = logging.getLogger(__name__)
@@ -61,10 +61,19 @@ def init_target_status():
     with POSTGRES_ENGINE.connect() as con:
         con.execute(status_query)
 
+    target_create_query = """
+    CREATE TABLE IF NOT EXISTS targets
+        (filename text, "TARGET" text, "GROUP" text, "RAJ2000" float8, "DECJ2000" float8, "NOTE" text);
+        """
+    with POSTGRES_ENGINE.connect() as con:
+        con.execute(target_create_query)
+
     # Set initial status as "pending"
     df_targets = pd.read_sql("select * from targets;", POSTGRES_ENGINE)
+    if df_targets.shape[0] == 0:
+        return None
     df0 = df_targets.reset_index()[["TARGET", "GROUP"]]
-    df0["TARGET"] = df0["TARGET"].apply(normalize_target_name)
+
     df0["status"] = "pending"
     data = list(df0.values)
 
@@ -81,6 +90,8 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
         file_list = []
         for extension in ["mdb", "sgf", "xml", "ninaTargetSet"]:
             file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
+    if len(file_list) == 0:
+        return None
     new_files = list(set(check_file_in_table(file_list, POSTGRES_ENGINE, "targets")))
     n_files = len(file_list)
     if len(new_files) > 0:
@@ -107,10 +118,10 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
 
 
 if __name__ == "__main__":
-    log.info(f"Starting watchdog on data directory")
+    log.info("Starting watchdog on data directory")
     client.publish("watchdog", "running")
     t_last_update = time.time()
-    update_frequency = 60
+    update_frequency = CONFIG.get("watchdog_update_frequency", 15)
     update = True
     while True:
         client.loop()

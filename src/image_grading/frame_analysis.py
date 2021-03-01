@@ -56,6 +56,8 @@ def show_fwhm_ellipticity_vs_r(df_radial, filename):
     p.update_layout(
         yaxis_range=[0, 5],
         xaxis_title="Distance to chip center (pixels)",
+        yaxis=dict(titlefont=dict(color="blue"), tickfont=dict(color="blue")),
+        yaxis2=dict(titlefont=dict(color="red"), tickfont=dict(color="red")),
         title=f"Radial analysis for<br>{os.path.basename(filename)}",
     )
     p.update_yaxes(title_text="FWHM (px)", secondary_y=False, range=[0, 5])

@@ -2,6 +2,7 @@ import os
 import numpy as np
 from .logger import log
 
+
 DEFAULT_PROFILE_PATH = os.getenv("DEFAULT_PROFILE_PATH")
 DEFAULT_DATA_PATH = os.getenv("DEFAULT_DATA_PATH")
 
@@ -25,18 +26,29 @@ class Profile:
 
     def summary(self):
         log.info(self.name)
-        log.info("Pixel scale:   {:.2f}".format(self.pixel_scale()))
-        log.info("Field of view: {:.1f} x {:.1f}".format(*list(self.fov())))
+        log.info("Pixel scale:   {:.2f}".format(self.pixel_scale))
+        log.info("Field of view: {:.1f} x {:.1f}".format(*list(self.fov)))
 
+    @property
     def pixel_scale(self):
-        return self.sensor.pitch * 206.3 / self.telescope.focal_length
+        return self.sensor.pixel_size * 206.3 / self.telescope.focal_length
 
+    @property
     def fov(self):
         return (
             ARCMIN_PER_DEGREE
             * DEGREES_PER_RADIAN
             * np.arctan(self.sensor.size / self.telescope.focal_length)
         )
+
+    @property
+    def etendue(self):
+        return (
+            self.sensor.pixel_size / self.telescope.focal_ratio
+        ) ** 2 * self.sensor.quantum_efficiency
+
+    def __repr__(self):
+        return f"{self.telescope.name} {self.sensor.name}"
 
 
 def cleanup_name(name):

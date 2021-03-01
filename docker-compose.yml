@@ -17,6 +17,7 @@ services:
             POSTGRES_DB: fits_files
             PGPORT: 5432
             PGHOST: db
+            REDIS_HOST: redis
         depends_on:
             - db
             - watchdog
@@ -38,6 +39,7 @@ services:
             POSTGRES_DB: fits_files
             PGPORT: 5432
             PGHOST: db
+            REDIS_HOST: redis
         depends_on:
             - db
             - mqtt

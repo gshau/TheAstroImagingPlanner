@@ -1,5 +1,3 @@
-## Glossary
-
 This glossary defines some of the data that's available either in table or graph format.  Generally, for data that's aggregated on a subexposure frame level, the available features are provided either from the FITs header, and are typically capitalized, or from an analysis of stars extracted from the subexposure frame.  
 
 - filename: Name of file

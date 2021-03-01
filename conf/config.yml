@@ -17,7 +17,6 @@ default_target_status:
 
 # Default profiles to start new session with
 default_profiles: 
-  - ap92 asi6200mm
   - ontc1010 qsi690
 # Inactive profiles to hide from the UI
 inactive_profiles:
@@ -31,7 +30,10 @@ progress_mode: 'group'
 progress_days_ago: 0
 
 # Number of threads used when processing star data
-threads_for_star_processing: 4
+threads_for_star_processing: 2
+
+watchdog_update_frequency: 15
+monitor_mode_update_frequency: 15
 
 horizon_data:
   flat_horizon_alt: 10
@@ -57,7 +59,7 @@ bandwidth: 120
 k_extinction: 0.2
 
 # Time resolution of target figure on first tab
-time_resolution: 300
+time_resolution: 60
 
 # Minimum Target-moon distance
 min_moon_distance: 30

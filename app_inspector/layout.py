@@ -300,7 +300,7 @@ def serve_layout():
     #     [
     #         dbc.Alert("", id="alert-auto", is_open=False, duration=1,),
     #         dcc.Interval(
-    #             id="interval-component",
+    #             id="monitor-mode-interval",
     #             interval=60 * 1000,  # in milliseconds
     #             n_intervals=0,
     #         ),

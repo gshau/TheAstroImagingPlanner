@@ -14,6 +14,8 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_table
 
+from dash.exceptions import PreventUpdate
+
 import pandas as pd
 import numpy as np
 
@@ -188,7 +190,8 @@ TRANSLATED_FILTERS = {
 all_target_coords = pd.DataFrame()
 all_targets = []
 
-REDIS = DirectRedis(host="redis", port=6379, db=0)
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS = DirectRedis(host=REDIS_HOST, port=6379, db=0)
 
 
 def push_df_to_redis(df, key):
@@ -532,7 +535,8 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
-            notes_text = df_combined.loc[target_name, "NOTE"]
+            notes_text = df_combined[["NOTE"]].loc[target_name].values.flatten()[0]
+            profile = df_combined[["GROUP"]].loc[target_name].values.flatten()[0]
             skip_below_horizon = True
             for horizon_status in ["above", "below"]:
                 if (horizon_status == "below") and skip_below_horizon:
@@ -558,7 +562,7 @@ def get_data(
                     df0.loc[~show_trace, value] = np.nan
 
                     text = df0.apply(
-                        lambda row: f"Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        lambda row: f"Profile: {profile}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
                         axis=1,
                     )
 
@@ -571,7 +575,6 @@ def get_data(
                             showlegend=in_legend,
                             name=target_name,
                             connectgaps=False,
-                            legend_group=target_name,
                             customdata=np.dstack(
                                 (df0["moon_distance"].values, df0["sky_mpsas"].values)
                             ),
@@ -756,7 +759,18 @@ def get_progress_graph(
     bin = df0[BINNING_COL].astype(int).astype(str)
     fl = df0[FOCALLENGTH_COL].astype(int).astype(str)
     df0["text"] = df0[INSTRUMENT_COL] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
-    df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index("OBJECT")
+
+    barmode = CONFIG.get("progress_mode", "group")
+    if barmode == "stack":
+        df0["object_with_status"] = df0.apply(
+            lambda row: f'{row["OBJECT"]} {row["is_ok"]}', axis=1
+        )
+        df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index(
+            ["object_with_status"]
+        )
+    else:
+        df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index(["OBJECT"])
+
     for filter in [col for col in COLORS if col in df_summary.columns]:
         p.add_trace(
             go.Bar(
@@ -770,19 +784,96 @@ def get_progress_graph(
             )
         )
     p.update_layout(
-        barmode=CONFIG.get("progress_mode", "group"),
+        barmode=barmode,
         yaxis_title="Total Exposure (hr)",
         xaxis_title="Object",
         title="Acquired Data",
         height=600,
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0.02),
+        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
         title_x=0.5,
+        transition={"duration": 250},
     )
     graph = dcc.Graph(
         config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]}, figure=p,
     )
 
     return graph, df_summary
+
+
+def apply_rejection_criteria(
+    z_score_thr,
+    iqr_scale,
+    eccentricity_median_thr,
+    star_trail_strength_thr,
+    min_star_reduction,
+):
+
+    df_stored_data = get_df_from_redis("df_stored_data")
+
+    df_reject_criteria_all = add_rejection_criteria(
+        df_stored_data,
+        z_score_thr=z_score_thr,
+        iqr_scale=iqr_scale,
+        eccentricity_median_thr=eccentricity_median_thr,
+        star_trail_strength_thr=star_trail_strength_thr,
+        min_star_reduction=min_star_reduction,
+    )
+
+    status_map = {False: "&#10004;", True: "&#10006;"}
+
+    df_reject_criteria_all["fwhm_status"] = df_reject_criteria_all["high_fwhm"].replace(
+        status_map
+    )
+    df_reject_criteria_all["ecc_status"] = df_reject_criteria_all["high_ecc"].replace(
+        status_map
+    )
+    df_reject_criteria_all["star_trail_status"] = df_reject_criteria_all[
+        "trailing_stars"
+    ].replace(status_map)
+    df_reject_criteria_all["iqr_status"] = df_reject_criteria_all[
+        "star_count_iqr_outlier"
+    ].replace(status_map)
+    df_reject_criteria_all["star_z_score_status"] = df_reject_criteria_all[
+        "bad_star_count_z_score"
+    ].replace(status_map)
+    df_reject_criteria_all["fwhm_z_score_status"] = df_reject_criteria_all[
+        "bad_fwhm_z_score"
+    ].replace(status_map)
+    df_reject_criteria_all["star_count_fraction_status"] = df_reject_criteria_all[
+        "low_star_count_fraction"
+    ].replace(status_map)
+
+    cols = [
+        "filename",
+        "star_count_iqr_outlier",
+        "star_count_z_score",
+        "fwhm_iqr_outlier",
+        "fwhm_z_score",
+        "high_ecc",
+        "high_fwhm",
+        "star_count_fraction",
+        "bad_star_count_z_score",
+        "bad_fwhm_z_score",
+        "trailing_stars",
+        "low_star_count_fraction",
+        "low_star_count",
+        "bad_star_shape",
+        "is_ok",
+        "fwhm_status",
+        "ecc_status",
+        "star_trail_status",
+        "iqr_status",
+        "star_z_score_status",
+        "fwhm_z_score_status",
+        "star_count_fraction_status",
+    ]
+
+    df_reject_criteria = df_reject_criteria_all[cols]
+
+    push_df_to_redis(df_reject_criteria, "df_reject_criteria")
+    push_df_to_redis(df_reject_criteria_all, "df_reject_criteria_all")
+
+    return ""
 
 
 def store_target_coordinate_data(date_string, site_data):
@@ -816,20 +907,21 @@ def filter_targets_for_matches_and_filters(
     object_data = get_object_data()
 
     targets = []
-    for profile in profile_list:
-        if profile in object_data.target_list:
-            targets += list(object_data.target_list[profile].values())
+    if len(object_data.target_list) > 0:
+        for profile in profile_list:
+            if profile in object_data.target_list:
+                targets += list(object_data.target_list[profile].values())
 
-    if filters:
-        targets = target_filter(targets, filters)
+        if filters:
+            targets = target_filter(targets, filters)
 
-    if status_matches:
-        matching_targets = df_target_status[
-            df_target_status["status"].isin(status_matches)
-        ]["TARGET"].values
-        targets = [target for target in targets if target.name in matching_targets]
+        if status_matches:
+            matching_targets = df_target_status[
+                df_target_status["status"].isin(status_matches)
+            ]["TARGET"].values
+            targets = [target for target in targets if target.name in matching_targets]
 
-        log.debug(f"Target matching status {status_matches}: {targets}")
+            log.debug(f"Target matching status {status_matches}: {targets}")
 
     return targets
 
@@ -887,7 +979,11 @@ def toggle_modal_callback(n1, n2, is_open):
 
 
 @app.callback(
-    [Output("profile-selection", "options"), Output("profile-selection", "value")],
+    [
+        Output("profile-selection", "options"),
+        Output("profile-selection", "value"),
+        Output("profile-selection", "disabled"),
+    ],
     [Input("upload-data", "contents")],
     [
         State("upload-data", "filename"),
@@ -899,11 +995,16 @@ def update_output_callback(
     list_of_contents, list_of_names, list_of_dates, profiles_selected
 ):
     object_data = get_object_data()
+    i = "None"
+    profile_dropdown_is_disabled = True
     if not object_data:
-        return [{}], [{}]
+        return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
     if not object_data.profiles:
-        return [{}], [{}]
+        return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
+    if len(object_data.profiles) == 0:
+        return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
 
+    profile_dropdown_is_disabled = False
     profile = object_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
@@ -926,8 +1027,8 @@ def update_output_callback(
                 for profile in object_data.profiles:
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
-        return options, default_options
-    return options, default_options
+        return options, default_options, profile_dropdown_is_disabled
+    return options, default_options, profile_dropdown_is_disabled
 
 
 @app.callback(
@@ -1032,6 +1133,7 @@ def update_target_with_status_callback(status, targets, profile_list):
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
         Output("tab-config-div", "style"),
+        # Output("tab-about-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
@@ -1042,14 +1144,64 @@ def render_content(tab):
         "tab-data-table",
         "tab-files-table",
         "tab-config",
+        # "tab-about",
     ]
 
     styles = [{"display": "none"}] * len(tab_names)
-
     indx = tab_names.index(tab)
 
     styles[indx] = {}
     return styles
+
+
+@app.callback(
+    [
+        Output("tabs", "active_tab"),
+        Output("tab-target-review", "disabled"),
+        Output("tab-target-review", "label"),
+        Output("tab-target-review", "labelClassName"),
+        Output("tab-targets-table", "disabled"),
+        Output("tab-targets-table", "label"),
+        Output("tab-targets-table", "labelClassName"),
+    ],
+    [Input("dummy-id", "children")],
+    [
+        State("tabs", "active_tab"),
+        State("tab-target-review", "label"),
+        State("tab-target-review", "labelClassName"),
+        State("tab-targets-table", "label"),
+        State("tab-targets-table", "labelClassName"),
+    ],
+)
+def set_target_review_status(
+    dummy_id,
+    tab,
+    tab_review_name,
+    tab_review_label_style,
+    tab_table_name,
+    tab_table_label_style,
+):
+
+    disabled = False
+    df_objects = get_df_from_redis("df_objects")
+    if df_objects.shape[0] == 0:
+        disabled = True
+        tab_review_name = "Target Planning (disabled)"
+        tab_review_label_style = None
+        tab_table_name = "Targets Table (disabled)"
+        tab_table_label_style = None
+        if tab == "tab-target" or tab == "tab-data-table":
+            tab = "tab-files-table"
+
+    return (
+        tab,
+        disabled,
+        tab_review_name,
+        tab_review_label_style,
+        disabled,
+        tab_table_name,
+        tab_table_label_style,
+    )
 
 
 @app.callback(
@@ -1140,12 +1292,14 @@ def update_contrast(
 
     all_target_coords = add_contrast(
         all_target_coords,
-        n_thread=12,
+        n_thread=1,
         filter_bandwidth=filter_bandwidth,
         mpsas=local_mpsas,
         include_airmass=True,
         k_ext=k_ext,
     )
+
+    push_df_to_redis(all_target_coords, "all_target_coords")
 
     return ""
 
@@ -1162,7 +1316,7 @@ def update_contrast(
         Input("dummy-id-contrast-data", "children"),
         Input("store-target-status", "data"),
         Input("y-axis-type", "value"),
-        Input("filter-targets", "checked"),
+        Input("filter-targets", "on"),
         Input("status-match", "value"),
         Input("filter-match", "value"),
         Input("min-moon-distance", "value"),
@@ -1221,6 +1375,9 @@ def store_data(
     metadata = dict(date_range=sun_down_range, value=value)
     filtered_targets = [d["name"] for d in data if d["name"]]
 
+    push_df_to_redis(data, "target_data")
+    push_df_to_redis(filtered_targets, "filtered_targets")
+
     return data, filtered_targets, metadata, dark_sky_duration_text, ""
 
 
@@ -1233,6 +1390,7 @@ def store_data(
     [
         Input("store-target-data", "data"),
         Input("dummy-rejection-criteria-id", "children"),
+        Input("dummy-interval-update", "children"),
     ],
     [
         State("store-target-metadata", "data"),
@@ -1240,17 +1398,31 @@ def store_data(
         State("profile-selection", "value"),
         State("status-match", "value"),
         State("date-picker", "date"),
+        State("monitor-mode-interval", "disabled"),
     ],
 )
+@timer
 def update_target_graph(
     target_data,
     rejection_criteria_change_input,
+    refresh_plots,
     metadata,
     dark_sky_duration,
     profile_list,
     status_list,
     date,
+    monitor_mode_off,
 ):
+
+    ctx = dash.callback_context
+    if ctx.triggered and not monitor_mode_off:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "dummy-interval-update":
+            log.info("Checking...")
+            if refresh_plots != "new":
+                raise PreventUpdate
+            log.info("Doing update")
+
     df_target_status = get_df_from_redis("df_target_status")
     df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
@@ -1316,18 +1488,10 @@ def update_target_graph(
 
     df_combined = pd.merge(df_combined, df_target_status, on=["GROUP", "TARGET"])
 
-    cols = [
-        "OBJECT",
-        "TARGET",
-        "GROUP",
-        "status",
-        "L",
-        "R",
-        "G",
-        "B",
-        "Ha",
-        "OIII",
-        "SII",
+    cols = ["OBJECT", "TARGET", "GROUP", "status"]
+
+    cols += [f for f in df_combined.columns if f in FILTER_LIST]
+    cols += [
         "Instrument",
         "Focal Length",
         "Binning",
@@ -1502,8 +1666,6 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
         "CCD-TEMP",
         "fwhm_median",
         "eccentricity_mean",
-        "star_trail_strength",
-        "star_orientation_score",
         "is_ok",
     ]
     if "rejected" in df0.columns:
@@ -1662,11 +1824,22 @@ def update_scatter_axes(value):
 
 
 @app.callback(
-    [Output("inspector-dates", "options"), Output("inspector-dates", "value")],
-    [Input("store-target-data", "data"), Input("target-matches", "value")],
-    [State("inspector-dates", "value")],
+    [
+        Output("inspector-dates", "options"),
+        Output("inspector-dates", "value"),
+        Output("scatter-radio-selection", "value"),
+        Output("monitor-mode-interval", "disabled"),
+    ],
+    [
+        Input("store-target-data", "data"),
+        Input("target-matches", "value"),
+        Input("monitor-mode", "on"),
+    ],
+    [State("inspector-dates", "value"), State("scatter-radio-selection", "value")],
 )
-def update_inspector_dates(target_data, target_matches, selected_dates):
+def update_inspector_dates(
+    target_data, target_matches, monitor_mode, selected_dates, radio_selection
+):
 
     df_stored_data = get_df_from_redis("df_stored_data")
 
@@ -1680,10 +1853,20 @@ def update_inspector_dates(target_data, target_matches, selected_dates):
     options = make_options(all_dates)
 
     default_dates = None
+    interval_disabled = True
+    if monitor_mode:
+        default_dates = [all_dates[0]]
+        radio_selection = "DATE-OBS vs. fwhm_median"
+        interval_disabled = False
     if selected_dates:
         default_dates = selected_dates
+    ctx = dash.callback_context
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "target-matches":
+            default_dates = None
 
-    return options, default_dates
+    return options, default_dates, radio_selection, interval_disabled
 
 
 @app.callback(
@@ -1703,72 +1886,13 @@ def rejection_criteria_callback(
     star_trail_strength_thr,
     min_star_reduction,
 ):
-    df_stored_data = get_df_from_redis("df_stored_data")
-
-    df_reject_criteria_all = add_rejection_criteria(
-        df_stored_data,
-        z_score_thr=z_score_thr,
-        iqr_scale=iqr_scale,
-        eccentricity_median_thr=eccentricity_median_thr,
-        star_trail_strength_thr=star_trail_strength_thr,
-        min_star_reduction=min_star_reduction,
+    return apply_rejection_criteria(
+        z_score_thr,
+        iqr_scale,
+        eccentricity_median_thr,
+        star_trail_strength_thr,
+        min_star_reduction,
     )
-
-    status_map = {False: "&#10004;", True: "&#10006;"}
-
-    df_reject_criteria_all["fwhm_status"] = df_reject_criteria_all["high_fwhm"].replace(
-        status_map
-    )
-    df_reject_criteria_all["ecc_status"] = df_reject_criteria_all["high_ecc"].replace(
-        status_map
-    )
-    df_reject_criteria_all["star_trail_status"] = df_reject_criteria_all[
-        "trailing_stars"
-    ].replace(status_map)
-    df_reject_criteria_all["iqr_status"] = df_reject_criteria_all[
-        "star_count_iqr_outlier"
-    ].replace(status_map)
-    df_reject_criteria_all["star_z_score_status"] = df_reject_criteria_all[
-        "bad_star_count_z_score"
-    ].replace(status_map)
-    df_reject_criteria_all["fwhm_z_score_status"] = df_reject_criteria_all[
-        "bad_fwhm_z_score"
-    ].replace(status_map)
-    df_reject_criteria_all["star_count_fraction_status"] = df_reject_criteria_all[
-        "low_star_count_fraction"
-    ].replace(status_map)
-
-    cols = [
-        "filename",
-        "star_count_iqr_outlier",
-        "star_count_z_score",
-        "fwhm_iqr_outlier",
-        "fwhm_z_score",
-        "high_ecc",
-        "high_fwhm",
-        "star_count_fraction",
-        "bad_star_count_z_score",
-        "bad_fwhm_z_score",
-        "trailing_stars",
-        "low_star_count_fraction",
-        "low_star_count",
-        "bad_star_shape",
-        "is_ok",
-        "fwhm_status",
-        "ecc_status",
-        "star_trail_status",
-        "iqr_status",
-        "star_z_score_status",
-        "fwhm_z_score_status",
-        "star_count_fraction_status",
-    ]
-
-    df_reject_criteria = df_reject_criteria_all[cols]
-
-    push_df_to_redis(df_reject_criteria, "df_reject_criteria")
-    push_df_to_redis(df_reject_criteria_all, "df_reject_criteria_all")
-
-    return ""
 
 
 @app.callback(
@@ -1784,25 +1908,67 @@ def rejection_criteria_callback(
         Input("y-axis-field", "value"),
         Input("scatter-size-field", "value"),
         Input("dummy-rejection-criteria-id", "children"),
+        Input("dummy-interval-update", "children"),
+    ],
+    [
+        State("z-score-field", "value"),
+        State("iqr-scale-field", "value"),
+        State("ecc-thr-field", "value"),
+        State("trail-thr-field", "value"),
+        State("star-frac-thr-field", "value"),
+        State("monitor-mode-interval", "disabled"),
     ],
 )
 @timer
 def update_scatter_plot(
-    target_data, inspector_dates, target_matches, x_col, y_col, size_col, dummy
+    target_data,
+    inspector_dates,
+    target_matches,
+    x_col,
+    y_col,
+    size_col,
+    dummy,
+    refresh_plots,
+    z_score_thr,
+    iqr_scale,
+    eccentricity_median_thr,
+    star_trail_strength_thr,
+    min_star_reduction,
+    monitor_mode_off,
 ):
+    ctx = dash.callback_context
+    if ctx.triggered and not monitor_mode_off:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "dummy-interval-update":
+            log.info("Checking...")
+            if refresh_plots != "new":
+                raise PreventUpdate
+            log.info("Doing update")
+            apply_rejection_criteria(
+                z_score_thr,
+                iqr_scale,
+                eccentricity_median_thr,
+                star_trail_strength_thr,
+                min_star_reduction,
+            )
+
     df_stars_headers = get_df_from_redis("df_stars_headers")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
     df_reject_criteria_all = get_df_from_redis("df_reject_criteria_all")
-
     p = go.Figure()
     df0 = df_stars_headers.copy()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
+    df0["FILTER_indx"] = df0["FILTER"].map(
+        dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
+    )
+
     df0 = pd.merge(df0, df_reject_criteria, on="filename", how="left")
     if inspector_dates:
         df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
         df_reject_criteria_all = df_reject_criteria_all[
             df_reject_criteria_all["date_night_of"].astype(str).isin(inspector_dates)
         ]
+
     if not target_matches:
         target_matches = sorted(df0["OBJECT"].unique())
     df0 = df0[df0["OBJECT"].isin(target_matches)]
@@ -1821,7 +1987,7 @@ def update_scatter_plot(
         apply_rejection_criteria=True,
     )
 
-    progress_graph.figure.layout.height = 400
+    progress_graph.figure.layout.height = 800
 
     df0["text"] = df0.apply(
         lambda row: "<br>Object: "
@@ -1840,22 +2006,22 @@ def update_scatter_plot(
         axis=1,
     )
 
-    group_cols = ["FILTER", "is_ok", "low_star_count", "high_fwhm"]
+    group_cols = ["FILTER_indx", "FILTER", "is_ok", "low_star_count", "high_fwhm"]
     inputs = (
         (df0[group_cols].drop_duplicates())
-        .sort_values(by=group_cols, ascending=[True, False, False, False])
+        .sort_values(by=group_cols, ascending=[True, True, False, False, False])
         .values
     )
 
     i_filter = 0
 
     t0 = time.time()
-    for filter, status_is_ok, low_star_count, high_fwhm in inputs:
+    for filter_index, filter, status_is_ok, low_star_count, high_fwhm in inputs:
 
         log.debug(
             f"{status_is_ok}, {low_star_count}, {high_fwhm}, {filter}: {time.time() - t0:.3f}"
         )
-        # t0 = time.time()
+
         selection = df0["FILTER"] == filter
         selection &= df0["is_ok"] == status_is_ok
         selection &= df0["low_star_count"] == low_star_count
@@ -1887,9 +2053,10 @@ def update_scatter_plot(
                 symbol = f"{symbol}-open"
                 legend_name = f"{legend_name} &#10006; - star count"
             elif high_fwhm:
-                symbol = f"{symbol}-dot"
+                symbol = f"{symbol}-open-dot"
                 legend_name = f"{legend_name} &#10006; - star bloat"
             else:
+                symbol = "diamond-wide"
                 symbol = f"{symbol}-open-dot"
                 legend_name = f"{legend_name} &#10006; - star shape"
 
@@ -1915,11 +2082,17 @@ def update_scatter_plot(
                 customdata=df1["filename"],
             )
         )
+    max_targets_in_list = 5
+    target_list = ", ".join(normalized_target_matches[:max_targets_in_list])
+    if len(normalized_target_matches) > max_targets_in_list:
+        target_list = f"{target_list} and {len(normalized_target_matches) - max_targets_in_list} other targets"
+
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
-        title=f"Subframe data for {', '.join(normalized_target_matches)}",
-        legend=dict(orientation="h", yanchor="top", y=-0.1, xanchor="left", x=0.02),
+        title=f"Subframe data for {target_list}",
+        legend=dict(orientation="v"),
+        transition={"duration": 250},
     )
 
     return p, progress_graph
@@ -1934,7 +2107,7 @@ def update_scatter_plot(
     ],
     [
         Input("target-scatter-graph", "clickData"),
-        Input("aberration-preview", "checked"),
+        Input("aberration-preview", "on"),
         Input("frame-heatmap-dropdown", "value"),
     ],
 )
@@ -1995,31 +2168,44 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
         Output("alert-auto", "is_open"),
         Output("alert-auto", "duration"),
         Output("alert-auto", "color"),
+        Output("dummy-interval-update", "children"),
+        Output("monitor-mode-interval", "interval"),
     ],
-    [Input("interval-component", "n_intervals")],
+    [Input("monitor-mode-interval", "n_intervals")],
 )
 def toggle_alert(n):
 
-    df_stars_headers = get_df_from_redis("df_stars_headers")
-
-    df_old = df_stars_headers.copy()
+    df_old = get_df_from_redis("df_stars_headers").dropna(subset=["n_stars"])
     update_data()
-    df_new = df_stars_headers.drop(df_old.index)
+    df_stars_headers = get_df_from_redis("df_stars_headers")
+    df0 = df_stars_headers.dropna(subset=["n_stars"])
+    df_new = df0[~df0["filename"].isin(df_old["filename"])]
+    total_row_count = df0.shape[0]
     new_row_count = df_new.shape[0]
 
     new_files_available = new_row_count > 0
 
+    update_frequency = CONFIG.get("monitor_mode_update_frequency", 15) * 1000
+
+    color = "primary"
     if new_files_available:
         filenames = df_new["filename"].values
-        response = [f"Detected {new_row_count} new files available:"]
+        response = [f"Recently processed {new_row_count} new file:"]
+        if len(filenames) > 1:
+            response = [f"Recently processed {new_row_count} new files:"]
         for filename in filenames:
             response.append(html.Br())
             response.append(filename)
         is_open = True
         duration = 60000
-        color = "primary"
-        return response, is_open, duration, color
-    return "", False, 0, "primary"
+        log.info(f"Found new files: {filenames}")
+        response += [
+            html.Br(),
+            html.Br(),
+            f"Total file count: {total_row_count} / {df_stars_headers.shape[0]}",
+        ]
+        return response, is_open, duration, color, "new", update_frequency
+    return "", False, 0, color, "old", update_frequency
 
 
 @app.callback(

@@ -44,9 +44,12 @@ def get_sensor_map(equipment, df0):
 
 def get_optic_map(equipment, df0):
     optic_map = {}
-    for optic_name in equipment.get("optics", {}):
+    for optic_name in equipment.get("telescopes", {}):
         for fl in df0[FOCALLENGTH_COL].unique():
-            if np.abs(int(equipment["optics"][optic_name]["focal_length"]) - fl) < 2:
+            if (
+                np.abs(int(equipment["telescopes"][optic_name]["focal_length"]) - fl)
+                <= 5
+            ):
                 optic_map[fl] = optic_name
     return optic_map
 

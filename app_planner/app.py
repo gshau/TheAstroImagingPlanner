@@ -65,6 +65,7 @@ import seaborn as sns
 from astropy.utils.exceptions import AstropyWarning
 
 import flask
+import glob
 
 from astro_planner.logger import log
 from pathlib import Path
@@ -91,10 +92,12 @@ with open(f"{base_dir}/conf/config.yml", "r") as f:
 
 HORIZON_DATA = CONFIG.get("horizon_data", {})
 
-with open(f"{base_dir}/conf/equipment.yml", "r") as f:
-    EQUIPMENT = yaml.safe_load(f)
-    if EQUIPMENT is None:
-        EQUIPMENT = {}
+EQUIPMENT = {}
+for filename in glob.glob(f"{base_dir}/conf/equipment/*.yml"):
+    with open(filename, "r") as f:
+        equipment_dict = yaml.safe_load(f)
+        if equipment_dict:
+            EQUIPMENT = {**EQUIPMENT, **equipment_dict}
 
 
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")

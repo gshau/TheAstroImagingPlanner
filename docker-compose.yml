@@ -1,7 +1,7 @@
 version: '3'
 services:
     planner_app:
-        image: gshau/astroimaging-planner:latest
+        image: gshau/astroimaging-planner:${APP_VERSION}
         restart: always
         container_name: planner
         entrypoint: ["python", "./src/app.py"]
@@ -25,14 +25,13 @@ services:
             - mqtt
             - redis
     watchdog:
-        image: gshau/astroimaging-planner:latest
+        image: gshau/astroimaging-planner:${APP_VERSION}
         restart: always
         container_name: watchdog
         entrypoint: ["python", "./src/watchdog.py"]
         volumes:
             - ./conf:/app/conf
             - ${DATA_PATH}:/data:ro
-            - ${TARGETS_PATH}:/targets:ro
             - ./logs:/logs
         environment:
             POSTGRES_USER: astro_user

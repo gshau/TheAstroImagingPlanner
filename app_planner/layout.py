@@ -117,9 +117,9 @@ def serve_layout():
             dbc.Col(
                 dbc.RadioItems(
                     options=[
+                        {"label": "Pending", "value": "pending"},
                         {"label": "Active", "value": "active"},
                         {"label": "Acquired", "value": "acquired"},
-                        {"label": "Pending", "value": "pending"},
                         {"label": "Closed", "value": "closed"},
                     ],
                     labelStyle={"display": "block"},

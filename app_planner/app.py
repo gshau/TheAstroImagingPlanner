@@ -100,8 +100,6 @@ for filename in glob.glob(f"{base_dir}/conf/equipment/*.yml"):
             EQUIPMENT = {**EQUIPMENT, **equipment_dict}
 
 
-ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
-
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
 DEFAULT_LON = CONFIG.get("lon", -88.37)
 DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", -5)

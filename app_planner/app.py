@@ -65,6 +65,7 @@ import seaborn as sns
 from astropy.utils.exceptions import AstropyWarning
 
 import flask
+import glob
 
 from astro_planner.logger import log
 from pathlib import Path
@@ -91,10 +92,12 @@ with open(f"{base_dir}/conf/config.yml", "r") as f:
 
 HORIZON_DATA = CONFIG.get("horizon_data", {})
 
-with open(f"{base_dir}/conf/equipment.yml", "r") as f:
-    EQUIPMENT = yaml.safe_load(f)
-    if EQUIPMENT is None:
-        EQUIPMENT = {}
+EQUIPMENT = {}
+for filename in glob.glob(f"{base_dir}/conf/equipment/*.yml"):
+    with open(filename, "r") as f:
+        equipment_dict = yaml.safe_load(f)
+        if equipment_dict:
+            EQUIPMENT = {**EQUIPMENT, **equipment_dict}
 
 
 ROBOCLIP_FILE = os.getenv("ROBOCLIP_FILE", "/roboclip/VoyRC.mdb")
@@ -229,7 +232,7 @@ def pull_inspector_data():
         ]
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+            "Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
@@ -293,7 +296,7 @@ def pull_stored_data():
         df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+            "Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
@@ -322,7 +325,7 @@ def pull_target_data():
         df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+            "Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
@@ -641,7 +644,7 @@ def update_weather(site):
 
     graph_data = [
         dcc.Graph(
-            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"],},
+            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
             figure={
                 "data": data,
                 "layout": dict(
@@ -737,6 +740,7 @@ def get_progress_graph(
         .dropna()
     )
 
+    total_exposure = df_summary[exposure_col].sum() / 3600
     df_summary = df_summary.unstack(1).fillna(0)
     df_summary = df_summary[exposure_col] / 3600
 
@@ -783,11 +787,12 @@ def get_progress_graph(
                 textposition="auto",
             )
         )
+
     p.update_layout(
         barmode=barmode,
         yaxis_title="Total Exposure (hr)",
         xaxis_title="Object",
-        title="Acquired Data",
+        title=f"Acquired Data, Total Exposure = {total_exposure:.2f} hours",
         height=600,
         legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
         title_x=0.5,
@@ -919,6 +924,12 @@ def filter_targets_for_matches_and_filters(
             matching_targets = df_target_status[
                 df_target_status["status"].isin(status_matches)
             ]["TARGET"].values
+            matching_targets = [
+                normalize_target_name(matching_target)
+                for matching_target in matching_targets
+            ]
+            # log.info([t.name for t in targets])
+            # log.info(matching_targets)
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
@@ -1243,10 +1254,10 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
             log.info(f"Clearing tables: {tables_to_clear}")
             clear_tables(tables_to_clear)
         if button_id == "button-restart-app":
-            log.info(f"Restarting app")
+            log.info("Restarting app")
             shutdown()
         if button_id == "button-restart-watchdog":
-            log.info(f"Restarting watchdog")
+            log.info("Restarting watchdog")
             shutdown_watchdog()
 
     return ""
@@ -1427,7 +1438,7 @@ def update_target_graph(
     df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
 
-    log.debug(f"Calling update_target_graph")
+    log.debug("Calling update_target_graph")
     if not metadata:
         metadata = {}
     try:
@@ -1987,7 +1998,7 @@ def update_scatter_plot(
         apply_rejection_criteria=True,
     )
 
-    progress_graph.figure.layout.height = 800
+    progress_graph.figure.layout.height = 600
 
     df0["text"] = df0.apply(
         lambda row: "<br>Object: "
@@ -2090,6 +2101,7 @@ def update_scatter_plot(
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
+        height=600,
         title=f"Subframe data for {target_list}",
         legend=dict(orientation="v"),
         transition={"duration": 250},
@@ -2124,7 +2136,7 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
         return p0, p1, p2, ""
     base_filename = data["points"][0]["customdata"]
     if not base_filename:
-        log.info(f"No base filename found")
+        log.info("No base filename found")
         return p0, p1, p2, ""
 
     file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
@@ -2238,10 +2250,10 @@ def toggle_file_skiplist_alert(n_show, n_clear):
                 duration = 60000
                 color = "warning"
                 return response, is_open, duration, color
-            return [f"No files skipped"], True, 5000, "info"
+            return ["No files skipped"], True, 5000, "info"
         if button_id == "button-clear-file-skiplist":
             REDIS.set("file_skiplist", "[]")
-            response = [f"Clearing file skiplist, will re-process"]
+            response = ["Clearing file skiplist, will re-process"]
             is_open = True
             duration = 5000
             color = "primary"

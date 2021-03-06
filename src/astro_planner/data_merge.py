@@ -67,7 +67,7 @@ def add_group(equipment, df0):
     return df0
 
 
-def merge_targets_with_stored_metadata(df_stored_data, df_targets, config):
+def merge_targets_with_stored_metadata(df_stored_data, df_targets, profile_config):
 
     df0 = (
         df_stored_data.groupby(
@@ -77,7 +77,7 @@ def merge_targets_with_stored_metadata(df_stored_data, df_targets, config):
     )
     df0 = df0[EXPOSURE_COL].unstack(4).fillna(0).reset_index()
 
-    df0 = add_group(config.get("equipment", {}), df0)
+    df0 = add_group(profile_config, df0)
     df_targets["OBJECT"] = df_targets["TARGET"].apply(normalize_target_name)
     df_combined = df0.set_index("OBJECT").join(
         df_targets.set_index("OBJECT"), how="outer"

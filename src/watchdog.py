@@ -18,8 +18,7 @@ from image_grading.preprocessing import (
     TARGET_DIR,
     DATA_DIR,
 )
-
-from astro_planner.target import object_file_reader
+from astro_planner.target import object_file_reader, normalize_target_name
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
 log = logging.getLogger(__name__)
@@ -73,7 +72,7 @@ def init_target_status():
     if df_targets.shape[0] == 0:
         return None
     df0 = df_targets.reset_index()[["TARGET", "GROUP"]]
-
+    df0["TARGET"] = df0["TARGET"].apply(normalize_target_name)
     df0["status"] = "pending"
     data = list(df0.values)
 

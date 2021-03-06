@@ -232,7 +232,7 @@ def pull_inspector_data():
         ]
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+            "Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
@@ -296,7 +296,7 @@ def pull_stored_data():
         df_stored_data = pd.read_sql(stored_data_query, POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+            "Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
@@ -325,7 +325,7 @@ def pull_target_data():
         df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
     except exc.SQLAlchemyError:
         log.info(
-            f"Issue with reading tables, waiting for 15 seconds for it to resolve..."
+            "Issue with reading tables, waiting for 15 seconds for it to resolve..."
         )
         time.sleep(15)
         return None
@@ -644,7 +644,7 @@ def update_weather(site):
 
     graph_data = [
         dcc.Graph(
-            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"],},
+            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
             figure={
                 "data": data,
                 "layout": dict(
@@ -1254,10 +1254,10 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
             log.info(f"Clearing tables: {tables_to_clear}")
             clear_tables(tables_to_clear)
         if button_id == "button-restart-app":
-            log.info(f"Restarting app")
+            log.info("Restarting app")
             shutdown()
         if button_id == "button-restart-watchdog":
-            log.info(f"Restarting watchdog")
+            log.info("Restarting watchdog")
             shutdown_watchdog()
 
     return ""
@@ -1438,7 +1438,7 @@ def update_target_graph(
     df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
 
-    log.debug(f"Calling update_target_graph")
+    log.debug("Calling update_target_graph")
     if not metadata:
         metadata = {}
     try:
@@ -2136,7 +2136,7 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
         return p0, p1, p2, ""
     base_filename = data["points"][0]["customdata"]
     if not base_filename:
-        log.info(f"No base filename found")
+        log.info("No base filename found")
         return p0, p1, p2, ""
 
     file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
@@ -2250,10 +2250,10 @@ def toggle_file_skiplist_alert(n_show, n_clear):
                 duration = 60000
                 color = "warning"
                 return response, is_open, duration, color
-            return [f"No files skipped"], True, 5000, "info"
+            return ["No files skipped"], True, 5000, "info"
         if button_id == "button-clear-file-skiplist":
             REDIS.set("file_skiplist", "[]")
-            response = [f"Clearing file skiplist, will re-process"]
+            response = ["Clearing file skiplist, will re-process"]
             is_open = True
             duration = 5000
             color = "primary"

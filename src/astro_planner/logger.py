@@ -5,7 +5,7 @@ import os
 
 
 handler = logging.handlers.WatchedFileHandler(
-    os.environ.get("LOGFILE", "/logs/planner.log"), mode="w"
+    os.environ.get("LOGFILE", "./planner.log"), mode="w"
 )
 
 formatter = logging.Formatter(fmt="%(asctime)s %(levelname)s %(module)s %(message)s")

@@ -737,6 +737,7 @@ def get_progress_graph(
         .dropna()
     )
 
+    total_exposure = df_summary[exposure_col].sum() / 3600
     df_summary = df_summary.unstack(1).fillna(0)
     df_summary = df_summary[exposure_col] / 3600
 
@@ -783,11 +784,12 @@ def get_progress_graph(
                 textposition="auto",
             )
         )
+
     p.update_layout(
         barmode=barmode,
         yaxis_title="Total Exposure (hr)",
         xaxis_title="Object",
-        title="Acquired Data",
+        title=f"Acquired Data, Total Exposure = {total_exposure:.2f} hours",
         height=600,
         legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
         title_x=0.5,
@@ -919,6 +921,12 @@ def filter_targets_for_matches_and_filters(
             matching_targets = df_target_status[
                 df_target_status["status"].isin(status_matches)
             ]["TARGET"].values
+            matching_targets = [
+                normalize_target_name(matching_target)
+                for matching_target in matching_targets
+            ]
+            # log.info([t.name for t in targets])
+            # log.info(matching_targets)
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
@@ -1987,7 +1995,7 @@ def update_scatter_plot(
         apply_rejection_criteria=True,
     )
 
-    progress_graph.figure.layout.height = 800
+    progress_graph.figure.layout.height = 600
 
     df0["text"] = df0.apply(
         lambda row: "<br>Object: "
@@ -2090,6 +2098,7 @@ def update_scatter_plot(
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
+        height=600,
         title=f"Subframe data for {target_list}",
         legend=dict(orientation="v"),
         transition={"duration": 250},

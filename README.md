@@ -1,5 +1,4 @@
 # The AstroImaging Planner
-
 <details open="open">
   <summary>Table of Contents</summary>
   <ol>
@@ -279,5 +278,10 @@ See below for the wishlist of things I'd like to implement for the future.
   
 # License
 Distributed under the GPLv3 License. See `LICENSE` for more information.
+
+
+# Donate
+If this project helped you with your astrophotography planning and data review, please consider donating!  
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](UJ63AXALXGAP4)
 
 

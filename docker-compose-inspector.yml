@@ -1,8 +1,0 @@
-version: '3.7'
-services:
-    app_standalone:
-        image: gshau/astroimaging-planner:frame-inspector
-        restart: always
-        entrypoint: ["python", "./src/app.py"]
-        ports:
-            - "8050:8050"

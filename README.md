@@ -40,7 +40,7 @@
 
 
 # About This Project
-The goal of this dashboard project is to offer the ability to view at a glance the planning and progress of astronomical targets for imaging.  There are three main components to the dashboard:
+The goal of this dashboard project is to offer the ability to view at a glance the planning and progress of astronomical targets for imaging.  These are the main components to the dashboard:
 1. Target tracking and status - what are the best times in the night to image targets, allowing you to decide when to move on to another target
 2. Tracking target progress - how much data each target has, broken down by filter and instrument
 3. Weather forecast data
@@ -48,10 +48,9 @@ The goal of this dashboard project is to offer the ability to view at a glance t
 3. Inspection of subexposure data - inspect subexposure data, including all FITs header data, extracted stars, and other star analyses.  Integrates with the main file store where all subexposure is stored.
 5. Standalone image/star inspector for ad-hoc inspection of new frames
 
-# Features
+# Main Features
 
-
-The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, or a user-loaded [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/) sequence file.  An example Roboclip database is given in `data/VoyRC_default.mbd`.  In creating targets for this database, the group can be set to any string.  For implementation here, I'm assuming the group description is of the form `"{optic} {sensor}"`, where the optic and sensors are defined in the equipment profiles.
+The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, or [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/) sequence files.  
 
 ## Target planning
 The top chart shows the altitude of each target in the database over the course of the night, with astronomical dawn/dusk marked by the orange bands. Also shown is the altitude of the Moon.  Since the plotting is based off [Plotly](), the same interactions apply here. Each curve can be easily hidden with a single click in the legend.  Likewise, all curves can be hidden except for the target with a double click of that target in the legend. I usually switch from one target to another when their altitude lines cross to keep getting good quality data.  
@@ -62,7 +61,7 @@ There’s a dropdown for selecting the equipment profiles, which I have used the
 
 ![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_main.png)
 
-## Target status
+### Target status
 The bottom chart is a summary of data collected so far, and is read from the FITs header from the data you have on file, broken down by each filter. 
 
 I’ve added an option of tracking the target’s status as well. Currently, there are four options:
@@ -72,10 +71,10 @@ I’ve added an option of tracking the target’s status as well. Currently, the
 * Closed - targets that have processing finalized
 These status fields can be filtered as well for the two charts on the right.
 
-## Weather
+### Weather
 There’s also various weather tools like the local forecast using clearoutside, NWS, and GOES satellite links and an HRRR smoke forecast for North America.
 
-## Acquired Data
+### Acquired Data
 A second tab shows the targets with gear I'd want to use to capture it, the target status (pending/active/acquired/closed), and the exposure summaries. Here’s a view of that:
 ![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_stored_data_view.png)
 
@@ -258,24 +257,6 @@ There's an option to allow for a custom horizon, where if the target falls below
 ## Future development
 I have in development a contrast view, which takes into account the bandwidth of filters and the SNR with certain levels of LP, whether it be artificial light from the city, or natural light from the Moon. This also can be extended to include the effect of aerosols in the atmosphere like the smoke we’ve been getting over much of the US this year.
 
-See below for the wishlist of things I'd like to implement for the future.  
-### Wishlist:
-- [x] Custom horizon
-  - [x] Alpha reduced on inaccessible targets
-- [x] Target status to filter acquired data chart
-- [x] Internal: Unified dataframe for all targets
-- [x] Add dark sky duration
-- [-] Automatic grading of images
-- [ ] Revised contrast calculations for narrowband/broadband filters
-- [ ] mpsas level at current location for contrast
-- [ ] Target selection via user-controlled:
-  - [ ] priority
-  - [ ] filter goals
-  - [ ] exposure totals and progress
-- [ ] Add OpenWeatherMap datasource
-- [ ] Suggested target and filter sequences
-  - [ ] Show color-coded blocks of when filters are used
-  
 # License
 Distributed under the GPLv3 License. See `LICENSE` for more information.
 

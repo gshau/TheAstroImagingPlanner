@@ -340,10 +340,8 @@ def get_object_data():
     return object_data
 
 
-def merge_target_with_stored_data(df_stored_data, df_objects):
-    df_combined = merge_targets_with_stored_metadata(
-        df_stored_data, df_objects, EQUIPMENT
-    )
+def merge_target_with_stored_data(df_data, df_objects):
+    df_combined = merge_targets_with_stored_metadata(df_data, df_objects, EQUIPMENT)
     return df_combined
 
 
@@ -379,12 +377,19 @@ use_planner = True
 def update_data():
     df_stored_data = pull_stored_data()
     df_stars_headers = pull_inspector_data()
+
+    cols = list(df_stars_headers.columns.difference(df_stored_data.columns))
+    df_data = pd.merge(
+        df_stars_headers[["file_full_path"] + cols],
+        df_stored_data,
+        on=["file_full_path"],
+        suffixes=["", ""],
+    )
     if use_planner:
         object_data, df_objects, df_target_status = pull_target_data()
-        df_combined = merge_target_with_stored_data(df_stored_data, df_objects)
+        df_combined = merge_target_with_stored_data(df_data, df_objects)
 
-    push_df_to_redis(df_stored_data, "df_stored_data")
-    push_df_to_redis(df_stars_headers, "df_stars_headers")
+    push_df_to_redis(df_data, "df_data")
     if use_planner:
         push_df_to_redis(df_combined, "df_combined")
         push_df_to_redis(df_objects, "df_objects")
@@ -811,10 +816,10 @@ def apply_rejection_criteria(
     min_star_reduction,
 ):
 
-    df_stored_data = get_df_from_redis("df_stored_data")
+    df_data = get_df_from_redis("df_data")
 
     df_reject_criteria_all = add_rejection_criteria(
-        df_stored_data,
+        df_data,
         z_score_thr=z_score_thr,
         iqr_scale=iqr_scale,
         eccentricity_median_thr=eccentricity_median_thr,
@@ -926,8 +931,6 @@ def filter_targets_for_matches_and_filters(
                 normalize_target_name(matching_target)
                 for matching_target in matching_targets
             ]
-            # log.info([t.name for t in targets])
-            # log.info(matching_targets)
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
@@ -962,16 +965,13 @@ app.layout = serve_layout
 
 @app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
 def set_date(utc_offset):
-    df_stars_headers = get_df_from_redis("df_stars_headers")
-    df_stored_data = get_df_from_redis("df_stored_data")
+    df_data = get_df_from_redis("df_data")
     if utc_offset is None:
         utc_offset = DEFAULT_UTC_OFFSET
     date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
-    df_stars_headers = set_date_cols(df_stars_headers, utc_offset=utc_offset)
-    df_stored_data = set_date_cols(df_stored_data, utc_offset=utc_offset)
+    df_data = set_date_cols(df_data, utc_offset=utc_offset)
 
-    push_df_to_redis(df_stars_headers, "df_stars_headers")
-    push_df_to_redis(df_stored_data, "df_stored_data")
+    push_df_to_redis(df_data, "df_data")
 
     return date
 
@@ -1325,7 +1325,7 @@ def update_contrast(
         Input("dummy-id-contrast-data", "children"),
         Input("store-target-status", "data"),
         Input("y-axis-type", "value"),
-        Input("filter-targets", "on"),
+        Input("filter-seasonal-targets", "on"),
         Input("status-match", "value"),
         Input("filter-match", "value"),
         Input("min-moon-distance", "value"),
@@ -1336,7 +1336,7 @@ def store_data(
     dummy_input,
     target_status_store,
     value,
-    filter_targets,
+    filter_seasonal_targets,
     status_matches,
     filters,
     min_moon_distance,
@@ -1372,7 +1372,7 @@ def store_data(
         target_coords,
         df_combined,
         value=value,
-        filter_targets=filter_targets,
+        filter_targets=filter_seasonal_targets,
         min_moon_distance=min_moon_distance,
     )
     log.info(f"get_data: {time.time() - t0}")
@@ -1647,13 +1647,13 @@ def add_rejection_criteria(
     ],
 )
 def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
-    df_stars_headers = get_df_from_redis("df_stars_headers")
+    df_data = get_df_from_redis("df_data")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
 
-    targets = sorted(df_stars_headers["OBJECT"].unique())
+    targets = sorted(df_data["OBJECT"].unique())
     target_options = make_options(targets)
 
-    df0 = pd.merge(df_stars_headers, df_reject_criteria, on="filename", how="left")
+    df0 = pd.merge(df_data, df_reject_criteria, on="filename", how="left")
     if target_matches:
         log.info("Selecting target match")
         df0 = df0[df0["OBJECT"].isin(target_matches)]
@@ -1838,6 +1838,7 @@ def update_scatter_axes(value):
         Output("inspector-dates", "value"),
         Output("scatter-radio-selection", "value"),
         Output("monitor-mode-interval", "disabled"),
+        Output("monitor-mode-indicator", "color"),
     ],
     [
         Input("store-target-data", "data"),
@@ -1850,20 +1851,22 @@ def update_inspector_dates(
     target_data, target_matches, monitor_mode, selected_dates, radio_selection
 ):
 
-    df_stored_data = get_df_from_redis("df_stored_data")
+    df_data = get_df_from_redis("df_data")
 
-    df0 = df_stored_data.copy()
+    df0 = df_data.copy()
 
     if target_matches:
         normalized_target_matches = [normalize_target_name(t) for t in target_matches]
-        df0 = df_stored_data[df_stored_data["OBJECT"].isin(normalized_target_matches)]
+        df0 = df_data[df_data["OBJECT"].isin(normalized_target_matches)]
 
     all_dates = list(sorted(df0["date_night_of"].dropna().unique(), reverse=True))
     options = make_options(all_dates)
 
     default_dates = None
     interval_disabled = True
+    monitor_mode_indicator_color = "#cccccc"
     if monitor_mode:
+        monitor_mode_indicator_color = "#00cc00"
         default_dates = [all_dates[0]]
         radio_selection = "DATE-OBS vs. fwhm_median"
         interval_disabled = False
@@ -1875,7 +1878,13 @@ def update_inspector_dates(
         if button_id == "target-matches":
             default_dates = None
 
-    return options, default_dates, radio_selection, interval_disabled
+    return (
+        options,
+        default_dates,
+        radio_selection,
+        interval_disabled,
+        monitor_mode_indicator_color,
+    )
 
 
 @app.callback(
@@ -1961,11 +1970,11 @@ def update_scatter_plot(
                 min_star_reduction,
             )
 
-    df_stars_headers = get_df_from_redis("df_stars_headers")
+    df_data = get_df_from_redis("df_data")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
     df_reject_criteria_all = get_df_from_redis("df_reject_criteria_all")
     p = go.Figure()
-    df0 = df_stars_headers.copy()
+    df0 = df_data.copy()
     df0["FILTER"] = df0["FILTER"].replace(FILTER_MAP)
     df0["FILTER_indx"] = df0["FILTER"].map(
         dict(zip(FILTER_LIST, range(len(FILTER_LIST))))
@@ -2123,7 +2132,7 @@ def update_scatter_plot(
 )
 def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
 
-    df_stars_headers = get_df_from_redis("df_stars_headers")
+    df_data = get_df_from_redis("df_data")
 
     p0 = go.Figure()
     p1 = p0
@@ -2137,7 +2146,7 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
         log.info("No base filename found")
         return p0, p1, p2, ""
 
-    file_full_path = df_stars_headers[df_stars_headers["filename"] == base_filename]
+    file_full_path = df_data[df_data["filename"] == base_filename]
     if file_full_path.shape[0] != 0:
         log.info(file_full_path)
         filename = file_full_path["file_full_path"].values[0]
@@ -2185,10 +2194,10 @@ def inspect_frame_analysis(data, as_aberration_inspector, frame_heatmap_col):
 )
 def toggle_alert(n):
 
-    df_old = get_df_from_redis("df_stars_headers").dropna(subset=["n_stars"])
+    df_old = get_df_from_redis("df_data").dropna(subset=["n_stars"])
     update_data()
-    df_stars_headers = get_df_from_redis("df_stars_headers")
-    df0 = df_stars_headers.dropna(subset=["n_stars"])
+    df_data = get_df_from_redis("df_data")
+    df0 = df_data.dropna(subset=["n_stars"])
     df_new = df0[~df0["filename"].isin(df_old["filename"])]
     total_row_count = df0.shape[0]
     new_row_count = df_new.shape[0]
@@ -2212,7 +2221,7 @@ def toggle_alert(n):
         response += [
             html.Br(),
             html.Br(),
-            f"Total file count: {total_row_count} / {df_stars_headers.shape[0]}",
+            f"Total file count: {total_row_count} / {df_data.shape[0]}",
         ]
         return response, is_open, duration, color, "new", update_frequency
     return "", False, 0, color, "old", update_frequency

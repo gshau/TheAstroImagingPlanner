@@ -181,7 +181,7 @@ def serve_layout():
     filter_targets_check = dbc.FormGroup(
         [
             daq.BooleanSwitch(
-                id="filter-targets",
+                id="filter-seasonal-targets",
                 on=True,
                 label="Display Only Seasonal Targets",
                 labelPosition="bottom",
@@ -974,7 +974,7 @@ def serve_layout():
                             children=[
                                 dcc.Graph(
                                     id="target-scatter-graph",
-                                    style={"width": "100%", "height": "800px"},
+                                    style={"width": "100%", "height": "600px"},
                                     config={
                                         "displaylogo": False,
                                         "modeBarButtonsToRemove": ["lasso2d"],
@@ -1131,13 +1131,6 @@ def serve_layout():
                 labelClassName="text-danger",
                 label_style={"font-size": 16},
             ),
-            # dbc.Tab(
-            #     label="About",
-            #     tab_id="tab-about",
-            #     labelClassName="text-secondary",
-            #     label_style={"font-size": 16},
-            #     style={"display": "none"},
-            # ),
         ],
     )
 
@@ -1167,7 +1160,24 @@ def serve_layout():
         style={"width": "90%"},
         children=[
             navbar,
-            tabs,
+            dbc.Row(
+                [
+                    dbc.Col(tabs, width=6),
+                    dbc.Col([]),
+                    dbc.Col(
+                        daq.Indicator(
+                            value=False,
+                            label="Monitor Mode",
+                            color="#888888",
+                            id="monitor-mode-indicator",
+                        ),
+                        width=1,
+                    ),
+                ],
+                justify="center",
+                align="center",
+                className="h-50",
+            ),
             html.Br(),
             alerts,
             loading,
@@ -1189,22 +1199,6 @@ def serve_layout():
         [
             body,
             tooltips,
-            # dbc.Toast(
-            #     "",
-            #     id="alert-auto",
-            #     header="New data available!",
-            #     is_open=False,
-            #     dismissable=True,
-            #     icon="success",
-            #     style={
-            #         "position": "fixed",
-            #         "top": 66,
-            #         "right": 10,
-            #         "width": 1200,
-            #         "maxWidth": "600px",
-            #         # "background-color": "#72BC4F",
-            #     },
-            # ),
             dcc.Store(id="store-site-data", data={}),
             dcc.Store(id="store-target-data"),
             dcc.Store(id="store-target-status"),

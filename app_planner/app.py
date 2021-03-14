@@ -788,7 +788,7 @@ def get_progress_graph(
 
     p.update_layout(
         barmode=barmode,
-        yaxis_title="Total Exposure (hr)",
+        yaxis_title="Total Exposure (hr) <br> Negative values are auto-rejected",
         xaxis_title="Object",
         title=f"Acquired Data, Total Exposure = {total_exposure:.2f} hours",
         height=600,

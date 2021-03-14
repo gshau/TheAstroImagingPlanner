@@ -218,7 +218,10 @@ def process_header_from_fits(filename, skip_missing_entries):
                             df_header[col] = value
                 if not found_col:
                     df_header[col] = np.nan
-                    missing_cols.append(col)
+                    if col == 'FILTER':
+                        df_header[col] = 'NO_FILTER'
+                    else:
+                        missing_cols.append(col)
 
         if missing_cols:
             log.warn(f"Header for {filename} missing matching columns {missing_cols}!")
@@ -228,7 +231,6 @@ def process_header_from_fits(filename, skip_missing_entries):
                 append_to_list_on_redis(filename, "file_skiplist")
                 return pd.DataFrame()
 
-        df_header["FILTER"] = df_header["FILTER"].fillna("NO_FILTER")
         if "COMMENT" in df_header.columns:
             df_header["COMMENT"] = df_header["COMMENT"].apply(lambda c: str(c))
 

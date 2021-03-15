@@ -19,3 +19,4 @@ redis==3.4.1
 direct_redis==0.3.1
 dash_daq==0.5.0
 ephem==3.7.7.1
+timezonefinder==5.2.0

@@ -36,7 +36,7 @@ from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
 from astro_planner.target import object_file_reader, normalize_target_name, Objects
 from astro_planner.contrast import add_contrast
-from astro_planner.site import update_site
+from astro_planner.site import update_site, get_utc_offset
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import (
     INSTRUMENT_COL,
@@ -102,7 +102,7 @@ for filename in glob.glob(f"{base_dir}/conf/equipment/*.yml"):
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
 DEFAULT_LON = CONFIG.get("lon", -88.37)
-DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", -5)
+DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", 0)
 DEFAULT_MPSAS = CONFIG.get("mpsas", 20.1)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
@@ -631,39 +631,43 @@ def parse_loaded_contents(contents, filename, date):
 def update_weather(site):
     log.debug("Trying NWS")
     nws_forecast = NWS_Forecast(site.lat, site.lon)
-    df_weather = nws_forecast.parse_data()
+    if nws_forecast.xmldoc:
+        df_weather = nws_forecast.parse_data()
 
-    data = []
-    for col in df_weather.columns:
-        data.append(
-            dict(
-                x=df_weather.index,
-                y=df_weather[col],
-                mode="lines",
-                name=col,
-                opacity=1,
+        data = []
+        for col in df_weather.columns:
+            data.append(
+                dict(
+                    x=df_weather.index,
+                    y=df_weather[col],
+                    mode="lines",
+                    name=col,
+                    opacity=1,
+                )
             )
-        )
 
-    graph_data = [
-        dcc.Graph(
-            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
-            figure={
-                "data": data,
-                "layout": dict(
-                    title=df_weather.index.name,
-                    margin={"l": 50, "b": 100, "t": 50, "r": 50},
-                    legend={"x": 1, "y": 0.5},
-                    yaxis={"range": [0, 100]},
-                    height=600,
-                    plot_bgcolor="#ddd",
-                    paper_bgcolor="#fff",
-                    hovermode="closest",
-                    transition={"duration": 150},
-                ),
-            },
-        )
-    ]
+        graph_data = [
+            dcc.Graph(
+                config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
+                figure={
+                    "data": data,
+                    "layout": dict(
+                        title=df_weather.index.name,
+                        margin={"l": 50, "b": 100, "t": 50, "r": 50},
+                        legend={"x": 1, "y": 0.5},
+                        yaxis={"range": [0, 100]},
+                        height=400,
+                        width=750,
+                        plot_bgcolor="#ddd",
+                        paper_bgcolor="#fff",
+                        hovermode="closest",
+                        transition={"duration": 150},
+                    ),
+                },
+            )
+        ]
+    else:
+        graph_data = []
 
     clear_outside_link = (
         f"http://clearoutside.com/forecast/{site.lat}/{site.lon}?view=current",
@@ -677,7 +681,15 @@ def update_weather(site):
         "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36",
     )
 
-    return graph_data, clear_outside_link[0], nws_link[0], goes_satellite_link
+    clear_outside_forecast_img = f"http://clearoutside.com/forecast_image_large/{site.lat}/{site.lon}/forecast.png"
+
+    return (
+        graph_data,
+        clear_outside_link[0],
+        nws_link[0],
+        goes_satellite_link,
+        clear_outside_forecast_img,
+    )
 
 
 def target_filter(targets, filters):
@@ -743,7 +755,12 @@ def get_progress_graph(
         .dropna()
     )
 
-    total_exposure = df_summary[exposure_col].sum() / 3600
+    log.info(df_summary[exposure_col])
+    exposure = df_summary[exposure_col] / 3600
+    accepted_exposure = exposure[exposure > 0].sum()
+    rejected_exposure = -exposure[exposure < 0].sum()
+    total_exposure = accepted_exposure + rejected_exposure
+
     df_summary = df_summary.unstack(1).fillna(0)
     df_summary = df_summary[exposure_col] / 3600
 
@@ -767,6 +784,16 @@ def get_progress_graph(
     fl = df0[FOCALLENGTH_COL].astype(int).astype(str)
     df0["text"] = df0[INSTRUMENT_COL] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
 
+    df0["text"] = df0.apply(
+        lambda row: "<br>Sensor: "
+        + str(row[INSTRUMENT_COL])
+        + f"<br>BINNING: {row[BINNING_COL]}"
+        + f"<br>FOCAL LENGTH: {row[FOCALLENGTH_COL]} mm"
+        + f"<br>Matching targets: {row['OBJECT']}",
+        # + f"<br>Inferred group: {row['inferred_group']}",
+        axis=1,
+    )
+
     barmode = CONFIG.get("progress_mode", "group")
     if barmode == "stack":
         df0["object_with_status"] = df0.apply(
@@ -777,8 +804,8 @@ def get_progress_graph(
         )
     else:
         df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index(["OBJECT"])
-
-    for filter in [col for col in COLORS if col in df_summary.columns]:
+    cols = [col for col in COLORS if col in df_summary.columns]
+    for filter in cols:
         p.add_trace(
             go.Bar(
                 name=f"{filter}",
@@ -795,7 +822,13 @@ def get_progress_graph(
         barmode=barmode,
         yaxis_title="Total Exposure (hr) <br> Negative values are auto-rejected",
         xaxis_title="Object",
-        title=f"Acquired Data, Total Exposure = {total_exposure:.2f} hours",
+        title={
+            "text": f"Acquired Data, Exposure Total = {total_exposure:.2f} hr<br> Accepted = {accepted_exposure:.2f} hr, Rejected = {rejected_exposure:.2f} hr",
+            "y": 0.95,
+            "x": 0.5,
+            "xanchor": "center",
+            "yanchor": "top",
+        },
         height=600,
         legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
         title_x=0.5,
@@ -892,7 +925,7 @@ def store_target_coordinate_data(date_string, site_data):
         site_data,
         default_lat=DEFAULT_LAT,
         default_lon=DEFAULT_LON,
-        default_utc_offset=DEFAULT_UTC_OFFSET,
+        date_string=date_string,
     )
     targets = []
     target_list = object_data.target_list
@@ -963,11 +996,16 @@ app.layout = serve_layout
 # Callbacks
 
 
-@app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
-def set_date(utc_offset):
+@app.callback(
+    Output("date-picker", "date"),
+    [Input("input-lat", "value"), Input("input-lon", "value")],
+    [State("date-picker", "date")],
+)
+def set_date(lat, lon, current_date):
     df_data = get_df_from_redis("df_data")
-    if utc_offset is None:
-        utc_offset = DEFAULT_UTC_OFFSET
+
+    utc_offset = get_utc_offset(lat, lon, current_date)
+
     date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
     df_data = set_date_cols(df_data, utc_offset=utc_offset)
 
@@ -1046,18 +1084,31 @@ def update_output_callback(
         Output("clear-outside", "href"),
         Output("nws-weather", "href"),
         Output("goes-satellite", "href"),
+        Output("clear-outside-img", "src"),
     ],
-    [Input("store-site-data", "data")],
+    [Input("store-site-data", "data"), Input("date-picker", "date")],
 )
-def update_weather_data_callback(site_data):
+def update_weather_data_callback(site_data, date_string):
     site = update_site(
         site_data,
         default_lat=DEFAULT_LAT,
         default_lon=DEFAULT_LON,
-        default_utc_offset=DEFAULT_UTC_OFFSET,
+        date_string=date_string,
     )
-    weather_graph, clear_outside_link, nws_link, goes_link = update_weather(site)
-    return weather_graph, clear_outside_link, nws_link, goes_link
+    (
+        weather_graph,
+        clear_outside_link,
+        nws_link,
+        goes_link,
+        clear_outside_forecast_img,
+    ) = update_weather(site)
+    return (
+        weather_graph,
+        clear_outside_link,
+        nws_link,
+        goes_link,
+        clear_outside_forecast_img,
+    )
 
 
 @app.callback(
@@ -1065,18 +1116,25 @@ def update_weather_data_callback(site_data):
     [
         Input("input-lat", "value"),
         Input("input-lon", "value"),
-        Input("input-utc-offset", "value"),
+        Input("date-picker", "date"),
     ],
 )
-def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
+def update_time_location_data_callback(lat=None, lon=None, date_string=None):
 
-    site_data = dict(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET)
+    site_data = dict(
+        lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=0, date_string="2021-01-01"
+    )
     if lat:
         site_data["lat"] = lat
     if lon:
         site_data["lon"] = lon
-    if utc_offset:
-        site_data["utc_offset"] = utc_offset
+    if date_string:
+        site_data["date_string"] = date_string
+
+    site_data["utc_offset"] = get_utc_offset(
+        site_data["lat"], site_data["lon"], site_data["date_string"]
+    )
+
     return site_data
 
 
@@ -2098,6 +2156,7 @@ def update_scatter_plot(
                 text=df1["text"],
                 marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
                 customdata=df1["filename"],
+                cliponaxis=False,
             )
         )
     max_targets_in_list = 5

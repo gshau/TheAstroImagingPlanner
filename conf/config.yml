@@ -48,7 +48,6 @@ debug: "True"
 # Default location settings
 lat: 43.37
 lon: -88.37
-utc_offset: -6
 
 # Link override for GOES satellite
 goes_satellite_link: "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36"

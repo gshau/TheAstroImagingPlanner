@@ -5,10 +5,25 @@ from astropy.time import TimezoneInfo  # Specifies a timezone
 from .logger import log
 
 
-def update_site(site_data, default_lat, default_lon, default_utc_offset):
+import datetime
+import pytz
+from timezonefinder import TimezoneFinder
+
+
+def get_utc_offset(lat, lon, date_string):
+    tf = TimezoneFinder()
+    if not lat or not lon or not date_string:
+        return 0
+    tz_name = tf.timezone_at(lng=lon, lat=lat)
+    date = datetime.datetime.fromisoformat(date_string)
+    utc_offset = float(pytz.timezone(tz_name).localize(date).strftime("%z")) / 100
+    return utc_offset
+
+
+def update_site(site_data, default_lat, default_lon, date_string):
     lat = site_data.get("lat", default_lat)
     lon = site_data.get("lon", default_lon)
-    utc_offset = site_data.get("utc_offset", default_utc_offset)
+    utc_offset = get_utc_offset(lat, lon, date_string)
     log.debug("Updating Site Data")
     site = ObservingSite(lat, lon, 0, utc_offset=utc_offset)
     return site

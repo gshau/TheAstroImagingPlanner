@@ -17,7 +17,6 @@ with open(f"{base_dir}/conf/config.yml", "r") as f:
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
 DEFAULT_LON = CONFIG.get("lon", -88.37)
-DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", -5)
 DEFAULT_MPSAS = CONFIG.get("mpsas", 19.5)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
@@ -327,18 +326,6 @@ def serve_layout():
             ),
             dbc.InputGroup(
                 [
-                    dbc.InputGroupAddon("UTC Offset".ljust(20), addon_type="append"),
-                    dbc.Input(
-                        id="input-utc-offset",
-                        children=DEFAULT_UTC_OFFSET,
-                        placeholder=DEFAULT_UTC_OFFSET,
-                        type="number",
-                        debounce=True,
-                    ),
-                ]
-            ),
-            dbc.InputGroup(
-                [
                     dbc.InputGroupAddon(
                         "Local SQM (mpsas):".ljust(20), addon_type="append"
                     ),
@@ -372,6 +359,8 @@ def serve_layout():
         id="weather-graph", children=[dbc.Spinner(color="warning")]
     )
 
+    clear_outside_forecast_img = html.Img(id="clear-outside-img")
+
     weather_modal = html.Div(
         [
             dbc.Button(
@@ -384,7 +373,12 @@ def serve_layout():
             dbc.Modal(
                 [
                     dbc.ModalHeader("Weather Forecast"),
-                    dbc.ModalBody(weather_graph),
+                    dbc.ModalBody(
+                        html.Div(
+                            [weather_graph, clear_outside_forecast_img],
+                            style={"textAlign": "center"},
+                        )
+                    ),
                     dbc.ModalFooter(
                         dbc.Button(
                             "Close",
@@ -396,7 +390,7 @@ def serve_layout():
                     ),
                 ],
                 id="modal",
-                size="xl",
+                size="lg",
             ),
         ]
     )

@@ -898,7 +898,20 @@ def serve_layout():
                     ),
                 ],
                 className="dash-bootstrap",
+            ),
+            html.Div(
+                [
+                    daq.BooleanSwitch(
+                        id="show-text-in-scatter",
+                        on=False,
+                        label="Label Points",
+                        labelPosition="bottom",
+                        color=switch_color,
+                    ),
+                ],
+                className="dash-bootstrap",
             )
+
         ]
     )
 

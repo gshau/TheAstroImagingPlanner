@@ -2000,6 +2000,7 @@ def rejection_criteria_callback(
         Input("scatter-size-field", "value"),
         Input("dummy-rejection-criteria-id", "children"),
         Input("dummy-interval-update", "children"),
+        Input("show-text-in-scatter", "on"),
     ],
     [
         State("z-score-field", "value"),
@@ -2020,6 +2021,7 @@ def update_scatter_plot(
     size_col,
     dummy,
     refresh_plots,
+    show_text,
     z_score_thr,
     iqr_scale,
     eccentricity_median_thr,
@@ -2156,20 +2158,26 @@ def update_scatter_plot(
             color = sns.color_palette(n_colors=len(filters)).as_hex()[i_filter]
             i_filter += 0
 
+        mode = "markers"
+        if show_text:
+            mode = "markers+text"
+
         p.add_trace(
             go.Scatter(
                 x=df1[x_col],
                 y=df1[y_col],
-                mode="markers",
+                mode=mode,
                 name=legend_name,
-                hovertemplate="<b>%{text}</b><br>"
+                hovertemplate="<b>%{customdata}</b><br>"
                 + f"{x_col}: "
                 + "%{x:.2f}<br>"
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
-                text=df1["text"],
+                text=df1["OBJECT"],
+                textposition="bottom right",
+                textfont=dict(color=color, size=8),
                 marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
-                customdata=df1["filename"],
+                customdata=df1["text"],
                 cliponaxis=False,
             )
         )

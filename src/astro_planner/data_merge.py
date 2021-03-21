@@ -164,7 +164,7 @@ def merge_targets_with_stored_metadata(df_data, df_targets):
     )
 
     df_merged["frame_overlap_fraction"] = np.clip(
-        1 - df_merged["distance"] / df_merged["fov_y"], 1, 0
+        1 - df_merged["distance"] / (df_merged["fov_y"] / 2), 1, 0
     )
 
     df_exposure = get_exposure_summary(df_merged)

@@ -34,7 +34,7 @@ from flask import request
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
-from astro_planner.target import object_file_reader, normalize_target_name, Objects
+from astro_planner.target import target_file_reader, normalize_target_name, Targets
 from astro_planner.contrast import add_contrast
 from astro_planner.site import update_site, get_utc_offset
 from astro_planner.ephemeris import get_coordinates
@@ -108,6 +108,7 @@ DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 DEFAULT_TIME_RESOLUTION = CONFIG.get("time_resolution", 300)
 DEFAULT_MIN_MOON_DISTANCE = CONFIG.get("min_moon_distance", 30)
+DEFAULT_MIN_FRAME_OVERLAP_FRACTION = CONFIG.get("min_frame_overlap_fraction", 0.95)
 
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
@@ -309,7 +310,7 @@ def pull_stored_data():
 
 
 def pull_target_data():
-    target_query = """select filename,
+    target_query = """select filename as target_filename,
         "TARGET",
         "GROUP",
         "RAJ2000",
@@ -319,8 +320,12 @@ def pull_target_data():
     """
 
     try:
-        df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+        df_targets = pd.read_sql(target_query, POSTGRES_ENGINE)
         df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
+        df_targets["TARGET"] = df_targets["TARGET"].apply(normalize_target_name)
+        df_target_status["TARGET"] = df_target_status["TARGET"].apply(
+            normalize_target_name
+        )
     except exc.SQLAlchemyError:
         log.info(
             "Issue with reading tables, waiting for 15 seconds for it to resolve..."
@@ -328,27 +333,22 @@ def pull_target_data():
         time.sleep(15)
         return None
 
-    object_data = Objects()
-    object_data.load_from_df(df_objects)
-    return object_data, df_objects, df_target_status
+    target_data = Targets()
+    target_data.load_from_df(df_targets)
+    return target_data, df_targets, df_target_status
 
 
-def get_object_data():
-    df_objects = get_df_from_redis("df_objects")
-    object_data = Objects()
-    object_data.load_from_df(df_objects)
-    return object_data
-
-
-def merge_target_with_stored_data(df_data, df_objects):
-    df_combined = merge_targets_with_stored_metadata(df_data, df_objects, EQUIPMENT)
-    return df_combined
+def get_target_data():
+    df_targets = get_df_from_redis("df_targets")
+    target_data = Targets()
+    target_data.load_from_df(df_targets)
+    return target_data
 
 
 VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 
-def update_targets_with_status(target_names, status, df_combined, profile_list):
+def update_targets_with_status(target_names, status, profile_list):
 
     query_template = """INSERT INTO target_status
     ("TARGET", "GROUP", status)
@@ -358,8 +358,7 @@ def update_targets_with_status(target_names, status, df_combined, profile_list):
     df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
     if status in VALID_STATUS:
         selection = df_target_status["GROUP"].isin(profile_list)
-        normalized_target_matches = [normalize_target_name(t) for t in target_names]
-        selection &= df_target_status["TARGET"].isin(normalized_target_matches)
+        selection &= df_target_status["TARGET"].isin(target_names)
         df0 = df_target_status[selection][["TARGET", "GROUP"]]
         df0["status"] = status
         if df0.shape[0] > 0:
@@ -385,15 +384,18 @@ def update_data():
         on=["file_full_path"],
         suffixes=["", ""],
     )
-    if use_planner:
-        object_data, df_objects, df_target_status = pull_target_data()
-        df_combined = merge_target_with_stored_data(df_data, df_objects)
-
     push_df_to_redis(df_data, "df_data")
+
     if use_planner:
-        push_df_to_redis(df_combined, "df_combined")
-        push_df_to_redis(df_objects, "df_objects")
+        target_data, df_targets, df_target_status = pull_target_data()
+        push_df_to_redis(df_targets, "df_targets")
         push_df_to_redis(df_target_status, "df_target_status")
+
+        df_merged_exposure, df_merged = merge_targets_with_stored_metadata(
+            df_data, df_targets
+        )
+        push_df_to_redis(df_merged_exposure, "df_merged_exposure")
+        push_df_to_redis(df_merged, "df_merged")
 
 
 update_data()
@@ -447,7 +449,7 @@ def get_time_limits(targets, sun_alt=-5):
 
 def get_data(
     target_coords,
-    df_combined,
+    df_targets,
     value="alt",
     sun_alt_for_twilight=-18,
     filter_targets=True,
@@ -541,8 +543,12 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
-            notes_text = df_combined[["NOTE"]].loc[target_name].values.flatten()[0]
-            profile = df_combined[["GROUP"]].loc[target_name].values.flatten()[0]
+            notes_text = df_targets.loc[
+                df_targets["TARGET"] == target_name, "NOTE"
+            ].values.flatten()[0]
+            profile = df_targets.loc[
+                df_targets["TARGET"] == target_name, "GROUP"
+            ].values.flatten()[0]
             skip_below_horizon = True
             for horizon_status in ["above", "below"]:
                 if (horizon_status == "below") and skip_below_horizon:
@@ -601,8 +607,8 @@ def parse_loaded_contents(contents, filename, date):
             local_file = f"./data/uploads/{file_root}.mdb"
             with open(local_file, "wb") as f:
                 f.write(decoded)
-            object_data = object_file_reader(local_file)
-            log.debug(object_data.df_objects.head())
+            target_data = target_file_reader(local_file)
+            log.debug(target_data.df_targets.head())
             log.debug(local_file)
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
@@ -611,7 +617,7 @@ def parse_loaded_contents(contents, filename, date):
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             log.info("Done!")
-            object_data = object_file_reader(local_file)
+            target_data = target_file_reader(local_file)
         elif ".xml" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace(".xml", "")
@@ -619,13 +625,13 @@ def parse_loaded_contents(contents, filename, date):
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             log.info("Done!")
-            object_data = object_file_reader(local_file)
+            target_data = target_file_reader(local_file)
         else:
             return None
     except Exception as e:
         log.warning(e)
         return None
-    return object_data
+    return target_data
 
 
 def update_weather(site):
@@ -788,9 +794,7 @@ def get_progress_graph(
         lambda row: "<br>Sensor: "
         + str(row[INSTRUMENT_COL])
         + f"<br>BINNING: {row[BINNING_COL]}"
-        + f"<br>FOCAL LENGTH: {row[FOCALLENGTH_COL]} mm"
-        + f"<br>Matching targets: {row['OBJECT']}",
-        # + f"<br>Inferred group: {row['inferred_group']}",
+        + f"<br>FOCAL LENGTH: {row[FOCALLENGTH_COL]} mm",
         axis=1,
     )
 
@@ -804,6 +808,7 @@ def get_progress_graph(
         )
     else:
         df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index(["OBJECT"])
+        df_summary = df_summary.loc[objects_sorted]
     cols = [col for col in COLORS if col in df_summary.columns]
     for filter in cols:
         p.add_trace(
@@ -918,7 +923,7 @@ def apply_rejection_criteria(
 
 
 def store_target_coordinate_data(date_string, site_data):
-    object_data = get_object_data()
+    target_data = get_target_data()
 
     t0 = time.time()
     site = update_site(
@@ -928,7 +933,7 @@ def store_target_coordinate_data(date_string, site_data):
         date_string=date_string,
     )
     targets = []
-    target_list = object_data.target_list
+    target_list = target_data.target_list
     for profile in target_list:
         targets += list(target_list[profile].values())
 
@@ -945,13 +950,13 @@ def filter_targets_for_matches_and_filters(
     targets, status_matches, filters, profile_list
 ):
     df_target_status = get_df_from_redis("df_target_status")
-    object_data = get_object_data()
+    target_data = get_target_data()
 
     targets = []
-    if len(object_data.target_list) > 0:
+    if len(target_data.target_list) > 0:
         for profile in profile_list:
-            if profile in object_data.target_list:
-                targets += list(object_data.target_list[profile].values())
+            if profile in target_data.target_list:
+                targets += list(target_data.target_list[profile].values())
 
         if filters:
             targets = target_filter(targets, filters)
@@ -960,10 +965,6 @@ def filter_targets_for_matches_and_filters(
             matching_targets = df_target_status[
                 df_target_status["status"].isin(status_matches)
             ]["TARGET"].values
-            matching_targets = [
-                normalize_target_name(matching_target)
-                for matching_target in matching_targets
-            ]
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
@@ -1041,25 +1042,25 @@ def toggle_modal_callback(n1, n2, is_open):
 def update_output_callback(
     list_of_contents, list_of_names, list_of_dates, profiles_selected
 ):
-    object_data = get_object_data()
+    target_data = get_target_data()
     i = "None"
     profile_dropdown_is_disabled = True
-    if not object_data:
+    if not target_data:
         return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
-    if not object_data.profiles:
+    if not target_data.profiles:
         return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
-    if len(object_data.profiles) == 0:
+    if len(target_data.profiles) == 0:
         return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
 
     profile_dropdown_is_disabled = False
-    profile = object_data.profiles[0]
+    profile = target_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
     default_profiles = CONFIG.get("default_profiles", [])
 
     options = [
         {"label": profile, "value": profile}
-        for profile in object_data.profiles
+        for profile in target_data.profiles
         if profile not in inactive_profiles
     ]
 
@@ -1069,9 +1070,9 @@ def update_output_callback(
 
     if list_of_contents is not None:
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
-            object_data = parse_loaded_contents(c, n, d)
-            if object_data:
-                for profile in object_data.profiles:
+            target_data = parse_loaded_contents(c, n, d)
+            if target_data:
+                for profile in target_data.profiles:
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
         return options, default_options, profile_dropdown_is_disabled
@@ -1186,10 +1187,7 @@ def update_target_with_status_callback(status, targets, profile_list):
 
     df_target_status = get_df_from_redis("df_target_status")
     if status:
-        df_combined = get_df_from_redis("df_combined")
-        df_target_status = update_targets_with_status(
-            targets, status, df_combined, profile_list
-        )
+        df_target_status = update_targets_with_status(targets, status, profile_list)
     push_df_to_redis(df_target_status, "df_target_status")
     return ""
 
@@ -1200,7 +1198,6 @@ def update_target_with_status_callback(status, targets, profile_list):
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
         Output("tab-config-div", "style"),
-        # Output("tab-about-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
@@ -1211,7 +1208,6 @@ def render_content(tab):
         "tab-data-table",
         "tab-files-table",
         "tab-config",
-        # "tab-about",
     ]
 
     styles = [{"display": "none"}] * len(tab_names)
@@ -1250,8 +1246,8 @@ def set_target_review_status(
 ):
 
     disabled = False
-    df_objects = get_df_from_redis("df_objects")
-    if df_objects.shape[0] == 0:
+    df_targets = get_df_from_redis("df_targets")
+    if df_targets.shape[0] == 0:
         disabled = True
         tab_review_name = "Target Planning (disabled)"
         tab_review_label_style = None
@@ -1324,7 +1320,7 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
     [Input("date-picker", "date")],
     [State("store-site-data", "data")],
 )
-def get_target_data(
+def get_target_data_cb(
     date_string, site_data,
 ):
     global all_target_coords, all_targets
@@ -1403,7 +1399,7 @@ def store_data(
 
     global all_target_coords, all_targets
 
-    df_combined = get_df_from_redis("df_combined")
+    df_targets = get_df_from_redis("df_targets")
 
     t0 = time.time()
 
@@ -1428,7 +1424,7 @@ def store_data(
 
     data, duration_sun_down_hrs = get_data(
         target_coords,
-        df_combined,
+        df_targets,
         value=value,
         filter_targets=filter_seasonal_targets,
         min_moon_distance=min_moon_distance,
@@ -1458,6 +1454,7 @@ def store_data(
         Input("store-target-data", "data"),
         Input("dummy-rejection-criteria-id", "children"),
         Input("dummy-interval-update", "children"),
+        Input("min-frame-overlap-fraction", "value"),
     ],
     [
         State("store-target-metadata", "data"),
@@ -1473,6 +1470,7 @@ def update_target_graph(
     target_data,
     rejection_criteria_change_input,
     refresh_plots,
+    min_frame_overlap_fraction,
     metadata,
     dark_sky_duration,
     profile_list,
@@ -1491,7 +1489,6 @@ def update_target_graph(
             log.info("Doing update")
 
     df_target_status = get_df_from_redis("df_target_status")
-    df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
 
     log.debug("Calling update_target_graph")
@@ -1543,21 +1540,40 @@ def update_target_graph(
 
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
 
+    df_merged_exposure = get_df_from_redis("df_merged_exposure")
+    df_merged = get_df_from_redis("df_merged")
+
+    if not min_frame_overlap_fraction:
+        min_frame_overlap_fraction = DEFAULT_MIN_FRAME_OVERLAP_FRACTION
+
+    target_object_matchup = df_merged[
+        df_merged["frame_overlap_fraction"] > min_frame_overlap_fraction
+    ][["TARGET", "OBJECT"]].drop_duplicates()
+
+    df_merged_exposure_targets = df_merged_exposure.explode("matching_targets").rename(
+        {"matching_targets": "TARGET"}, axis=1
+    )
+    df_merged_exposure_targets = pd.merge(
+        df_merged_exposure_targets, df_target_status, on=["GROUP", "TARGET"]
+    )
+
+    matching_objects = list(
+        target_object_matchup.loc[
+            target_object_matchup["TARGET"].isin(targets), "OBJECT"
+        ]
+    )
+
     progress_graph, df_summary = get_progress_graph(
         df_reject_criteria,
         date_string=date_string,
         days_ago=progress_days_ago,
-        targets=targets,
+        targets=matching_objects,
         apply_rejection_criteria=True,
     )
 
-    df_combined = df_combined.reset_index()
-
-    df_combined = pd.merge(df_combined, df_target_status, on=["GROUP", "TARGET"])
-
     cols = ["OBJECT", "TARGET", "GROUP", "status"]
 
-    cols += [f for f in df_combined.columns if f in FILTER_LIST]
+    cols += [f for f in df_merged_exposure_targets.columns if f in FILTER_LIST]
     cols += [
         "Instrument",
         "Focal Length",
@@ -1569,12 +1585,12 @@ def update_target_graph(
 
     columns = []
     for col in cols:
-        if col in df_combined.columns:
+        if col in df_merged_exposure_targets.columns:
             entry = {"name": col, "id": col, "deletable": False, "selectable": True}
             columns.append(entry)
 
     # target table
-    data = df_combined.to_dict("records")
+    data = df_merged_exposure_targets.to_dict("records")
     target_table = html.Div(
         [
             dash_table.DataTable(
@@ -1914,8 +1930,7 @@ def update_inspector_dates(
     df0 = df_data.copy()
 
     if target_matches:
-        normalized_target_matches = [normalize_target_name(t) for t in target_matches]
-        df0 = df_data[df_data["OBJECT"].isin(normalized_target_matches)]
+        df0 = df_data[df_data["OBJECT"].isin(target_matches)]
 
     all_dates = list(sorted(df0["date_night_of"].dropna().unique(), reverse=True))
     options = make_options(all_dates)
@@ -2054,12 +2069,11 @@ def update_scatter_plot(
     if not y_col:
         y_col = "eccentricity_median"
 
-    normalized_target_matches = [normalize_target_name(t) for t in target_matches]
     progress_graph, df_summary = get_progress_graph(
         df_reject_criteria_all,
         date_string="2020-01-01",
         days_ago=0,
-        targets=normalized_target_matches,
+        targets=target_matches,
         apply_rejection_criteria=True,
     )
 
@@ -2160,9 +2174,9 @@ def update_scatter_plot(
             )
         )
     max_targets_in_list = 5
-    target_list = ", ".join(normalized_target_matches[:max_targets_in_list])
-    if len(normalized_target_matches) > max_targets_in_list:
-        target_list = f"{target_list} and {len(normalized_target_matches) - max_targets_in_list} other targets"
+    target_list = ", ".join(target_matches[:max_targets_in_list])
+    if len(target_matches) > max_targets_in_list:
+        target_list = f"{target_list} and {len(target_matches) - max_targets_in_list} other targets"
 
     p.update_layout(
         xaxis_title=x_col,

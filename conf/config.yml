@@ -29,6 +29,9 @@ progress_mode: 'group'
 # Last number of days to show target progress, regardless of filters
 progress_days_ago: 0
 
+# Minimum frame overlap fraction to match fits files to sequence/roboclip targets
+min_frame_overlap_fraction: 0.95
+
 # Number of threads used when processing star data
 threads_for_star_processing: 2
 

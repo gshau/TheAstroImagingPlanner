@@ -44,6 +44,17 @@ DEFAULT_SUBEXPOSURES = {
 }
 
 
+def normalize_target_name(target):
+    if target:
+        target = target.lower()
+        target = target.replace("-", "_")
+        target = target.replace(" ", "_")
+        target = re.sub(r"^(?:sh2)_*", "sh2-", target)
+        for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
+            target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
+    return target
+
+
 class Target:
     def __init__(self, name, ra=None, dec=None, notes=""):
         self.name = name
@@ -68,27 +79,12 @@ class Target:
         return f"{self.name} at RA={self.ra} DEC={self.dec}"
 
 
-def clean_subframes(subframes, n_subs_name="subs_requested"):
-    return dict((k, v) for k, v in subframes.items() if v[n_subs_name] > 0)
-
-
-def normalize_target_name(target):
-    if target:
-        target = target.lower()
-        target = target.replace("-", "_")
-        target = target.replace(" ", "_")
-        target = re.sub(r"^(?:sh2)_*", "sh2-", target)
-        for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
-            target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
-    return target
-
-
-class Objects:
+class Targets:
     def __init__(self):
         self.target_list = defaultdict(dict)
         self.profiles = []
 
-    def process_objects(self, df_input):
+    def process_targets(self, df_input):
         self.target_list = defaultdict(dict)
         for row in df_input.itertuples():
             profile = row.GROUP
@@ -105,33 +101,33 @@ class Objects:
             self.target_list[profile][target_name] = target
 
     def load_from_df(self, df_input):
-        self.df_objects = df_input
-        self.process_objects(self.df_objects)
+        self.df_targets = df_input
+        self.process_targets(self.df_targets)
         profiles = [
             profile for profile in self.target_list.keys() if type(profile) == str
         ]
         self.profiles = sorted(profiles)
 
 
-class RoboClipObjects(Objects):
+class RoboClipTargets(Targets):
     def __init__(self, filename):
         super().__init__()
-        self.df_objects = mdb.read_table(
+        self.df_targets = mdb.read_table(
             filename, "RoboClip", converters_from_schema=False
         )
-        self.df_objects.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)
-        self.df_objects["GROUP"] = self.df_objects["GROUP"].fillna("UNLABELED")
-        self.load_from_df(self.df_objects)
+        self.df_targets.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)
+        self.df_targets["GROUP"] = self.df_targets["GROUP"].fillna("UNLABELED")
+        self.load_from_df(self.df_targets)
 
 
-class SGPSequenceObjects(Objects):
+class SGPSequenceTargets(Targets):
     def __init__(self, filename):
         super().__init__()
         for self.filename in [filename]:
             with open(self.filename, "r") as f:
                 self.data = json.load(f)
-                self.df_objects = self.parse_data()
-                self.process_objects(self.df_objects)
+                self.df_targets = self.parse_data()
+                self.process_targets(self.df_targets)
 
     def parse_data(self):
         self.sequence = {}
@@ -171,13 +167,13 @@ class SGPSequenceObjects(Objects):
         )
 
 
-class NINASequenceObjects(Objects):
+class NINASequenceTargets(Targets):
     def __init__(self, filename):
         super().__init__()
         for self.filename in [filename]:
             self.tree = ElementTree.parse(self.filename)
-            self.df_objects = self.parse_data()
-            self.process_objects(self.df_objects)
+            self.df_targets = self.parse_data()
+            self.process_targets(self.df_targets)
 
     def parse_data(self):
         self.sequence = {}
@@ -206,10 +202,10 @@ class NINASequenceObjects(Objects):
         return df
 
 
-def object_file_reader(filename):
+def target_file_reader(filename):
     if ".mdb" in filename:
-        return RoboClipObjects(filename)
+        return RoboClipTargets(filename)
     elif ".sgf" in filename:
-        return SGPSequenceObjects(filename)
+        return SGPSequenceTargets(filename)
     elif ".xml" in filename or ".ninaTargetSet" in filename:
-        return NINASequenceObjects(filename)
+        return NINASequenceTargets(filename)

@@ -21,6 +21,7 @@ DEFAULT_MPSAS = CONFIG.get("mpsas", 19.5)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 MIN_MOON_DISTANCE = CONFIG.get("min_moon_distance", 30)
+MIN_FRAME_OVERLAP_FRACTION = CONFIG.get("min_frame_overlap_fraction", 0.95)
 
 USE_CONTRAST = strtobool(os.getenv("USE_CONTRAST", "True")) == 1
 styles = {}
@@ -286,6 +287,20 @@ def serve_layout():
 
     location_selection = html.Div(
         [
+            dbc.InputGroup(
+                [
+                    dbc.InputGroupAddon(
+                        "Minimum Frame Overlap Fraction".ljust(20), addon_type="append"
+                    ),
+                    dbc.Input(
+                        id="min-frame-overlap-fraction",
+                        children=MIN_FRAME_OVERLAP_FRACTION,
+                        placeholder=MIN_FRAME_OVERLAP_FRACTION,
+                        type="number",
+                        debounce=True,
+                    ),
+                ]
+            ),
             dbc.InputGroup(
                 [
                     dbc.InputGroupAddon(

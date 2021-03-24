@@ -2168,7 +2168,8 @@ def update_scatter_plot(
                 y=df1[y_col],
                 mode=mode,
                 name=legend_name,
-                hovertemplate="<b>%{customdata}</b><br>"
+                hovertext=df1["text"],
+                hovertemplate="<b>%{hovertext}</b><br>"
                 + f"{x_col}: "
                 + "%{x:.2f}<br>"
                 + f"{y_col}: "
@@ -2177,7 +2178,7 @@ def update_scatter_plot(
                 textposition="bottom right",
                 textfont=dict(color=color, size=8),
                 marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
-                customdata=df1["text"],
+                customdata=df1["filename"],
                 cliponaxis=False,
             )
         )

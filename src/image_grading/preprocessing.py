@@ -161,14 +161,18 @@ def coord_str_to_vec(coord_string):
         coord_string = coord_string.replace(replace_string, "")
     coord_vec = coord_string.split()
     coord_vec = [float(entry) for entry in coord_vec]
+    coord_vec = [np.abs(float(entry)) * np.sign(coord_vec[0]) for entry in coord_vec]
+
     return coord_vec
 
 
 def coord_str_to_float(coord_string):
-    coord_vec = coord_str_to_vec(coord_string)
-    result = 0
-    for i, val in enumerate(coord_vec):
-        result += val / 60 ** i
+    result = np.nan
+    if coord_string:
+        coord_vec = coord_str_to_vec(coord_string)
+        result = 0
+        for i, val in enumerate(coord_vec):
+            result += val / 60 ** i
     return result
 
 
@@ -218,8 +222,8 @@ def process_header_from_fits(filename, skip_missing_entries):
                             df_header[col] = value
                 if not found_col:
                     df_header[col] = np.nan
-                    if col == 'FILTER':
-                        df_header[col] = 'NO_FILTER'
+                    if col == "FILTER":
+                        df_header[col] = "NO_FILTER"
                     else:
                         missing_cols.append(col)
 

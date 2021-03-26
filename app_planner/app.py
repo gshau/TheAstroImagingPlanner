@@ -13,6 +13,8 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_table
+import dash_leaflet as dl
+
 
 from dash.exceptions import PreventUpdate
 
@@ -45,6 +47,7 @@ from astro_planner.data_parser import (
     BINNING_COL,
 )
 from astro_planner.utils import timer
+from astro_planner.sky_brightness import LightPollutionMap
 
 from image_grading.preprocessing import clear_tables, init_tables
 
@@ -162,6 +165,7 @@ FILTER_MAP = {
     "HA": HA_FILTER,
     "O3": OIII_FILTER,
     "S2": SII_FILTER,
+    BAYER_: BAYER,
 }
 
 
@@ -687,7 +691,7 @@ def update_weather(site):
         "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36",
     )
 
-    clear_outside_forecast_img = f"http://clearoutside.com/forecast_image_large/{site.lat}/{site.lon}/forecast.png"
+    clear_outside_forecast_img = f"http://clearoutside.com/forecast_image_large/{np.round(site.lat, 2)}/{np.round(site.lon, 2)}/forecast.png"
 
     return (
         graph_data,
@@ -972,6 +976,48 @@ def filter_targets_for_matches_and_filters(
     return targets
 
 
+def get_click_coord_mpsas(click_lat_lon):
+    lat, lon = click_lat_lon
+    lat = np.round(lat, 3)
+    lon = (np.round(lon, 3) + 180) % 360 - 180
+    mpsas = np.round(get_mpsas_from_lat_lon(lat, lon), 2)
+
+    bortle_bins = [21.99, 21.89, 21.69, 20.49, 19.5, 18.94, 18.38]
+    bortle_colors = [
+        "dark",
+        "secondary",
+        "primary",
+        "success",
+        "warning",
+        "danger",
+        "danger",
+        "light",
+        "light",
+    ]
+    bortle_value = np.digitize(mpsas, bortle_bins) + 1
+    bortle_color = bortle_colors[bortle_value - 1]
+
+    text = dbc.Card(
+        dbc.CardBody(
+            [
+                html.H1("Location data", className="card-title"),
+                html.H2(f"Latitude: {lat}"),
+                html.H2(f"Longitude: {lon}"),
+                html.H2(f"Sky Brightness: {mpsas} magnitudes/arc-second^2"),
+                html.H2(
+                    dbc.Badge(
+                        f"Bortle Scale: {bortle_value}",
+                        color=bortle_color,
+                        className="mr-1",
+                    ),
+                ),
+            ]
+        )
+    )
+
+    return lat, lon, mpsas, text
+
+
 def shutdown():
     func = request.environ.get("werkzeug.server.shutdown")
     if func is None:
@@ -1112,19 +1158,71 @@ def update_weather_data_callback(site_data, date_string):
     )
 
 
+@app.callback(Output("location-marker", "children"), [Input("map-id", "click_lat_lng")])
+def set_marker(x):
+    if not x:
+        return dl.Marker(
+            position=[DEFAULT_LAT, DEFAULT_LON],
+            children=[dl.Tooltip("Default Location")],
+        )
+    return dl.Marker(position=x, children=[dl.Tooltip("Location Selected")])
+
+
+def get_mpsas_from_lat_lon(lat, lon):
+    lp_map = LightPollutionMap()
+    mpsas = lp_map.mpsas_for_location(lat, lon)
+    return np.round(mpsas, 2)
+
+
 @app.callback(
-    Output("store-site-data", "data"),
+    Output("modal-location", "is_open"),
+    [Input("open-location", "n_clicks"), Input("close-location", "n_clicks")],
+    [State("modal-location", "is_open")],
+)
+def toggle_location_modal_callback(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
+
+@app.callback(
     [
+        Output("store-site-data", "data"),
+        Output("input-lat", "placeholder"),
+        Output("input-lon", "placeholder"),
+        Output("local-mpsas", "value"),
+        Output("location-text", "children"),
+    ],
+    [
+        Input("map-id", "click_lat_lng"),
         Input("input-lat", "value"),
         Input("input-lon", "value"),
         Input("date-picker", "date"),
     ],
+    [State("local-mpsas", "value")],
 )
-def update_time_location_data_callback(lat=None, lon=None, date_string=None):
+def update_time_location_data_callback(
+    click_lat_lon, lat=None, lon=None, date_string=None, mpsas=None,
+):
 
+    markdown_text = ""
     site_data = dict(
         lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=0, date_string="2021-01-01"
     )
+
+    if not lat:
+        lat = DEFAULT_LAT
+    if not lon:
+        lon = DEFAULT_LON
+    if not mpsas:
+        mpsas = get_mpsas_from_lat_lon(lat, lon)
+
+    ctx = dash.callback_context
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "map-id":
+            lat, lon, mpsas, markdown_text = get_click_coord_mpsas(click_lat_lon)
+
     if lat:
         site_data["lat"] = lat
     if lon:
@@ -1136,7 +1234,7 @@ def update_time_location_data_callback(lat=None, lon=None, date_string=None):
         site_data["lat"], site_data["lon"], site_data["date_string"]
     )
 
-    return site_data
+    return site_data, lat, lon, mpsas, markdown_text
 
 
 @app.callback(
@@ -1317,8 +1415,7 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
 
 @app.callback(
     Output("dummy-id-target-data", "children"),
-    [Input("date-picker", "date")],
-    [State("store-site-data", "data")],
+    [Input("date-picker", "date"), Input("store-site-data", "data")],
 )
 def get_target_data_cb(
     date_string, site_data,
@@ -1590,7 +1687,7 @@ def update_target_graph(
             columns.append(entry)
 
     # target table
-    data = df_merged_exposure_targets.to_dict("records")
+    data = df_merged_exposure_targets.round(3).to_dict("records")
     target_table = html.Div(
         [
             dash_table.DataTable(
@@ -1709,6 +1806,8 @@ def add_rejection_criteria(
         Output("summary-table", "children"),
         Output("header-col-match", "options"),
         Output("target-matches", "options"),
+        Output("fl-matches", "options"),
+        Output("px-size-matches", "options"),
         Output("x-axis-field", "options"),
         Output("y-axis-field", "options"),
         Output("scatter-size-field", "options"),
@@ -1718,9 +1817,18 @@ def add_rejection_criteria(
         Input("header-col-match", "value"),
         Input("target-matches", "value"),
         Input("inspector-dates", "value"),
+        Input("fl-matches", "value"),
+        Input("px-size-matches", "value"),
     ],
 )
-def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
+def update_files_table(
+    target_data,
+    header_col_match,
+    target_matches,
+    inspector_dates,
+    fl_matches,
+    px_size_matches,
+):
     df_data = get_df_from_redis("df_data")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
 
@@ -1728,14 +1836,25 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
     target_options = make_options(targets)
 
     df0 = pd.merge(df_data, df_reject_criteria, on="filename", how="left")
-    if target_matches:
-        log.info("Selecting target match")
-        df0 = df0[df0["OBJECT"].isin(target_matches)]
     if inspector_dates:
         log.info("Selecting dates")
         df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
 
-    log.info("Done with queries")
+    if target_matches:
+        log.info("Selecting target match")
+        df0 = df0[df0["OBJECT"].isin(target_matches)]
+
+    fl_match_options = make_options(sorted(df0["FOCALLEN"].unique()))
+    if fl_matches:
+        log.info("Selecting focal length match")
+        df0 = df0[df0["FOCALLEN"].isin(fl_matches)]
+
+    px_size_options = make_options(sorted(df0["XPIXSZ"].unique()))
+    if px_size_matches:
+        log.info("Selecting pixel size match")
+        df0 = df0[df0["XPIXSZ"].isin(px_size_matches)]
+
+    log.info("Done with filters")
 
     columns = []
     default_cols = [
@@ -1888,6 +2007,8 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
         summary_table,
         header_options,
         target_options,
+        fl_match_options,
+        px_size_options,
         scatter_field_options,
         scatter_field_options,
         scatter_field_options,
@@ -1936,6 +2057,8 @@ def update_inspector_dates(
     options = make_options(all_dates)
 
     default_dates = None
+    if all_dates:
+        default_dates = [all_dates[0]]
     interval_disabled = True
     monitor_mode_indicator_color = "#cccccc"
     if monitor_mode:
@@ -1995,6 +2118,8 @@ def rejection_criteria_callback(
         Input("store-target-data", "data"),
         Input("inspector-dates", "value"),
         Input("target-matches", "value"),
+        Input("fl-matches", "value"),
+        Input("px-size-matches", "value"),
         Input("x-axis-field", "value"),
         Input("y-axis-field", "value"),
         Input("scatter-size-field", "value"),
@@ -2016,6 +2141,8 @@ def update_scatter_plot(
     target_data,
     inspector_dates,
     target_matches,
+    fl_matches,
+    px_size_matches,
     x_col,
     y_col,
     size_col,
@@ -2065,6 +2192,19 @@ def update_scatter_plot(
     if not target_matches:
         target_matches = sorted(df0["OBJECT"].unique())
     df0 = df0[df0["OBJECT"].isin(target_matches)]
+
+    # fl_match_options = make_options(sorted(df0["FOCALLEN"].unique()))
+    if fl_matches:
+        log.info("Selecting focal length match")
+        df0 = df0[df0["FOCALLEN"].isin(fl_matches)]
+
+    # px_size_options = make_options(sorted(df0["XPIXSZ"].unique()))
+    if px_size_matches:
+        log.info("Selecting pixel size match")
+        df0 = df0[df0["XPIXSZ"].isin(px_size_matches)]
+
+    target_matches = sorted(df0["OBJECT"].unique())
+
     filters = df0["FILTER"].unique()
     if not x_col:
         x_col = "fwhm_median"
@@ -2143,14 +2283,14 @@ def update_scatter_plot(
             symbol = "x"
             if low_star_count:
                 symbol = f"{symbol}-open"
-                legend_name = f"{legend_name} &#10006; - star count"
+                legend_name = f"{legend_name} &#10006; - count"
             elif high_fwhm:
                 symbol = f"{symbol}-open-dot"
-                legend_name = f"{legend_name} &#10006; - star bloat"
+                legend_name = f"{legend_name} &#10006; - bloat"
             else:
                 symbol = "diamond-wide"
                 symbol = f"{symbol}-open-dot"
-                legend_name = f"{legend_name} &#10006; - star shape"
+                legend_name = f"{legend_name} &#10006; - shape"
 
         if filter in COLORS:
             color = COLORS[filter]
@@ -2191,7 +2331,7 @@ def update_scatter_plot(
         xaxis_title=x_col,
         yaxis_title=y_col,
         height=600,
-        title=f"Subframe data for {target_list}",
+        title=f"Subframe data for {target_list}<br>Click points to view in frame and inspector",
         legend=dict(orientation="v"),
         transition={"duration": 250},
     )

@@ -8,6 +8,7 @@ import dash_daq as daq
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
+import dash_leaflet as dl
 
 from pathlib import Path
 
@@ -37,8 +38,8 @@ if USE_CONTRAST:
     yaxis_map = {
         "alt": "Altitude",
         "airmass": "Airmass",
-        "contrast": "Relative Contrast",
-        "sky_mpsas": "Local Sky Brightness",
+        "contrast": "Relative Contrast (Experimental)",
+        "sky_mpsas": "Local Sky Brightness (Experimental)",
     }
 
 switch_color = "#427EDC"
@@ -317,23 +318,13 @@ def serve_layout():
             ),
             dbc.InputGroup(
                 [
-                    dbc.InputGroupAddon("Latitude".ljust(20), addon_type="append"),
-                    dbc.Input(
-                        id="input-lat",
-                        children=DEFAULT_LAT,
-                        placeholder=DEFAULT_LAT,
-                        type="number",
-                        debounce=True,
+                    dbc.InputGroupAddon(
+                        "Extinction Coef:".ljust(20), addon_type="append"
                     ),
-                ]
-            ),
-            dbc.InputGroup(
-                [
-                    dbc.InputGroupAddon("Longitude".ljust(20), addon_type="append"),
                     dbc.Input(
-                        id="input-lon",
-                        children=DEFAULT_LON,
-                        placeholder=DEFAULT_LON,
+                        id="k-ext",
+                        children=DEFAULT_K_EXTINCTION,
+                        placeholder=DEFAULT_K_EXTINCTION,
                         type="number",
                         debounce=True,
                     ),
@@ -355,15 +346,27 @@ def serve_layout():
             ),
             dbc.InputGroup(
                 [
-                    dbc.InputGroupAddon(
-                        "Extinction Coef:".ljust(20), addon_type="append"
-                    ),
+                    dbc.InputGroupAddon("Latitude".ljust(20), addon_type="append"),
                     dbc.Input(
-                        id="k-ext",
-                        children=DEFAULT_K_EXTINCTION,
-                        placeholder=DEFAULT_K_EXTINCTION,
+                        id="input-lat",
+                        children=DEFAULT_LAT,
+                        placeholder=DEFAULT_LAT,
                         type="number",
                         debounce=True,
+                        disabled=True,
+                    ),
+                ]
+            ),
+            dbc.InputGroup(
+                [
+                    dbc.InputGroupAddon("Longitude".ljust(20), addon_type="append"),
+                    dbc.Input(
+                        id="input-lon",
+                        children=DEFAULT_LON,
+                        placeholder=DEFAULT_LON,
+                        type="number",
+                        debounce=True,
+                        disabled=True,
                     ),
                 ]
             ),
@@ -375,6 +378,55 @@ def serve_layout():
     )
 
     clear_outside_forecast_img = html.Img(id="clear-outside-img")
+
+    location_picker_modal = html.Div(
+        [
+            dbc.Button(
+                "Select Location From Map",
+                id="open-location",
+                color="info",
+                block=True,
+                className="mr-1",
+            ),
+            dbc.Modal(
+                [
+                    dbc.ModalHeader("Select Location"),
+                    dbc.ModalBody(
+                        html.Div(
+                            [
+                                dl.Map(
+                                    style={"width": "1000px", "height": "800px"},
+                                    center=[DEFAULT_LAT, DEFAULT_LON],
+                                    zoom=6,
+                                    children=[
+                                        dl.TileLayer(
+                                            url="http://www.google.com/maps/vt?x={x}&y={y}&z={z}",
+                                            attribution='<a href="https://maps.google.com/">Google Maps</a>',
+                                        ),
+                                        dl.LayerGroup(id="location-marker",),
+                                    ],
+                                    id="map-id",
+                                ),
+                                html.Div(id="location-text"),
+                            ],
+                            style={"textAlign": "center"},
+                        )
+                    ),
+                    dbc.ModalFooter(
+                        dbc.Button(
+                            "Close",
+                            id="close-location",
+                            color="danger",
+                            block=True,
+                            className="mr-1",
+                        ),
+                    ),
+                ],
+                id="modal-location",
+                size="xl",
+            ),
+        ]
+    )
 
     weather_modal = html.Div(
         [
@@ -529,6 +581,8 @@ def serve_layout():
                                 dbc.Row(target_status_selector, justify="around"),
                                 html.Br(),
                                 dbc.Row(location_selection, justify="around"),
+                                html.Br(),
+                                dbc.Row(location_picker_modal, justify="around"),
                                 html.Br(),
                                 dbc.Row(weather_modal, justify="around"),
                                 html.Br(),
@@ -699,17 +753,48 @@ def serve_layout():
         [
             html.Div(
                 [
-                    html.Label("Select Target", style={"textAlign": "center"},),
-                    dcc.Dropdown(id="target-matches", options=[], multi=True),
+                    dcc.Dropdown(
+                        id="inspector-dates",
+                        placeholder="Select Date",
+                        options=[],
+                        multi=True,
+                    ),
                 ],
                 style={"textAlign": "center"},
                 className="dash-bootstrap",
             ),
-            html.Br(),
             html.Div(
                 [
-                    html.Label("Select Date", style={"textAlign": "center"},),
-                    dcc.Dropdown(id="inspector-dates", options=[], multi=True),
+                    dcc.Dropdown(
+                        id="target-matches",
+                        placeholder="Select Target",
+                        options=[],
+                        multi=True,
+                    ),
+                ],
+                style={"textAlign": "center"},
+                className="dash-bootstrap",
+            ),
+            html.Div(
+                [
+                    dcc.Dropdown(
+                        id="fl-matches",
+                        placeholder="Select Focal Length",
+                        options=[],
+                        multi=True,
+                    ),
+                ],
+                style={"textAlign": "center"},
+                className="dash-bootstrap",
+            ),
+            html.Div(
+                [
+                    dcc.Dropdown(
+                        id="px-size-matches",
+                        placeholder="Select pix size",
+                        options=[],
+                        multi=True,
+                    ),
                 ],
                 style={"textAlign": "center"},
                 className="dash-bootstrap",
@@ -885,52 +970,40 @@ def serve_layout():
         ]
     )
 
-    monitor_mode_check = dbc.Col(
+    monitor_mode_check = dbc.Row(
         [
-            html.Div(
-                [
-                    daq.BooleanSwitch(
-                        id="monitor-mode",
-                        on=False,
-                        label="Monitor Mode",
-                        labelPosition="bottom",
-                        color=switch_color,
-                    ),
-                ],
-                className="dash-bootstrap",
+            dbc.Col(
+                html.Div(
+                    [
+                        daq.BooleanSwitch(
+                            id="monitor-mode",
+                            on=False,
+                            label="Monitor Mode",
+                            labelPosition="bottom",
+                            color=switch_color,
+                        ),
+                    ],
+                    className="dash-bootstrap",
+                ),
+                width=6,
             ),
-            html.Div(
-                [
-                    daq.BooleanSwitch(
-                        id="show-text-in-scatter",
-                        on=False,
-                        label="Label Points",
-                        labelPosition="bottom",
-                        color=switch_color,
-                    ),
-                ],
-                className="dash-bootstrap",
-            )
-
+            dbc.Col(
+                html.Div(
+                    [
+                        daq.BooleanSwitch(
+                            id="show-text-in-scatter",
+                            on=False,
+                            label="Label Points",
+                            labelPosition="bottom",
+                            color=switch_color,
+                        ),
+                    ],
+                    className="dash-bootstrap",
+                ),
+                width=6,
+            ),
         ]
     )
-
-    # auto_reject_file_move = dbc.Col(
-    #     [
-    #         html.Div(
-    #             [
-    #                 daq.BooleanSwitch(
-    #                     id="auto-reject-file-move",
-    #                     on=False,
-    #                     label="Move Auto-rejected Frames (partial implementation)",
-    #                     labelPosition="bottom",
-    #                     color=switch_color,
-    #                 ),
-    #             ],
-    #             className="dash-bootstrap",
-    #         )
-    #     ]
-    # )
 
     data_files_table_container = dbc.Container(
         [
@@ -1190,6 +1263,7 @@ def serve_layout():
                         daq.Indicator(
                             value=False,
                             label="Monitor Mode",
+                            labelPosition="right",
                             color="#888888",
                             id="monitor-mode-indicator",
                         ),

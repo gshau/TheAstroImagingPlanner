@@ -49,17 +49,21 @@ class NWS_Forecast:
                 data[f"{key} {data_type}"] = [
                     val.text for val in xml_data.findall("value")
                 ]
-
-        df_weather = pd.DataFrame(data).set_index("date").astype(np.float)
-        df_weather.index.name = f"NWS Forecast for {location_data}"
-        return df_weather[
-            [
-                "temperature hourly",
-                "cloud-amount total",
-                "wind-speed sustained",
-                "humidity relative",
-            ]
+        cols = [
+            "temperature hourly",
+            "cloud-amount total",
+            "wind-speed sustained",
+            "humidity relative",
         ]
+        log.info("data length")
+        log.info(len(data))
+        try:
+            df_weather = pd.DataFrame(data).set_index("date").astype(np.float)
+            df_weather.index.name = f"NWS Forecast for {location_data}"
+            return df_weather[cols]
+        except ValueError:
+            log.info(f"Issue fetching weather data for {self.lat} {self.lon}")
+            return pd.DataFrame(columns=cols)
 
 
 class DarkSky_Forecast:

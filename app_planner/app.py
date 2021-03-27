@@ -484,12 +484,9 @@ def get_data(
 
     # Get sun up/down
     sun = target_coords["sun"]
-    sun_up = np.where(np.gradient((sun.alt > sun_alt_for_twilight).astype(int)) > 0)[0][
-        0
-    ]
-    sun_dn = np.where(np.gradient((sun.alt > sun_alt_for_twilight).astype(int)) < 0)[0][
-        0
-    ]
+    sun_above_threshold = (sun.alt > sun_alt_for_twilight).astype(int)
+    sun_up = np.where(np.gradient(sun_above_threshold) > 0)[0][0]
+    sun_dn = np.where(np.gradient(sun_above_threshold) < 0)[0][0]
 
     log.info(f"Sun down: {sun.index[sun_dn]}")
     log.info(f"Sun up: {sun.index[sun_up]}")
@@ -997,6 +994,10 @@ def get_click_coord_mpsas(click_lat_lon):
     bortle_value = np.digitize(mpsas, bortle_bins) + 1
     bortle_color = bortle_colors[bortle_value - 1]
 
+    bortle_badge = dbc.Badge(
+        f"Bortle: {bortle_value}", color=bortle_color, className="mr-1",
+    )
+
     text = dbc.Card(
         dbc.CardBody(
             [
@@ -1004,18 +1005,14 @@ def get_click_coord_mpsas(click_lat_lon):
                 html.H2(f"Latitude: {lat}"),
                 html.H2(f"Longitude: {lon}"),
                 html.H2(f"Sky Brightness: {mpsas} magnitudes/arc-second^2"),
-                html.H2(
-                    dbc.Badge(
-                        f"Bortle Scale: {bortle_value}",
-                        color=bortle_color,
-                        className="mr-1",
-                    ),
-                ),
+                html.H2(bortle_badge),
             ]
         )
     )
 
-    return lat, lon, mpsas, text
+    tab_text = f"Lat: {lat:.2f} Lon: {lon:.2f} Sky Brightness: {mpsas:.2f} mpsas"
+
+    return lat, lon, mpsas, text, tab_text, html.H4(bortle_badge)
 
 
 def shutdown():
@@ -1061,15 +1058,19 @@ def set_date(lat, lon, current_date):
     return date
 
 
+def get_modal(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
+
 @app.callback(
     Output("modal", "is_open"),
     [Input("open", "n_clicks"), Input("close", "n_clicks")],
     [State("modal", "is_open")],
 )
 def toggle_modal_callback(n1, n2, is_open):
-    if n1 or n2:
-        return not is_open
-    return is_open
+    return get_modal(n1, n2, is_open)
 
 
 @app.callback(
@@ -1180,9 +1181,7 @@ def get_mpsas_from_lat_lon(lat, lon):
     [State("modal-location", "is_open")],
 )
 def toggle_location_modal_callback(n1, n2, is_open):
-    if n1 or n2:
-        return not is_open
-    return is_open
+    return get_modal(n1, n2, is_open)
 
 
 @app.callback(
@@ -1192,6 +1191,8 @@ def toggle_location_modal_callback(n1, n2, is_open):
         Output("input-lon", "placeholder"),
         Output("local-mpsas", "value"),
         Output("location-text", "children"),
+        Output("location-tab-text", "children"),
+        Output("bortle-tab-badge", "children"),
     ],
     [
         Input("map-id", "click_lat_lng"),
@@ -1205,7 +1206,7 @@ def update_time_location_data_callback(
     click_lat_lon, lat=None, lon=None, date_string=None, mpsas=None,
 ):
 
-    markdown_text = ""
+    text = ""
     site_data = dict(
         lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=0, date_string="2021-01-01"
     )
@@ -1214,14 +1215,21 @@ def update_time_location_data_callback(
         lat = DEFAULT_LAT
     if not lon:
         lon = DEFAULT_LON
+    lat, lon, default_mpsas, text, tab_text, bortle_badge = get_click_coord_mpsas(
+        [lat, lon]
+    )
     if not mpsas:
-        mpsas = get_mpsas_from_lat_lon(lat, lon)
+        lat, lon, mpsas, text, tab_text, bortle_badge = get_click_coord_mpsas(
+            [lat, lon]
+        )
 
     ctx = dash.callback_context
     if ctx.triggered:
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]
         if button_id == "map-id":
-            lat, lon, mpsas, markdown_text = get_click_coord_mpsas(click_lat_lon)
+            lat, lon, mpsas, text, tab_text, bortle_badge = get_click_coord_mpsas(
+                click_lat_lon
+            )
 
     if lat:
         site_data["lat"] = lat
@@ -1234,7 +1242,7 @@ def update_time_location_data_callback(
         site_data["lat"], site_data["lon"], site_data["date_string"]
     )
 
-    return site_data, lat, lon, mpsas, markdown_text
+    return site_data, lat, lon, mpsas, text, tab_text, bortle_badge
 
 
 @app.callback(
@@ -1525,6 +1533,7 @@ def store_data(
         value=value,
         filter_targets=filter_seasonal_targets,
         min_moon_distance=min_moon_distance,
+        sun_alt_for_twilight=float(CONFIG.get("solar_altitude_for_night", -18)),
     )
     log.info(f"get_data: {time.time() - t0}")
 
@@ -2500,9 +2509,7 @@ def toggle_glossary_modal_callback(n1, n2, is_open):
     with open("/app/src/glossary.md", "r") as f:
         text = f.readlines()
 
-    status = is_open
-    if n1 or n2:
-        status = not is_open
+    status = get_modal(n1, n2, is_open)
 
     return status, dcc.Markdown(text)
 

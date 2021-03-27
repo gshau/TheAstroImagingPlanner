@@ -66,6 +66,9 @@ time_resolution: 60
 # Minimum Target-moon distance
 min_moon_distance: 30
 
+# Twilight/Dawn solar altitude
+solar_altitude_for_night: -18
+
 # Sensor map - for cleaning up the naming of some entries
 sensor_map:
   'null': null

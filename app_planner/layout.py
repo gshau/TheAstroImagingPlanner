@@ -442,7 +442,7 @@ def serve_layout():
                     dbc.ModalHeader("Weather Forecast"),
                     dbc.ModalBody(
                         html.Div(
-                            [weather_graph, clear_outside_forecast_img],
+                            [clear_outside_forecast_img, weather_graph],
                             style={"textAlign": "center"},
                         )
                     ),
@@ -791,7 +791,7 @@ def serve_layout():
                 [
                     dcc.Dropdown(
                         id="px-size-matches",
-                        placeholder="Select pix size",
+                        placeholder="Select Pixel Size",
                         options=[],
                         multi=True,
                     ),
@@ -1259,6 +1259,8 @@ def serve_layout():
                 [
                     dbc.Col(tabs, width=6),
                     dbc.Col([]),
+                    dbc.Col([], width=3, id="location-tab-text"),
+                    dbc.Col([], width=1, id="bortle-tab-badge"),
                     dbc.Col(
                         daq.Indicator(
                             value=False,

@@ -60,9 +60,8 @@ lon: -88.37
 # Link override for GOES satellite
 goes_satellite_link: "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36"
 
-# Local light pollution level (for contrast / local sky brightness calculations)
+# Atmospheric extinction coefficient
 k_extinction: 0.2
-bandwidth: 120
 
 # Time resolution of target figure on first tab
 time_resolution: 60

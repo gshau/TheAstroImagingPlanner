@@ -232,9 +232,8 @@ lon: -88.37
 # Link override for GOES satellite
 goes_satellite_link: "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36"
 
-# Local light pollution level (for contrast / local sky brightness calculations)
+# Atmospheric extinction coefficient
 k_extinction: 0.2
-bandwidth: 120
 
 # Time resolution of target figure on first tab
 time_resolution: 60
@@ -256,5 +255,7 @@ sensor_map:
 Distributed under the GPLv3 License. See `LICENSE` for more information.
 
 # Donate
-If this project helped you with your astrophotography planning and data review, please consider donating!  
-[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=UJ63AXALXGAP4)
+If this project helped you with your astrophotography planning and data review, please consider donating!
+
+<a href="https://www.buymeacoffee.com/gshau" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+

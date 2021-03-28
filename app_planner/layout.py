@@ -721,7 +721,7 @@ def serve_layout(app):
             log.info(root_name)
             with open(md_file, "r") as file:
                 markdown_from_files[root_name] = "".join(file.readlines())
-        about_container = dbc.Container(
+        help_container = dbc.Container(
             children=[
                 dbc.Row(
                     [
@@ -854,7 +854,7 @@ def serve_layout(app):
                     ]
                 )
             ],
-            id="tab-about-div",
+            id="tab-help-div",
             fluid=True,
             style={},
         )
@@ -1330,7 +1330,7 @@ def serve_layout(app):
 
         tabs = dbc.Tabs(
             id="tabs",
-            active_tab="tab-about",
+            active_tab="tab-target",
             children=[
                 dbc.Tab(
                     id="tab-target-review",
@@ -1359,8 +1359,8 @@ def serve_layout(app):
                     label_style={"font-size": 16},
                 ),
                 dbc.Tab(
-                    label="About",
-                    tab_id="tab-about",
+                    label="Help",
+                    tab_id="tab-help",
                     labelClassName="text-dark",
                     label_style={"font-size": 16},
                 ),
@@ -1421,7 +1421,7 @@ def serve_layout(app):
                 data_table_container,
                 target_container,
                 config_container,
-                about_container,
+                help_container,
                 data_files_table_container,
                 html.Div(id="dummy-id", style={"display": "none"}),
                 html.Div(id="dummy-id-target-data", style={"display": "none"}),

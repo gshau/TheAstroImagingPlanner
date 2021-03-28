@@ -1304,7 +1304,7 @@ def update_target_with_status_callback(status, targets, profile_list):
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
         Output("tab-config-div", "style"),
-        Output("tab-about-div", "style"),
+        Output("tab-help-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
@@ -1315,7 +1315,7 @@ def render_content(tab):
         "tab-data-table",
         "tab-files-table",
         "tab-config",
-        "tab-about",
+        "tab-help",
     ]
 
     styles = [{"display": "none"}] * len(tab_names)

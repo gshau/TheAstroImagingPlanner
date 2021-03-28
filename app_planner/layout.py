@@ -738,10 +738,16 @@ def serve_layout(app):
                                             [
                                                 dcc.Markdown(
                                                     markdown_from_files.get(
-                                                        "target_planning"
+                                                        "01_target_planning"
                                                     )
                                                 )
                                             ],
+                                        ),
+                                        dbc.CardImg(
+                                            src=app.get_asset_url(
+                                                "weather_forecast_modal.png"
+                                            ),
+                                            className="align-self-center w-50",
                                         ),
                                     ],
                                     style={"width": "18rem"},
@@ -759,7 +765,9 @@ def serve_layout(app):
                                         dbc.CardBody(
                                             [
                                                 dcc.Markdown(
-                                                    markdown_from_files.get("utilities")
+                                                    markdown_from_files.get(
+                                                        "05_utilities"
+                                                    )
                                                 )
                                             ]
                                         ),
@@ -785,7 +793,7 @@ def serve_layout(app):
                                             [
                                                 dcc.Markdown(
                                                     markdown_from_files.get(
-                                                        "frame_inspector"
+                                                        "02_frame_inspector"
                                                     )
                                                 )
                                             ]
@@ -807,7 +815,7 @@ def serve_layout(app):
                                             [
                                                 dcc.Markdown(
                                                     markdown_from_files.get(
-                                                        "frame_analysis"
+                                                        "03_frame_analysis"
                                                     )
                                                 )
                                             ]
@@ -829,7 +837,7 @@ def serve_layout(app):
                                             [
                                                 dcc.Markdown(
                                                     markdown_from_files.get(
-                                                        "targets_table"
+                                                        "04_targets_table"
                                                     )
                                                 )
                                             ]

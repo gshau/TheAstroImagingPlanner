@@ -1,5 +1,6 @@
 ## Frame Inspector
 
+[//]: # (src/assets/inspector_tab.png)
 The Frame Inspector tab allows you to drill down into the data you have stored.  There are four primary options to filter the data: Date, Target, Focal Length, Pixel Size.  
 
 

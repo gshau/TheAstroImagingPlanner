@@ -1,0 +1,6 @@
+## Subframe Analysis 
+
+If you click on one of the points in the scatter graph, the next three graphs below will populate:
+- `Aberration Inspector` - this view mimics the Aberration Inspector script in Pixinsight, and provides a 3x3 sub-panel of the subframe.  Toggle the `As Aberration Inspector View` to see the the full subframe in native resolution.  Note: if you're viewing large files, this can take a few seconds to render.
+- `Frame Analysis` - this view is very helpful to diagnose the cause of odd star shapes.  It consists of a heatmap, color coded by either `Ellipticity`, `Eccentricity`, or `FWHM`, available by the dropdown box above.  Each grid square has a line indicating average direciton of elongation the stars in that square have, and the length of the line indicates the strength.  This information is very valuable for diagnosing things like spacing issues, tilt, or wind effects.
+- `Radial Analysis` - this view shows the FWHM and ellipticity for stars at different radial distances from the center of the subframe.

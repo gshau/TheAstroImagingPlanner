@@ -1,0 +1,14 @@
+                                                
+## Utilities
+
+The utilities tab gives some control over some portions of the app.  
+ - `Clear All Tables` - clears all tables (restart from scratch)
+ - `Clear Targets Table` - clears only the target table
+ - `Clear Header Tables` - clears FITs header tables including status
+ - `Clear Star Tables` - clears all star metrics data
+ - `Download Planner Log` - download the log for the planner
+ - `Download Watchdog Log` - download the log for all backend work the watchdog does, including fits header reading, star metric eval, etc.
+ - `Restart App` - restart the main app
+ - `Restart Watchdog` - restart the watchdog
+ - `Show File Skiplist` - Show a list of files the watchdog skipped due to an error (most likely a key missing FITs header)
+ - `Clear File Skiplist` - Clear the skiplist to allow for those files to be reprocessed

@@ -188,9 +188,9 @@ TRANSLATED_FILTERS = {
     "oiii": ["ho", "sho", "hoo", "hos"],
     "sii": ["sho", "hos"],
     "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
-    "bb": ["luminance", "lrgb"],
-    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
-    "lum": ["luminance"],
+    "bb": ["luminance", "lrgb", "lum"],
+    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b ", "rgb"],
+    "lum": ["luminance", "lum"],
 }
 
 all_target_coords = pd.DataFrame()
@@ -1001,11 +1001,11 @@ def get_click_coord_mpsas(click_lat_lon):
     text = dbc.Card(
         dbc.CardBody(
             [
-                html.H1("Location data", className="card-title"),
-                html.H2(f"Latitude: {lat}"),
-                html.H2(f"Longitude: {lon}"),
-                html.H2(f"Sky Brightness: {mpsas} magnitudes/arc-second^2"),
-                html.H2(bortle_badge),
+                html.H3("Location data", className="card-title"),
+                html.H4(f"Latitude: {lat}"),
+                html.H4(f"Longitude: {lon}"),
+                html.H4(f"Sky Brightness: {mpsas} magnitudes/arc-second^2"),
+                html.H4(bortle_badge),
             ]
         )
     )
@@ -1034,7 +1034,7 @@ def shutdown_watchdog():
 
 
 # Set layout
-app.layout = serve_layout
+app.layout = serve_layout(app)
 
 
 # Callbacks
@@ -1304,6 +1304,7 @@ def update_target_with_status_callback(status, targets, profile_list):
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
         Output("tab-config-div", "style"),
+        Output("tab-about-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
@@ -1314,6 +1315,7 @@ def render_content(tab):
         "tab-data-table",
         "tab-files-table",
         "tab-config",
+        "tab-about",
     ]
 
     styles = [{"display": "none"}] * len(tab_names)
@@ -2497,21 +2499,6 @@ def toggle_file_skiplist_alert(n_show, n_clear):
             color = "primary"
             return response, is_open, duration, color
     return "", False, 0, "primary"
-
-
-@app.callback(
-    [Output("glossary-modal", "is_open"), Output("glossary", "children")],
-    [Input("glossary-open", "n_clicks"), Input("glossary-close", "n_clicks")],
-    [State("glossary-modal", "is_open")],
-)
-def toggle_glossary_modal_callback(n1, n2, is_open):
-
-    with open("/app/src/glossary.md", "r") as f:
-        text = f.readlines()
-
-    status = get_modal(n1, n2, is_open)
-
-    return status, dcc.Markdown(text)
 
 
 if __name__ == "__main__":

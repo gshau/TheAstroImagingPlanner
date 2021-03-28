@@ -1,0 +1,3 @@
+## Targets Table
+
+The Targets Table provides a view of all data stored and targets pulled from RoboClip or sequence files.  The `OBJECT` column is the name of the object stored in the FITs header, and it is matched with the `TARGET` according to the `Minimum Frame Overlap Fraction` setting on the main planner tab.  As with the other tables on the Inspector tab, you can filter any of the columns in the table.  In the example here, I've selected only the active targets.

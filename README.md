@@ -14,16 +14,6 @@ These are the main components to the dashboard:
 
 The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, or [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/) sequence files.  
 
-
-# Getting Started
-
-## Prerequisites:
-
-You can build your own docker image from these files by using `docker-compose up`, which may take some time.  This can be done by editing the `docker-compose.yml` file as noted in the file.  Alternatively, by default, you can pull down the latest image from docker hub with:
-```
-docker pull gshau/astroimaging-planner:latest
-```
-
 ## Running the app
 1. Install [Docker](https://docs.docker.com/get-docker/)
 2. Download and extract the [source code](https://github.com/gshau/TheAstroImagingPlanner/archive/refs/heads/master.zip)

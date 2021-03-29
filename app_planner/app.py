@@ -469,7 +469,7 @@ def get_data(
         y=target_coords["moon"]["alt"],
         text="Moon",
         opacity=1,
-        line=dict(color="Gray", width=4),
+        line=dict(color="#333333", width=4),
         name="Moon",
     )
 
@@ -561,7 +561,7 @@ def get_data(
 
                     in_legend = True
                     opacity = 1
-                    width = 3
+                    width = 2
                     if horizon_status == "below":
                         show_trace = df["alt"] > -90
                         in_legend = False
@@ -2431,22 +2431,37 @@ def toggle_alert(n):
     df_data = get_df_from_redis("df_data")
     df0 = df_data.dropna(subset=["n_stars"])
     df_new = df0[~df0["filename"].isin(df_old["filename"])]
+    df_removed = df_old[~df_old["filename"].isin(df0["filename"])]
+
+    removed_row_count = df_removed.shape[0]
+
     total_row_count = df0.shape[0]
     new_row_count = df_new.shape[0]
 
-    new_files_available = new_row_count > 0
+    has_new_files = new_row_count > 0
+    has_removed_files = removed_row_count > 0
+
+    files_changed = has_new_files | has_removed_files
 
     update_frequency = CONFIG.get("monitor_mode_update_frequency", 15) * 1000
 
     color = "primary"
-    if new_files_available:
+    if files_changed:
         filenames = df_new["filename"].values
-        response = [f"Recently processed {new_row_count} new file:"]
-        if len(filenames) > 1:
-            response = [f"Recently processed {new_row_count} new files:"]
-        for filename in filenames:
-            response.append(html.Br())
-            response.append(filename)
+        removed_filenames = df_removed["filename"].values
+        response = []
+
+        if has_new_files:
+            response += [f"Recently processed {new_row_count} new files:"]
+            for filename in filenames:
+                response.append(html.Br())
+                response.append(filename)
+        if has_removed_files:
+            color = "danger"
+            response.append(f"Recently removed {removed_row_count} files:")
+            for filename in removed_filenames:
+                response.append(html.Br())
+                response.append(filename)
         is_open = True
         duration = 60000
         log.info(f"Found new files: {filenames}")

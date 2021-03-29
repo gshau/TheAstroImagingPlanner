@@ -454,7 +454,7 @@ def process_image_from_filename(
         if objects.shape[0] == 0:
             log.info(f"No stars found for {filename}, adding to skiplist")
             append_to_list_on_redis(filename, "file_skiplist")
-        objects["filename_with_path"] = filename
+        objects["file_full_path"] = filename
         objects["filename"] = os.path.basename(filename)
         objects["nx"] = data.shape[0]
         objects["ny"] = data.shape[1]
@@ -472,7 +472,6 @@ def init_tables():
         [
             "fits_headers",
             "fits_status",
-            # "star_metrics",
             "aggregated_star_metrics",
             "xy_frame_metrics",
             "radial_frame_metrics",
@@ -644,8 +643,45 @@ def update_star_metrics(
         log.info("Done processing stars")
 
 
+def check_file_orphaned_in_table(file_list, engine, table_name):
+    try:
+        df = pd.read_sql(table_name, engine)
+        orphaned_files = [
+            os.path.basename(file)
+            for file in df["file_full_path"].values
+            if file not in file_list
+        ]
+    except:
+        orphaned_files = []
+    return orphaned_files
+
+
+def remove_orphaned_rows(config=CONFIG, data_dir=DATA_DIR, file_list=None):
+    if not file_list:
+        file_list = get_fits_file_list(data_dir, config)
+    orphaned_files = check_file_orphaned_in_table(
+        file_list, POSTGRES_ENGINE, "fits_headers"
+    )
+    if orphaned_files:
+        for filename in orphaned_files:
+            log.info(f"Orphaned file to be removed from tables: {filename}")
+
+        for table_name in [
+            "aggregated_star_metrics",
+            "fits_headers",
+            "fits_status",
+            "radial_frame_metrics",
+            "xy_frame_metrics",
+        ]:
+            drop_query = f"""DELETE FROM {table_name} WHERE filename IN {tuple(orphaned_files)}"""
+
+            with POSTGRES_ENGINE.connect() as con:
+                con.execute(drop_query)
+
+
 def update_db_with_matching_files(config=CONFIG, data_dir=DATA_DIR, file_list=None):
     log.debug("Checking for new files")
+    remove_orphaned_rows(config, data_dir, file_list)
     update_fits_headers(config, data_dir, file_list)
     update_fits_status(config, data_dir, file_list)
     update_star_metrics(config, data_dir, file_list, n_chunk=10)
@@ -693,7 +729,7 @@ def bin_stars(df_s, filename, tnpix_min=6):
 
     df_radial.columns = [col.replace("%", "_pct") for col in df_radial.columns]
 
-    df_radial["filename_with_path"] = filename
+    df_radial["file_full_path"] = filename
     df_radial["filename"] = os.path.basename(filename)
 
     df_xy = group_xy.agg(
@@ -719,7 +755,7 @@ def bin_stars(df_s, filename, tnpix_min=6):
     df_xy["ellipticity"] = np.sqrt(df_xy["vec_u"] ** 2 + df_xy["vec_v"] ** 2)
     df_xy["dot_norm"] = df_xy["dot"] / df_xy["ellipticity"] / df_xy["chip_r"]
 
-    df_xy["filename_with_path"] = filename
+    df_xy["file_full_path"] = filename
     df_xy["filename"] = os.path.basename(filename)
 
     return df_radial, df_xy

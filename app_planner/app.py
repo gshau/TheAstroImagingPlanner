@@ -13,6 +13,8 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import dash_table
+import dash_leaflet as dl
+
 
 from dash.exceptions import PreventUpdate
 
@@ -34,9 +36,9 @@ from flask import request
 
 from scipy.interpolate import interp1d
 from astro_planner.weather import NWS_Forecast
-from astro_planner.target import object_file_reader, normalize_target_name, Objects
+from astro_planner.target import target_file_reader, normalize_target_name, Targets
 from astro_planner.contrast import add_contrast
-from astro_planner.site import update_site
+from astro_planner.site import update_site, get_utc_offset
 from astro_planner.ephemeris import get_coordinates
 from astro_planner.data_parser import (
     INSTRUMENT_COL,
@@ -45,6 +47,7 @@ from astro_planner.data_parser import (
     BINNING_COL,
 )
 from astro_planner.utils import timer
+from astro_planner.sky_brightness import LightPollutionMap
 
 from image_grading.preprocessing import clear_tables, init_tables
 
@@ -102,12 +105,13 @@ for filename in glob.glob(f"{base_dir}/conf/equipment/*.yml"):
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
 DEFAULT_LON = CONFIG.get("lon", -88.37)
-DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", -5)
+DEFAULT_UTC_OFFSET = CONFIG.get("utc_offset", 0)
 DEFAULT_MPSAS = CONFIG.get("mpsas", 20.1)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 DEFAULT_TIME_RESOLUTION = CONFIG.get("time_resolution", 300)
 DEFAULT_MIN_MOON_DISTANCE = CONFIG.get("min_moon_distance", 30)
+DEFAULT_MIN_FRAME_OVERLAP_FRACTION = CONFIG.get("min_frame_overlap_fraction", 0.95)
 
 POSTGRES_USER = os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
@@ -161,6 +165,7 @@ FILTER_MAP = {
     "HA": HA_FILTER,
     "O3": OIII_FILTER,
     "S2": SII_FILTER,
+    BAYER_: BAYER,
 }
 
 
@@ -183,9 +188,9 @@ TRANSLATED_FILTERS = {
     "oiii": ["ho", "sho", "hoo", "hos"],
     "sii": ["sho", "hos"],
     "nb": ["ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"],
-    "bb": ["luminance", "lrgb"],
-    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b "],
-    "lum": ["luminance"],
+    "bb": ["luminance", "lrgb", "lum"],
+    "rgb": ["osc", "bayer", "dslr", "slr", "r ", " g ", " b ", "rgb"],
+    "lum": ["luminance", "lum"],
 }
 
 all_target_coords = pd.DataFrame()
@@ -309,7 +314,7 @@ def pull_stored_data():
 
 
 def pull_target_data():
-    target_query = """select filename,
+    target_query = """select filename as target_filename,
         "TARGET",
         "GROUP",
         "RAJ2000",
@@ -319,8 +324,12 @@ def pull_target_data():
     """
 
     try:
-        df_objects = pd.read_sql(target_query, POSTGRES_ENGINE)
+        df_targets = pd.read_sql(target_query, POSTGRES_ENGINE)
         df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
+        df_targets["TARGET"] = df_targets["TARGET"].apply(normalize_target_name)
+        df_target_status["TARGET"] = df_target_status["TARGET"].apply(
+            normalize_target_name
+        )
     except exc.SQLAlchemyError:
         log.info(
             "Issue with reading tables, waiting for 15 seconds for it to resolve..."
@@ -328,27 +337,22 @@ def pull_target_data():
         time.sleep(15)
         return None
 
-    object_data = Objects()
-    object_data.load_from_df(df_objects)
-    return object_data, df_objects, df_target_status
+    target_data = Targets()
+    target_data.load_from_df(df_targets)
+    return target_data, df_targets, df_target_status
 
 
-def get_object_data():
-    df_objects = get_df_from_redis("df_objects")
-    object_data = Objects()
-    object_data.load_from_df(df_objects)
-    return object_data
-
-
-def merge_target_with_stored_data(df_data, df_objects):
-    df_combined = merge_targets_with_stored_metadata(df_data, df_objects, EQUIPMENT)
-    return df_combined
+def get_target_data():
+    df_targets = get_df_from_redis("df_targets")
+    target_data = Targets()
+    target_data.load_from_df(df_targets)
+    return target_data
 
 
 VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 
-def update_targets_with_status(target_names, status, df_combined, profile_list):
+def update_targets_with_status(target_names, status, profile_list):
 
     query_template = """INSERT INTO target_status
     ("TARGET", "GROUP", status)
@@ -358,8 +362,7 @@ def update_targets_with_status(target_names, status, df_combined, profile_list):
     df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
     if status in VALID_STATUS:
         selection = df_target_status["GROUP"].isin(profile_list)
-        normalized_target_matches = [normalize_target_name(t) for t in target_names]
-        selection &= df_target_status["TARGET"].isin(normalized_target_matches)
+        selection &= df_target_status["TARGET"].isin(target_names)
         df0 = df_target_status[selection][["TARGET", "GROUP"]]
         df0["status"] = status
         if df0.shape[0] > 0:
@@ -385,15 +388,18 @@ def update_data():
         on=["file_full_path"],
         suffixes=["", ""],
     )
-    if use_planner:
-        object_data, df_objects, df_target_status = pull_target_data()
-        df_combined = merge_target_with_stored_data(df_data, df_objects)
-
     push_df_to_redis(df_data, "df_data")
+
     if use_planner:
-        push_df_to_redis(df_combined, "df_combined")
-        push_df_to_redis(df_objects, "df_objects")
+        target_data, df_targets, df_target_status = pull_target_data()
+        push_df_to_redis(df_targets, "df_targets")
         push_df_to_redis(df_target_status, "df_target_status")
+
+        df_merged_exposure, df_merged = merge_targets_with_stored_metadata(
+            df_data, df_targets
+        )
+        push_df_to_redis(df_merged_exposure, "df_merged_exposure")
+        push_df_to_redis(df_merged, "df_merged")
 
 
 update_data()
@@ -447,7 +453,7 @@ def get_time_limits(targets, sun_alt=-5):
 
 def get_data(
     target_coords,
-    df_combined,
+    df_targets,
     value="alt",
     sun_alt_for_twilight=-18,
     filter_targets=True,
@@ -463,7 +469,7 @@ def get_data(
         y=target_coords["moon"]["alt"],
         text="Moon",
         opacity=1,
-        line=dict(color="Gray", width=4),
+        line=dict(color="#333333", width=4),
         name="Moon",
     )
 
@@ -478,12 +484,9 @@ def get_data(
 
     # Get sun up/down
     sun = target_coords["sun"]
-    sun_up = np.where(np.gradient((sun.alt > sun_alt_for_twilight).astype(int)) > 0)[0][
-        0
-    ]
-    sun_dn = np.where(np.gradient((sun.alt > sun_alt_for_twilight).astype(int)) < 0)[0][
-        0
-    ]
+    sun_above_threshold = (sun.alt > sun_alt_for_twilight).astype(int)
+    sun_up = np.where(np.gradient(sun_above_threshold) > 0)[0][0]
+    sun_dn = np.where(np.gradient(sun_above_threshold) < 0)[0][0]
 
     log.info(f"Sun down: {sun.index[sun_dn]}")
     log.info(f"Sun up: {sun.index[sun_up]}")
@@ -541,8 +544,12 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
-            notes_text = df_combined[["NOTE"]].loc[target_name].values.flatten()[0]
-            profile = df_combined[["GROUP"]].loc[target_name].values.flatten()[0]
+            notes_text = df_targets.loc[
+                df_targets["TARGET"] == target_name, "NOTE"
+            ].values.flatten()[0]
+            profile = df_targets.loc[
+                df_targets["TARGET"] == target_name, "GROUP"
+            ].values.flatten()[0]
             skip_below_horizon = True
             for horizon_status in ["above", "below"]:
                 if (horizon_status == "below") and skip_below_horizon:
@@ -554,7 +561,7 @@ def get_data(
 
                     in_legend = True
                     opacity = 1
-                    width = 3
+                    width = 2
                     if horizon_status == "below":
                         show_trace = df["alt"] > -90
                         in_legend = False
@@ -601,8 +608,8 @@ def parse_loaded_contents(contents, filename, date):
             local_file = f"./data/uploads/{file_root}.mdb"
             with open(local_file, "wb") as f:
                 f.write(decoded)
-            object_data = object_file_reader(local_file)
-            log.debug(object_data.df_objects.head())
+            target_data = target_file_reader(local_file)
+            log.debug(target_data.df_targets.head())
             log.debug(local_file)
         elif ".sgf" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
@@ -611,7 +618,7 @@ def parse_loaded_contents(contents, filename, date):
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             log.info("Done!")
-            object_data = object_file_reader(local_file)
+            target_data = target_file_reader(local_file)
         elif ".xml" in filename:
             out_data = io.StringIO(decoded.decode("utf-8"))
             file_root = filename.replace(".xml", "")
@@ -619,51 +626,55 @@ def parse_loaded_contents(contents, filename, date):
             with open(local_file, "w") as f:
                 f.write(out_data.read())
             log.info("Done!")
-            object_data = object_file_reader(local_file)
+            target_data = target_file_reader(local_file)
         else:
             return None
     except Exception as e:
         log.warning(e)
         return None
-    return object_data
+    return target_data
 
 
 def update_weather(site):
     log.debug("Trying NWS")
     nws_forecast = NWS_Forecast(site.lat, site.lon)
-    df_weather = nws_forecast.parse_data()
+    if nws_forecast.xmldoc:
+        df_weather = nws_forecast.parse_data()
 
-    data = []
-    for col in df_weather.columns:
-        data.append(
-            dict(
-                x=df_weather.index,
-                y=df_weather[col],
-                mode="lines",
-                name=col,
-                opacity=1,
+        data = []
+        for col in df_weather.columns:
+            data.append(
+                dict(
+                    x=df_weather.index,
+                    y=df_weather[col],
+                    mode="lines",
+                    name=col,
+                    opacity=1,
+                )
             )
-        )
 
-    graph_data = [
-        dcc.Graph(
-            config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
-            figure={
-                "data": data,
-                "layout": dict(
-                    title=df_weather.index.name,
-                    margin={"l": 50, "b": 100, "t": 50, "r": 50},
-                    legend={"x": 1, "y": 0.5},
-                    yaxis={"range": [0, 100]},
-                    height=600,
-                    plot_bgcolor="#ddd",
-                    paper_bgcolor="#fff",
-                    hovermode="closest",
-                    transition={"duration": 150},
-                ),
-            },
-        )
-    ]
+        graph_data = [
+            dcc.Graph(
+                config={"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d"]},
+                figure={
+                    "data": data,
+                    "layout": dict(
+                        title=df_weather.index.name,
+                        margin={"l": 50, "b": 100, "t": 50, "r": 50},
+                        legend={"x": 1, "y": 0.5},
+                        yaxis={"range": [0, 100]},
+                        height=400,
+                        width=750,
+                        plot_bgcolor="#ddd",
+                        paper_bgcolor="#fff",
+                        hovermode="closest",
+                        transition={"duration": 150},
+                    ),
+                },
+            )
+        ]
+    else:
+        graph_data = []
 
     clear_outside_link = (
         f"http://clearoutside.com/forecast/{site.lat}/{site.lon}?view=current",
@@ -677,7 +688,15 @@ def update_weather(site):
         "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36",
     )
 
-    return graph_data, clear_outside_link[0], nws_link[0], goes_satellite_link
+    clear_outside_forecast_img = f"http://clearoutside.com/forecast_image_large/{np.round(site.lat, 2)}/{np.round(site.lon, 2)}/forecast.png"
+
+    return (
+        graph_data,
+        clear_outside_link[0],
+        nws_link[0],
+        goes_satellite_link,
+        clear_outside_forecast_img,
+    )
 
 
 def target_filter(targets, filters):
@@ -743,7 +762,11 @@ def get_progress_graph(
         .dropna()
     )
 
-    total_exposure = df_summary[exposure_col].sum() / 3600
+    exposure = df_summary[exposure_col] / 3600
+    accepted_exposure = exposure[exposure > 0].sum()
+    rejected_exposure = -exposure[exposure < 0].sum()
+    total_exposure = accepted_exposure + rejected_exposure
+
     df_summary = df_summary.unstack(1).fillna(0)
     df_summary = df_summary[exposure_col] / 3600
 
@@ -767,6 +790,14 @@ def get_progress_graph(
     fl = df0[FOCALLENGTH_COL].astype(int).astype(str)
     df0["text"] = df0[INSTRUMENT_COL] + " @ " + bin + "x" + bin + " FL = " + fl + "mm"
 
+    df0["text"] = df0.apply(
+        lambda row: "<br>Sensor: "
+        + str(row[INSTRUMENT_COL])
+        + f"<br>BINNING: {row[BINNING_COL]}"
+        + f"<br>FOCAL LENGTH: {row[FOCALLENGTH_COL]} mm",
+        axis=1,
+    )
+
     barmode = CONFIG.get("progress_mode", "group")
     if barmode == "stack":
         df0["object_with_status"] = df0.apply(
@@ -777,8 +808,9 @@ def get_progress_graph(
         )
     else:
         df_summary = df0[df0["OBJECT"].isin(objects_sorted)].set_index(["OBJECT"])
-
-    for filter in [col for col in COLORS if col in df_summary.columns]:
+        df_summary = df_summary.loc[objects_sorted]
+    cols = [col for col in COLORS if col in df_summary.columns]
+    for filter in cols:
         p.add_trace(
             go.Bar(
                 name=f"{filter}",
@@ -795,7 +827,13 @@ def get_progress_graph(
         barmode=barmode,
         yaxis_title="Total Exposure (hr) <br> Negative values are auto-rejected",
         xaxis_title="Object",
-        title=f"Acquired Data, Total Exposure = {total_exposure:.2f} hours",
+        title={
+            "text": f"Acquired Data, Exposure Total = {total_exposure:.2f} hr<br> Accepted = {accepted_exposure:.2f} hr, Rejected = {rejected_exposure:.2f} hr",
+            "y": 0.95,
+            "x": 0.5,
+            "xanchor": "center",
+            "yanchor": "top",
+        },
         height=600,
         legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
         title_x=0.5,
@@ -885,17 +923,17 @@ def apply_rejection_criteria(
 
 
 def store_target_coordinate_data(date_string, site_data):
-    object_data = get_object_data()
+    target_data = get_target_data()
 
     t0 = time.time()
     site = update_site(
         site_data,
         default_lat=DEFAULT_LAT,
         default_lon=DEFAULT_LON,
-        default_utc_offset=DEFAULT_UTC_OFFSET,
+        date_string=date_string,
     )
     targets = []
-    target_list = object_data.target_list
+    target_list = target_data.target_list
     for profile in target_list:
         targets += list(target_list[profile].values())
 
@@ -912,13 +950,13 @@ def filter_targets_for_matches_and_filters(
     targets, status_matches, filters, profile_list
 ):
     df_target_status = get_df_from_redis("df_target_status")
-    object_data = get_object_data()
+    target_data = get_target_data()
 
     targets = []
-    if len(object_data.target_list) > 0:
+    if len(target_data.target_list) > 0:
         for profile in profile_list:
-            if profile in object_data.target_list:
-                targets += list(object_data.target_list[profile].values())
+            if profile in target_data.target_list:
+                targets += list(target_data.target_list[profile].values())
 
         if filters:
             targets = target_filter(targets, filters)
@@ -927,15 +965,53 @@ def filter_targets_for_matches_and_filters(
             matching_targets = df_target_status[
                 df_target_status["status"].isin(status_matches)
             ]["TARGET"].values
-            matching_targets = [
-                normalize_target_name(matching_target)
-                for matching_target in matching_targets
-            ]
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
 
     return targets
+
+
+def get_click_coord_mpsas(click_lat_lon):
+    lat, lon = click_lat_lon
+    lat = np.round(lat, 3)
+    lon = (np.round(lon, 3) + 180) % 360 - 180
+    mpsas = np.round(get_mpsas_from_lat_lon(lat, lon), 2)
+
+    bortle_bins = [21.99, 21.89, 21.69, 20.49, 19.5, 18.94, 18.38]
+    bortle_colors = [
+        "dark",
+        "secondary",
+        "primary",
+        "success",
+        "warning",
+        "danger",
+        "danger",
+        "light",
+        "light",
+    ]
+    bortle_value = np.digitize(mpsas, bortle_bins) + 1
+    bortle_color = bortle_colors[bortle_value - 1]
+
+    bortle_badge = dbc.Badge(
+        f"Bortle: {bortle_value}", color=bortle_color, className="mr-1",
+    )
+
+    text = dbc.Card(
+        dbc.CardBody(
+            [
+                html.H3("Location data", className="card-title"),
+                html.H4(f"Latitude: {lat}"),
+                html.H4(f"Longitude: {lon}"),
+                html.H4(f"Sky Brightness: {mpsas} magnitudes/arc-second^2"),
+                html.H4(bortle_badge),
+            ]
+        )
+    )
+
+    tab_text = f"Lat: {lat:.2f} Lon: {lon:.2f} Sky Brightness: {mpsas:.2f} mpsas"
+
+    return lat, lon, mpsas, text, tab_text, html.H4(bortle_badge)
 
 
 def shutdown():
@@ -957,17 +1033,22 @@ def shutdown_watchdog():
 
 
 # Set layout
-app.layout = serve_layout
+app.layout = serve_layout(app)
 
 
 # Callbacks
 
 
-@app.callback(Output("date-picker", "date"), [Input("input-utc-offset", "value")])
-def set_date(utc_offset):
+@app.callback(
+    Output("date-picker", "date"),
+    [Input("input-lat", "value"), Input("input-lon", "value")],
+    [State("date-picker", "date")],
+)
+def set_date(lat, lon, current_date):
     df_data = get_df_from_redis("df_data")
-    if utc_offset is None:
-        utc_offset = DEFAULT_UTC_OFFSET
+
+    utc_offset = get_utc_offset(lat, lon, current_date)
+
     date = datetime.datetime.now() + datetime.timedelta(hours=utc_offset)
     df_data = set_date_cols(df_data, utc_offset=utc_offset)
 
@@ -976,15 +1057,19 @@ def set_date(utc_offset):
     return date
 
 
+def get_modal(n1, n2, is_open):
+    if n1 or n2:
+        return not is_open
+    return is_open
+
+
 @app.callback(
     Output("modal", "is_open"),
     [Input("open", "n_clicks"), Input("close", "n_clicks")],
     [State("modal", "is_open")],
 )
 def toggle_modal_callback(n1, n2, is_open):
-    if n1 or n2:
-        return not is_open
-    return is_open
+    return get_modal(n1, n2, is_open)
 
 
 @app.callback(
@@ -1003,25 +1088,25 @@ def toggle_modal_callback(n1, n2, is_open):
 def update_output_callback(
     list_of_contents, list_of_names, list_of_dates, profiles_selected
 ):
-    object_data = get_object_data()
+    target_data = get_target_data()
     i = "None"
     profile_dropdown_is_disabled = True
-    if not object_data:
+    if not target_data:
         return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
-    if not object_data.profiles:
+    if not target_data.profiles:
         return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
-    if len(object_data.profiles) == 0:
+    if len(target_data.profiles) == 0:
         return [{"label": i, "value": i}], [], profile_dropdown_is_disabled
 
     profile_dropdown_is_disabled = False
-    profile = object_data.profiles[0]
+    profile = target_data.profiles[0]
 
     inactive_profiles = CONFIG.get("inactive_profiles", [])
     default_profiles = CONFIG.get("default_profiles", [])
 
     options = [
         {"label": profile, "value": profile}
-        for profile in object_data.profiles
+        for profile in target_data.profiles
         if profile not in inactive_profiles
     ]
 
@@ -1031,9 +1116,9 @@ def update_output_callback(
 
     if list_of_contents is not None:
         for (c, n, d) in zip(list_of_contents, list_of_names, list_of_dates):
-            object_data = parse_loaded_contents(c, n, d)
-            if object_data:
-                for profile in object_data.profiles:
+            target_data = parse_loaded_contents(c, n, d)
+            if target_data:
+                for profile in target_data.profiles:
                     if profile not in inactive_profiles:
                         options.append({"label": profile, "value": profile})
         return options, default_options, profile_dropdown_is_disabled
@@ -1046,38 +1131,117 @@ def update_output_callback(
         Output("clear-outside", "href"),
         Output("nws-weather", "href"),
         Output("goes-satellite", "href"),
+        Output("clear-outside-img", "src"),
     ],
-    [Input("store-site-data", "data")],
+    [Input("store-site-data", "data"), Input("date-picker", "date")],
 )
-def update_weather_data_callback(site_data):
+def update_weather_data_callback(site_data, date_string):
     site = update_site(
         site_data,
         default_lat=DEFAULT_LAT,
         default_lon=DEFAULT_LON,
-        default_utc_offset=DEFAULT_UTC_OFFSET,
+        date_string=date_string,
     )
-    weather_graph, clear_outside_link, nws_link, goes_link = update_weather(site)
-    return weather_graph, clear_outside_link, nws_link, goes_link
+    (
+        weather_graph,
+        clear_outside_link,
+        nws_link,
+        goes_link,
+        clear_outside_forecast_img,
+    ) = update_weather(site)
+    return (
+        weather_graph,
+        clear_outside_link,
+        nws_link,
+        goes_link,
+        clear_outside_forecast_img,
+    )
+
+
+@app.callback(Output("location-marker", "children"), [Input("map-id", "click_lat_lng")])
+def set_marker(x):
+    if not x:
+        return dl.Marker(
+            position=[DEFAULT_LAT, DEFAULT_LON],
+            children=[dl.Tooltip("Default Location")],
+        )
+    return dl.Marker(position=x, children=[dl.Tooltip("Location Selected")])
+
+
+def get_mpsas_from_lat_lon(lat, lon):
+    lp_map = LightPollutionMap()
+    mpsas = lp_map.mpsas_for_location(lat, lon)
+    return np.round(mpsas, 2)
 
 
 @app.callback(
-    Output("store-site-data", "data"),
+    Output("modal-location", "is_open"),
+    [Input("open-location", "n_clicks"), Input("close-location", "n_clicks")],
+    [State("modal-location", "is_open")],
+)
+def toggle_location_modal_callback(n1, n2, is_open):
+    return get_modal(n1, n2, is_open)
+
+
+@app.callback(
     [
+        Output("store-site-data", "data"),
+        Output("input-lat", "placeholder"),
+        Output("input-lon", "placeholder"),
+        Output("local-mpsas", "value"),
+        Output("location-text", "children"),
+        Output("location-tab-text", "children"),
+        Output("bortle-tab-badge", "children"),
+    ],
+    [
+        Input("map-id", "click_lat_lng"),
         Input("input-lat", "value"),
         Input("input-lon", "value"),
-        Input("input-utc-offset", "value"),
+        Input("date-picker", "date"),
     ],
+    [State("local-mpsas", "value")],
 )
-def update_time_location_data_callback(lat=None, lon=None, utc_offset=None):
+def update_time_location_data_callback(
+    click_lat_lon, lat=None, lon=None, date_string=None, mpsas=None,
+):
 
-    site_data = dict(lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=DEFAULT_UTC_OFFSET)
+    text = ""
+    site_data = dict(
+        lat=DEFAULT_LAT, lon=DEFAULT_LON, utc_offset=0, date_string="2021-01-01"
+    )
+
+    if not lat:
+        lat = DEFAULT_LAT
+    if not lon:
+        lon = DEFAULT_LON
+    lat, lon, default_mpsas, text, tab_text, bortle_badge = get_click_coord_mpsas(
+        [lat, lon]
+    )
+    if not mpsas:
+        lat, lon, mpsas, text, tab_text, bortle_badge = get_click_coord_mpsas(
+            [lat, lon]
+        )
+
+    ctx = dash.callback_context
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if button_id == "map-id":
+            lat, lon, mpsas, text, tab_text, bortle_badge = get_click_coord_mpsas(
+                click_lat_lon
+            )
+
     if lat:
         site_data["lat"] = lat
     if lon:
         site_data["lon"] = lon
-    if utc_offset:
-        site_data["utc_offset"] = utc_offset
-    return site_data
+    if date_string:
+        site_data["date_string"] = date_string
+
+    site_data["utc_offset"] = get_utc_offset(
+        site_data["lat"], site_data["lon"], site_data["date_string"]
+    )
+
+    return site_data, lat, lon, mpsas, text, tab_text, bortle_badge
 
 
 @app.callback(
@@ -1128,10 +1292,7 @@ def update_target_with_status_callback(status, targets, profile_list):
 
     df_target_status = get_df_from_redis("df_target_status")
     if status:
-        df_combined = get_df_from_redis("df_combined")
-        df_target_status = update_targets_with_status(
-            targets, status, df_combined, profile_list
-        )
+        df_target_status = update_targets_with_status(targets, status, profile_list)
     push_df_to_redis(df_target_status, "df_target_status")
     return ""
 
@@ -1142,7 +1303,7 @@ def update_target_with_status_callback(status, targets, profile_list):
         Output("tab-data-table-div", "style"),
         Output("tab-files-table-div", "style"),
         Output("tab-config-div", "style"),
-        # Output("tab-about-div", "style"),
+        Output("tab-help-div", "style"),
     ],
     [Input("tabs", "active_tab")],
 )
@@ -1153,7 +1314,7 @@ def render_content(tab):
         "tab-data-table",
         "tab-files-table",
         "tab-config",
-        # "tab-about",
+        "tab-help",
     ]
 
     styles = [{"display": "none"}] * len(tab_names)
@@ -1192,8 +1353,8 @@ def set_target_review_status(
 ):
 
     disabled = False
-    df_objects = get_df_from_redis("df_objects")
-    if df_objects.shape[0] == 0:
+    df_targets = get_df_from_redis("df_targets")
+    if df_targets.shape[0] == 0:
         disabled = True
         tab_review_name = "Target Planning (disabled)"
         tab_review_label_style = None
@@ -1263,10 +1424,9 @@ def config_buttons(n1, n2, n3, n4, n5, n6):
 
 @app.callback(
     Output("dummy-id-target-data", "children"),
-    [Input("date-picker", "date")],
-    [State("store-site-data", "data")],
+    [Input("date-picker", "date"), Input("store-site-data", "data")],
 )
-def get_target_data(
+def get_target_data_cb(
     date_string, site_data,
 ):
     global all_target_coords, all_targets
@@ -1345,7 +1505,7 @@ def store_data(
 
     global all_target_coords, all_targets
 
-    df_combined = get_df_from_redis("df_combined")
+    df_targets = get_df_from_redis("df_targets")
 
     t0 = time.time()
 
@@ -1370,10 +1530,11 @@ def store_data(
 
     data, duration_sun_down_hrs = get_data(
         target_coords,
-        df_combined,
+        df_targets,
         value=value,
         filter_targets=filter_seasonal_targets,
         min_moon_distance=min_moon_distance,
+        sun_alt_for_twilight=float(CONFIG.get("solar_altitude_for_night", -18)),
     )
     log.info(f"get_data: {time.time() - t0}")
 
@@ -1400,6 +1561,7 @@ def store_data(
         Input("store-target-data", "data"),
         Input("dummy-rejection-criteria-id", "children"),
         Input("dummy-interval-update", "children"),
+        Input("min-frame-overlap-fraction", "value"),
     ],
     [
         State("store-target-metadata", "data"),
@@ -1415,6 +1577,7 @@ def update_target_graph(
     target_data,
     rejection_criteria_change_input,
     refresh_plots,
+    min_frame_overlap_fraction,
     metadata,
     dark_sky_duration,
     profile_list,
@@ -1433,7 +1596,6 @@ def update_target_graph(
             log.info("Doing update")
 
     df_target_status = get_df_from_redis("df_target_status")
-    df_combined = get_df_from_redis("df_combined")
     df_reject_criteria = get_df_from_redis("df_reject_criteria_all")
 
     log.debug("Calling update_target_graph")
@@ -1485,21 +1647,40 @@ def update_target_graph(
 
     progress_days_ago = int(CONFIG.get("progress_days_ago", 0))
 
+    df_merged_exposure = get_df_from_redis("df_merged_exposure")
+    df_merged = get_df_from_redis("df_merged")
+
+    if not min_frame_overlap_fraction:
+        min_frame_overlap_fraction = DEFAULT_MIN_FRAME_OVERLAP_FRACTION
+
+    target_object_matchup = df_merged[
+        df_merged["frame_overlap_fraction"] > min_frame_overlap_fraction
+    ][["TARGET", "OBJECT"]].drop_duplicates()
+
+    df_merged_exposure_targets = df_merged_exposure.explode("matching_targets").rename(
+        {"matching_targets": "TARGET"}, axis=1
+    )
+    df_merged_exposure_targets = pd.merge(
+        df_merged_exposure_targets, df_target_status, on=["GROUP", "TARGET"]
+    )
+
+    matching_objects = list(
+        target_object_matchup.loc[
+            target_object_matchup["TARGET"].isin(targets), "OBJECT"
+        ]
+    )
+
     progress_graph, df_summary = get_progress_graph(
         df_reject_criteria,
         date_string=date_string,
         days_ago=progress_days_ago,
-        targets=targets,
+        targets=matching_objects,
         apply_rejection_criteria=True,
     )
 
-    df_combined = df_combined.reset_index()
-
-    df_combined = pd.merge(df_combined, df_target_status, on=["GROUP", "TARGET"])
-
     cols = ["OBJECT", "TARGET", "GROUP", "status"]
 
-    cols += [f for f in df_combined.columns if f in FILTER_LIST]
+    cols += [f for f in df_merged_exposure_targets.columns if f in FILTER_LIST]
     cols += [
         "Instrument",
         "Focal Length",
@@ -1511,12 +1692,12 @@ def update_target_graph(
 
     columns = []
     for col in cols:
-        if col in df_combined.columns:
+        if col in df_merged_exposure_targets.columns:
             entry = {"name": col, "id": col, "deletable": False, "selectable": True}
             columns.append(entry)
 
     # target table
-    data = df_combined.to_dict("records")
+    data = df_merged_exposure_targets.round(3).to_dict("records")
     target_table = html.Div(
         [
             dash_table.DataTable(
@@ -1635,6 +1816,8 @@ def add_rejection_criteria(
         Output("summary-table", "children"),
         Output("header-col-match", "options"),
         Output("target-matches", "options"),
+        Output("fl-matches", "options"),
+        Output("px-size-matches", "options"),
         Output("x-axis-field", "options"),
         Output("y-axis-field", "options"),
         Output("scatter-size-field", "options"),
@@ -1644,9 +1827,18 @@ def add_rejection_criteria(
         Input("header-col-match", "value"),
         Input("target-matches", "value"),
         Input("inspector-dates", "value"),
+        Input("fl-matches", "value"),
+        Input("px-size-matches", "value"),
     ],
 )
-def update_files_table(target_data, header_col_match, target_matches, inspector_dates):
+def update_files_table(
+    target_data,
+    header_col_match,
+    target_matches,
+    inspector_dates,
+    fl_matches,
+    px_size_matches,
+):
     df_data = get_df_from_redis("df_data")
     df_reject_criteria = get_df_from_redis("df_reject_criteria")
 
@@ -1654,14 +1846,25 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
     target_options = make_options(targets)
 
     df0 = pd.merge(df_data, df_reject_criteria, on="filename", how="left")
-    if target_matches:
-        log.info("Selecting target match")
-        df0 = df0[df0["OBJECT"].isin(target_matches)]
     if inspector_dates:
         log.info("Selecting dates")
         df0 = df0[df0["date_night_of"].astype(str).isin(inspector_dates)]
 
-    log.info("Done with queries")
+    if target_matches:
+        log.info("Selecting target match")
+        df0 = df0[df0["OBJECT"].isin(target_matches)]
+
+    fl_match_options = make_options(sorted(df0["FOCALLEN"].unique()))
+    if fl_matches:
+        log.info("Selecting focal length match")
+        df0 = df0[df0["FOCALLEN"].isin(fl_matches)]
+
+    px_size_options = make_options(sorted(df0["XPIXSZ"].unique()))
+    if px_size_matches:
+        log.info("Selecting pixel size match")
+        df0 = df0[df0["XPIXSZ"].isin(px_size_matches)]
+
+    log.info("Done with filters")
 
     columns = []
     default_cols = [
@@ -1814,6 +2017,8 @@ def update_files_table(target_data, header_col_match, target_matches, inspector_
         summary_table,
         header_options,
         target_options,
+        fl_match_options,
+        px_size_options,
         scatter_field_options,
         scatter_field_options,
         scatter_field_options,
@@ -1856,13 +2061,14 @@ def update_inspector_dates(
     df0 = df_data.copy()
 
     if target_matches:
-        normalized_target_matches = [normalize_target_name(t) for t in target_matches]
-        df0 = df_data[df_data["OBJECT"].isin(normalized_target_matches)]
+        df0 = df_data[df_data["OBJECT"].isin(target_matches)]
 
     all_dates = list(sorted(df0["date_night_of"].dropna().unique(), reverse=True))
     options = make_options(all_dates)
 
     default_dates = None
+    if all_dates:
+        default_dates = [all_dates[0]]
     interval_disabled = True
     monitor_mode_indicator_color = "#cccccc"
     if monitor_mode:
@@ -1922,11 +2128,14 @@ def rejection_criteria_callback(
         Input("store-target-data", "data"),
         Input("inspector-dates", "value"),
         Input("target-matches", "value"),
+        Input("fl-matches", "value"),
+        Input("px-size-matches", "value"),
         Input("x-axis-field", "value"),
         Input("y-axis-field", "value"),
         Input("scatter-size-field", "value"),
         Input("dummy-rejection-criteria-id", "children"),
         Input("dummy-interval-update", "children"),
+        Input("show-text-in-scatter", "on"),
     ],
     [
         State("z-score-field", "value"),
@@ -1942,11 +2151,14 @@ def update_scatter_plot(
     target_data,
     inspector_dates,
     target_matches,
+    fl_matches,
+    px_size_matches,
     x_col,
     y_col,
     size_col,
     dummy,
     refresh_plots,
+    show_text,
     z_score_thr,
     iqr_scale,
     eccentricity_median_thr,
@@ -1990,18 +2202,30 @@ def update_scatter_plot(
     if not target_matches:
         target_matches = sorted(df0["OBJECT"].unique())
     df0 = df0[df0["OBJECT"].isin(target_matches)]
+
+    # fl_match_options = make_options(sorted(df0["FOCALLEN"].unique()))
+    if fl_matches:
+        log.info("Selecting focal length match")
+        df0 = df0[df0["FOCALLEN"].isin(fl_matches)]
+
+    # px_size_options = make_options(sorted(df0["XPIXSZ"].unique()))
+    if px_size_matches:
+        log.info("Selecting pixel size match")
+        df0 = df0[df0["XPIXSZ"].isin(px_size_matches)]
+
+    target_matches = sorted(df0["OBJECT"].unique())
+
     filters = df0["FILTER"].unique()
     if not x_col:
         x_col = "fwhm_median"
     if not y_col:
         y_col = "eccentricity_median"
 
-    normalized_target_matches = [normalize_target_name(t) for t in target_matches]
     progress_graph, df_summary = get_progress_graph(
         df_reject_criteria_all,
         date_string="2020-01-01",
         days_ago=0,
-        targets=normalized_target_matches,
+        targets=target_matches,
         apply_rejection_criteria=True,
     )
 
@@ -2069,14 +2293,14 @@ def update_scatter_plot(
             symbol = "x"
             if low_star_count:
                 symbol = f"{symbol}-open"
-                legend_name = f"{legend_name} &#10006; - star count"
+                legend_name = f"{legend_name} &#10006; - count"
             elif high_fwhm:
                 symbol = f"{symbol}-open-dot"
-                legend_name = f"{legend_name} &#10006; - star bloat"
+                legend_name = f"{legend_name} &#10006; - bloat"
             else:
                 symbol = "diamond-wide"
                 symbol = f"{symbol}-open-dot"
-                legend_name = f"{legend_name} &#10006; - star shape"
+                legend_name = f"{legend_name} &#10006; - shape"
 
         if filter in COLORS:
             color = COLORS[filter]
@@ -2084,32 +2308,40 @@ def update_scatter_plot(
             color = sns.color_palette(n_colors=len(filters)).as_hex()[i_filter]
             i_filter += 0
 
+        mode = "markers"
+        if show_text:
+            mode = "markers+text"
+
         p.add_trace(
             go.Scatter(
                 x=df1[x_col],
                 y=df1[y_col],
-                mode="markers",
+                mode=mode,
                 name=legend_name,
-                hovertemplate="<b>%{text}</b><br>"
+                hovertext=df1["text"],
+                hovertemplate="<b>%{hovertext}</b><br>"
                 + f"{x_col}: "
                 + "%{x:.2f}<br>"
                 + f"{y_col}: "
                 + "%{y:.2f}<br>",
-                text=df1["text"],
+                text=df1["OBJECT"],
+                textposition="bottom right",
+                textfont=dict(color=color, size=8),
                 marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
                 customdata=df1["filename"],
+                cliponaxis=False,
             )
         )
     max_targets_in_list = 5
-    target_list = ", ".join(normalized_target_matches[:max_targets_in_list])
-    if len(normalized_target_matches) > max_targets_in_list:
-        target_list = f"{target_list} and {len(normalized_target_matches) - max_targets_in_list} other targets"
+    target_list = ", ".join(target_matches[:max_targets_in_list])
+    if len(target_matches) > max_targets_in_list:
+        target_list = f"{target_list} and {len(target_matches) - max_targets_in_list} other targets"
 
     p.update_layout(
         xaxis_title=x_col,
         yaxis_title=y_col,
         height=600,
-        title=f"Subframe data for {target_list}",
+        title=f"Subframe data for {target_list}<br>Click points to view in frame and inspector",
         legend=dict(orientation="v"),
         transition={"duration": 250},
     )
@@ -2199,22 +2431,37 @@ def toggle_alert(n):
     df_data = get_df_from_redis("df_data")
     df0 = df_data.dropna(subset=["n_stars"])
     df_new = df0[~df0["filename"].isin(df_old["filename"])]
+    df_removed = df_old[~df_old["filename"].isin(df0["filename"])]
+
+    removed_row_count = df_removed.shape[0]
+
     total_row_count = df0.shape[0]
     new_row_count = df_new.shape[0]
 
-    new_files_available = new_row_count > 0
+    has_new_files = new_row_count > 0
+    has_removed_files = removed_row_count > 0
+
+    files_changed = has_new_files | has_removed_files
 
     update_frequency = CONFIG.get("monitor_mode_update_frequency", 15) * 1000
 
     color = "primary"
-    if new_files_available:
+    if files_changed:
         filenames = df_new["filename"].values
-        response = [f"Recently processed {new_row_count} new file:"]
-        if len(filenames) > 1:
-            response = [f"Recently processed {new_row_count} new files:"]
-        for filename in filenames:
-            response.append(html.Br())
-            response.append(filename)
+        removed_filenames = df_removed["filename"].values
+        response = []
+
+        if has_new_files:
+            response += [f"Recently processed {new_row_count} new files:"]
+            for filename in filenames:
+                response.append(html.Br())
+                response.append(filename)
+        if has_removed_files:
+            color = "danger"
+            response.append(f"Recently removed {removed_row_count} files:")
+            for filename in removed_filenames:
+                response.append(html.Br())
+                response.append(filename)
         is_open = True
         duration = 60000
         log.info(f"Found new files: {filenames}")
@@ -2266,23 +2513,6 @@ def toggle_file_skiplist_alert(n_show, n_clear):
             color = "primary"
             return response, is_open, duration, color
     return "", False, 0, "primary"
-
-
-@app.callback(
-    [Output("glossary-modal", "is_open"), Output("glossary", "children")],
-    [Input("glossary-open", "n_clicks"), Input("glossary-close", "n_clicks")],
-    [State("glossary-modal", "is_open")],
-)
-def toggle_glossary_modal_callback(n1, n2, is_open):
-
-    with open("/app/src/glossary.md", "r") as f:
-        text = f.readlines()
-
-    status = is_open
-    if n1 or n2:
-        status = not is_open
-
-    return status, dcc.Markdown(text)
 
 
 if __name__ == "__main__":

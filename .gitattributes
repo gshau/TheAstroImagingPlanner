@@ -1,0 +1,1 @@
+data/sky_atlas/World_Atlas_2015_compressed.tif filter=lfs diff=lfs merge=lfs -text

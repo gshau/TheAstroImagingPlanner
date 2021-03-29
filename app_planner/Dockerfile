@@ -16,6 +16,8 @@ WORKDIR /app
 COPY ./ ./
 COPY ./${APP_DIR}/ ./src
 
+ADD https://github.com/gshau/TheAstroImagingPlanner/releases/download/lp-map-v1.0/World_Atlas_2015_compressed.tif /app/data/sky_atlas/World_Atlas_2015_compressed.tif
+
 EXPOSE 8050
 
 CMD ["python", "./src/app.py"]

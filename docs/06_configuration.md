@@ -1,3 +1,8 @@
+
+## App Configuration
+The config file `conf/config.yml` contains the configuration needed to personalize the app.  This includes the file patterns for detecting subframes, site and horizon data, and custom fits header entries.  Below is an example configuration:
+
+```
 # FITs file patters in regex format, relative to DATA_DIR
 fits_file_patterns:
   allow:
@@ -72,4 +77,4 @@ sensor_map:
   'null': null
   "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8"
   "QHYCCD-Cameras-Capture": "QHY16200A"
-
+```

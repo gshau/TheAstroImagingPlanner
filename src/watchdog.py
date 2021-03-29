@@ -18,9 +18,27 @@ from image_grading.preprocessing import (
     TARGET_DIR,
     DATA_DIR,
 )
-from astro_planner.target import object_file_reader, normalize_target_name
+from astro_planner.target import target_file_reader, normalize_target_name
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
+
+import logging.handlers
+
+handler = logging.handlers.WatchedFileHandler(
+    os.environ.get("LOGFILE", "./watchdog.log"), mode="w"
+)
+
+formatter = logging.Formatter(fmt="%(asctime)s %(levelname)s %(module)s %(message)s")
+handler.setFormatter(formatter)
+root = logging.getLogger()
+
+root.setLevel(os.environ.get("LOGLEVEL", "INFO"))
+root.addHandler(handler)
+
+logging.basicConfig(
+    level=os.environ.get("LOGLEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(module)s %(message)s",
+)
+
 log = logging.getLogger(__name__)
 
 client = mqtt.Client()
@@ -101,8 +119,8 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
         df_list = []
         for filename in files_with_data:
             try:
-                objects = object_file_reader(filename)
-                df = objects.df_objects
+                targets = target_file_reader(filename)
+                df = targets.df_targets
                 df["filename"] = os.path.basename(filename)
                 df_list.append(df[target_columns])
             except:

@@ -1,5 +1,6 @@
 from urllib.request import urlopen
 from xml.etree.ElementTree import parse
+from .logger import log
 import pandas as pd
 import numpy as np
 import json
@@ -16,7 +17,11 @@ class NWS_Forecast:
         url = urlopen(
             f"https://forecast.weather.gov/MapClick.php?lat={self.lat}&lon={self.lon}&FcstType=digitalDWML"
         )
-        self.xmldoc = parse(url)
+        try:
+            self.xmldoc = parse(url)
+        except:
+            log.warning(f"Unable to get NWS forecast for {self.lat} {self.lon}")
+            self.xmldoc = None
 
     def parse_data(self):
         # parse location
@@ -44,17 +49,19 @@ class NWS_Forecast:
                 data[f"{key} {data_type}"] = [
                     val.text for val in xml_data.findall("value")
                 ]
-
-        df_weather = pd.DataFrame(data).set_index("date").astype(np.float)
-        df_weather.index.name = f"NWS Forecast for {location_data}"
-        return df_weather[
-            [
-                "temperature hourly",
-                "cloud-amount total",
-                "wind-speed sustained",
-                "humidity relative",
-            ]
+        cols = [
+            "temperature hourly",
+            "cloud-amount total",
+            "wind-speed sustained",
+            "humidity relative",
         ]
+        try:
+            df_weather = pd.DataFrame(data).set_index("date").astype(np.float)
+            df_weather.index.name = f"NWS Forecast for {location_data}"
+            return df_weather[cols]
+        except ValueError:
+            log.info(f"Issue fetching weather data for {self.lat} {self.lon}")
+            return pd.DataFrame(columns=cols)
 
 
 class DarkSky_Forecast:

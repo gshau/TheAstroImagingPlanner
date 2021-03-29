@@ -1,116 +1,161 @@
-# The AstroImaging Planner
-<details open="open">
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <a href="#features">Dashboard Features</a>
-      <ul>
-        <li><a href="#target-planning">Target Planning</a></li>
-        <li><a href="#target-status">Tracking Target Status</a></li>
-        <li><a href="#weather">Weather</a></li>
-        <li><a href="#acquired-data">Acquired Data</a></li>
-        <li><a href="#subexposure-inspector">Subexposure Inspector</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-        <li><a href="#docker-configuration">Docker configuration</a></li>
-        <li><a href="#app-configuration">App configuration</a></li>
-        <li><a href="#equipment">Equipment configuration</a></li>
-      </ul>
-    </li>
-    <!-- <li><a href="#usage">Usage</a></li> -->
-    <li><a href="#roadmap">Roadmap</a>
-    <ul>
-    <li>
-      <a href="#future-development">Future Development</a>
-    </ul>
-    </li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <!-- <li><a href="#contact">Contact</a></li> -->
-    <!-- <li><a href="#acknowledgements">Acknowledgements</a></li> -->
-  </ol>
-</details>
-
 
 
 # About This Project
-The goal of this dashboard project is to offer the ability to view at a glance the planning and progress of astronomical targets for imaging.  These are the main components to the dashboard:
+The goal of this dashboard project is to offer the ability to view at a glance the planning and progress of astronomical targets for imaging.  
+
+On the left are settings to change the date and site location in case you are planning weeks, etc. in advance of a trip. 
+These are the main components to the dashboard:
 1. Target tracking and status - what are the best times in the night to image targets, allowing you to decide when to move on to another target
 2. Tracking target progress - how much data each target has, broken down by filter and instrument
-3. Weather forecast data
 2. Acquired data - a birds-eye view of how much data has been collected on each target
 3. Inspection of subexposure data - inspect subexposure data, including all FITs header data, extracted stars, and other star analyses.  Integrates with the main file store where all subexposure is stored.
 5. Standalone image/star inspector for ad-hoc inspection of new frames
+3. Weather forecast data
 
-# Main Features
+The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/), or [N.I.N.A](https://nighttime-imaging.eu/) sequence files.  
 
-The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, or [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/) sequence files.  
-
-## Target planning
-The top chart shows the altitude of each target in the database over the course of the night, with astronomical dawn/dusk marked by the orange bands. Also shown is the altitude of the Moon.  Since the plotting is based off [Plotly](), the same interactions apply here. Each curve can be easily hidden with a single click in the legend.  Likewise, all curves can be hidden except for the target with a double click of that target in the legend. I usually switch from one target to another when their altitude lines cross to keep getting good quality data.  
-
-On the left are settings to change the date and site location in case you are planning weeks, etc. in advance of a trip. 
-
-There’s a dropdown for selecting the equipment profiles, which I have used the Group field in the RoboClip database. There are also dropdown to select targets by matching filters that I stored in the notes section of the roboclip entry.
-
-![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_main.png)
-
-### Target status
-The bottom chart is a summary of data collected so far, and is read from the FITs header from the data you have on file, broken down by each filter. 
-
-I’ve added an option of tracking the target’s status as well. Currently, there are four options:
-* Pending - targets waiting to start imagining
-* Active - targets actively being imaged this season
-* Acquired - targets where I feel there's enough subexposure to start processing
-* Closed - targets that have processing finalized
-These status fields can be filtered as well for the two charts on the right.
-
-### Weather
-There’s also various weather tools like the local forecast using clearoutside, NWS, and GOES satellite links and an HRRR smoke forecast for North America.
-
-### Acquired Data
-A second tab shows the targets with gear I'd want to use to capture it, the target status (pending/active/acquired/closed), and the exposure summaries. Here’s a view of that:
-![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_stored_data_view.png)
-
-## Frame inspector
-A third tab shows a new section that inspects all the frames that are already stored to give more insights about your data.  This includes, but not limited to:
-- Field curvature / astigmatism
-- Trailing due to bad tracking and/or wind
-- Total frame SNR to compare frames with similar filters against each other
-- Focus position vs. temperature to check how strong focus drift is with an imaging rig
-- Altitude vs. sky background to measure local LP levels
-
-Additionally, a preview window shows either the full frame or an aberration inspector box of the subframe selected.  A local map of both FWHM and Eccentricity is given, along with the collective direction of elongation of stars.  This elongation direction is crucial in diagnosing spacing or tilt issues between the sensor and optical system.  Lastly, two tables are available:
-- An all-subframe table to allow for inspection against all FITs header and other star metrics data
-- An aggregate table with some summary statistics of each filter
-
-![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_integrated_inspector_view.jpg)
-![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_frame_analysis.jpg)
-![AstroImagingPlanner_main](screenshots/AstroImagingPlanner_subexposure_table.jpg)
+## Running the app
+1. Install [Docker](https://docs.docker.com/get-docker/)
+2. Download and extract the [source code](https://github.com/gshau/TheAstroImagingPlanner/archive/refs/heads/master.zip)
+3. Edit the [`conf/env.conf`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/conf/env.conf) file and specify the following
+    - `DATA_PATH` - directory where you store subframes.
+    - `TARGETS_PATH` - directory where you have Voyager RoboClip, or SGP/NINA sequence files.
+    - `APP_VERSION` - the app version you'd like to run.
+4. Run the [`run-app.bat`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/run-app.bat) file if on Windows, or the [`run-app.sh`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/run-app.sh) file if on Linux/MacOS.  
+5. The watchdog processes all the stored data (it can take some time, depending on how much data is available and computing resources).  
+6. Once the watchdog starts to process star data, the app should be ready to use. ou can navigate to `http://localhost:8050`
+7. To update the app, you can run the [`update-app`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/update-app.sh) file to pull the latest build from Docker Hub.
 
 
-# Getting Started
+## Target Planning
 
 
-## Prerequisites:
-This dashboard is built using `python` and `dash`, among other libraries.  To allow for this dashboard to run with minimal fuss, `docker` is utilized.  Therefore, [Docker](https://docs.docker.com/get-docker/) must be installed on the system used to run this dashboard.  
+![](src/assets/planner_tab.png)
+### Target Graph
+The main target graph shows the data over the course of a night.  This graph, like others in the app, is interactive, and allows you to deselect targets by clicking them in the legend.  Double-click to show only that target.  You can also zoom in/out.  Each target curve has a popup of information.  This information includes the date, target name, moon distance and approximate sky brightness at the target.
 
-You can build your own docker image from these files by using `docker-compose up`, which may take some time.  This can be done by editing the `docker-compose.yml` file as noted in the file.  Alternatively, by default, you can pull down the latest image from docker hub with:
-```
-docker pull gshau/astroimaging-planner:latest
-```
+### Acquired Data Graph
+This graph shows how much data has been acquried so far for each target, and partitioned by filter used.  The data is also auto-graded based on the settings in the Frame Inspector.  Auto-rejected data based on those settings show up in the negative side of the graph, while accepted data shows up in the positive side of the graph.  The total bar length indicates the total amount of data for that target and filter.  
 
-### Necessary components:
-- Voyager Roboclip database file or SGP/NINA sequences
-- Config files from the `conf` directory
-- Data files of the format `{data_dir}/*/{fits_files}`, where `data_dir` is specified in the volume mappings.  Files are expected to have the following entries in their FITs headers:
-```
+### Settings
+-  **Date & Location**: Once a date or location has changed, all target data is updated, including altitude/azimuth over time, local sky brightness, contrast, etc.  Location can be set by clicking a location on the map.  Local sky brightness (SQM) and Bortle Scale data are also updated
+
+
+-  **Group**: This defines what targets you'd like to view.  For Voyager, this is the group in the RoboClip database.  For SGP or NINA, it is the name of the sequence files.
+
+
+-  **Quantity to plot**: Options here include:
+    - `Altitude` - Target altitude
+    - `Airmass` - Target airmass - how thick the atmosphere, relative to zenith, when viewing target.
+    - `Sky Brightness (Experimental)` - Estimated sky background in magnitudes per square arcsecond at the target's location in the sky.  
+    - `Relative Contrast (Experimental)` - Contrast reduction from ideal, given the best dark skies at your location.  The contrast reduction is a combination of increased sky brightness due to the moon or additional light pollution away from zenith, and of decreased SNR as the airmass increases with lower altitudes.  This is not a perfect measure of contrast, but I think it does encapsulate some of the effects going into it.
+
+
+-  **Matching Filters in Notes**: This section allows you to filter the targets shown in the main target graph.  For Voyager RoboClip databases, the data pulled from the stored Notes are checked with filter strings.  Filtering options with their matching strings include the following using case insensitive string matching
+    - `Narrowband`: "ha", "oiii", "sii", "sho", "ho", "hoo", "hos", "halpha", "h-alpha"
+    - `Broadband`: "luminance", "lrgb", "lum"
+    - `Luminance`: "luminance", "lum"
+    - `RGB`: "osc", "bayer", "dslr", "slr", r", "g", "b", "rgb"
+    - `Ha`: "ho", "sho", "hoo", "hos", "halpha", "h-alpha"
+    - `OIII`: "ho", "sho", "hoo", "hos"
+    - `SII`: "sho", "hos"
+    
+
+-  **Selected Target Status**: This option allows you to filter the targets shown in both the target graph and acquired data bar graph based on their status.  The status options are defined as:
+    - `Pending`: targets not yet imaged
+    - `Active`: targets currently being worked on
+    - `Acquired`: targets with enough data to process
+    - `Closed`: targets with finished final images
+
+
+-  **Display Only Seasonal Targets**: This option allows you to only show seasonal targets in the main target graph.  Seasonal targets are defined as having a transit occur, or the maximum altitude of the target is above 60 degrees during night hours.
+ 
+
+-  **Change Target Status**: This dropdown allows you to select the status for various targets.  You can specify multiple targets and change their status with the radio buttons below the dropdown.  
+
+                                                
+- **Other settings**
+    - `Minimum Frame Overlap Fraction` - this controls how close the RA/Dec of the target is to the center of the frame for stored data.  The fraction is the distance from the target RA/Dec to the center of the frame, relative to the half the vertical height of the frame.  
+    - `Minimum Moon Distance` - minimum distance from target to the Moon.  Useful for filtering targets that would have strong gradients and light pollution from the Moon
+    - `Extinction Coefficient` - atmospheric extinction coefficient.  Used in the calculation of contrast and sky brightness.  Values less than 0.2 indicate exceptionally transparent skies.  
+    - `Sky Brightness (mpsas)` - local sky brightness in magnitudes per square arc-second (mpsas).  This is extracted from [The new world atlas of artificial night sky brightness](https://doi.org/10.1126/sciadv.1600377), and is updated on a location change.  This value can also be overridden.
+
+### Show Weather Forecast
+Clicking on this button displays a modal that shows weather forecasts for the location.  Sources currently are [ClearOutside](http://clearoutside.com/) and [NWS](https://www.weather.gov/).
+
+![](src/assets/weather_forecast_modal.png)
+## Frame Inspector
+
+![](src/assets/inspector_tab.png)
+The Frame Inspector tab allows you to drill down into the data you have stored.  There are four primary options to filter the data: Date, Target, Focal Length, Pixel Size.  
+
+
+- Monitor mode - monitor for new files. Acquired data and subframe graphs will update with the new data as it comes in. The indicator for this mode is at the top right of the page.
+- Label Points - add target names to each point in the scatter plot.
+
+
+### Frame Acceptance Criteria
+The thresholds for accepting or rejecting frames allow you to adjust your tolerance for good/bad frames.  
+
+- `Max Eccentricity` - maximum allowed eccentricity.  
+- `Min Star Fraction` - minimum allowed star fraction.  The star fraction is calculated by the number of stars detected in a frame, divided by the maximum number of stars for the groupcombination.  Set this to zero to effectively turn this off.
+- `z score` - maximum allowed [z-score](https://en.wikipedia.org/wiki/Standard_score#Calculation) for eccentricity and FWHM. Set this very large to effectively turn this off.
+- `IQR scale` - the [Interquartile Range scale factor](https://en.wikipedia.org/wiki/Interquartile_range#Outliers), typically set to 1.5.  Set this very large to effectively turn this off.
+- `Trail Threshold` - a score to determine how aligned the star directions are.  If the entire frame has star orientations in one direction, this value should be high.  Values above 5 are significant.  Note: this value can be high, even when eccentricity is low since it measures alignment of star elongation, not the strength.
+
+
+## Acquired Data 
+This graph is similar to the one on the Target Planning tab, but selected only for the filters.
+
+
+## Subframe Data
+The scatter graph allows you to compare correlations of different variables in your data.  The available variables are pulled from the FITs header, while some are derived from the star metrics the watchdog calculates when new files are added.  The derived star metric data are aggregated over the subframe.  You can select what variable to plot by the X and Y-axis dropdown options, along with the marker size.  
+
+### Quick Options
+These quick access options set the X and Y axes for the subframe data scatter graph
+
+- `FWHM vs. Date` - default option once Monitor Mode is turned on.
+- `Eccentricity vs. FWHM`
+- `Altitude vs. Azimuth`
+- `Star Count vs. Sky Background (ADU)` - useful to check for sky conditions.  Vastly lower star counts indicate either thin clouds, haze or fog.  
+- `Focus Position vs. Temperature` - useful to check changes in focus position with different temperatures.  With this data, you can determine the temperature compensation coefficient for your setup.  Also, it can help determine filter offsets.  
+- `Sky Background (ADU) vs. Altitude` - helpful to see the effect of different light pollution gradients in your skies.
+- `Spacing Metric vs. Star Trailing`
+- `Eccentricity vs. Star Trailing`
+
+
+### Summary Table
+This table is an aggregation table over targets, filters, binning, focal length and pixel size.  Total exposure, the number of subframes and star orientation scores are provided.  Additionally, the `CCD-TEMP Dispersion` is given, which is the standard deviation of the CCD temperature.  This can be helpful when preprocessing your data to take care you're subtracting the right darks from your lights.
+
+### Subexposure data
+This table shows data at the subframe level, and can include all data available in the scatter graph variables, but also textual data stored in the FITs headers.  Add additional fields in the `Show FITs Header Cols` dropdown.
+
+## Subframe Analysis 
+![](src/assets/frame_analysis.png)
+If you click on one of the points in the scatter graph, the next three graphs below will populate:
+- `Aberration Inspector` - this view mimics the Aberration Inspector script in Pixinsight, and provides a 3x3 sub-panel of the subframe.  Toggle the `As Aberration Inspector View` to see the the full subframe in native resolution.  Note: if you're viewing large files, this can take a few seconds to render.
+- `Frame Analysis` - this view is very helpful to diagnose the cause of odd star shapes.  It consists of a heatmap, color coded by either `Ellipticity`, `Eccentricity`, or `FWHM`, available by the dropdown box above.  Each grid square has a line indicating average direciton of elongation the stars in that square have, and the length of the line indicates the strength.  This information is very valuable for diagnosing things like spacing issues, tilt, or wind effects.
+- `Radial Analysis` - this view shows the FWHM and ellipticity for stars at different radial distances from the center of the subframe.
+## Targets Table
+![](src/assets/table.png)
+The Targets Table provides a view of all data stored and targets pulled from RoboClip or sequence files.  The `OBJECT` column is the name of the object stored in the FITs header, and it is matched with the `TARGET` according to the `Minimum Frame Overlap Fraction` setting on the main planner tab.  As with the other tables on the Inspector tab, you can filter any of the columns in the table.  In the example here, I've selected only the active targets.
+                                                
+## Utilities
+![](src/assets/utilities_tab.png)
+The utilities tab gives some control over some portions of the app.  
+ - `Clear All Tables` - clears all tables (restart from scratch)
+ - `Clear Targets Table` - clears only the target table
+ - `Clear Header Tables` - clears FITs header tables including status
+ - `Clear Star Tables` - clears all star metrics data
+ - `Download Planner Log` - download the log for the planner
+ - `Download Watchdog Log` - download the log for all backend work the watchdog does, including fits header reading, star metric eval, etc.
+ - `Restart App` - restart the main app
+ - `Restart Watchdog` - restart the watchdog
+ - `Show File Skiplist` - Show a list of files the watchdog skipped due to an error (most likely a key missing FITs header - see below for a list of required header entries). 
+ - `Clear File Skiplist` - Clear the skiplist to allow for those files to be reprocessed
+
+Note: The FITs header must contain the following entries to be processed correctly:
+ ```
   "OBJECT"
   "DATE-OBS"
   "CCD-TEMP"
@@ -125,31 +170,6 @@ docker pull gshau/astroimaging-planner:latest
   "XPIXSZ"
 ```
 
-## Docker configuration
-
-Configure the `docker-compose.yml` file.  Most use-cases will only require changing the volume mappings under the app entry as shown below:
-```
-version: '3'
-services:
-    app:
-        # build: . 
-        image: gshau/astroimaging-planner:latest
-        ports:
-            - 8050:8050
-        volumes:
-            # path to the config files - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroPlanner/dash_app/conf:/app/conf
-            # your DATA_DIR - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroBox/data:/data:ro
-            # your roboclip path - tailor this path to your circumstances
-            - /Volumes/Users/gshau/Dropbox/AstroBox/roboclip:/roboclip:ro
-```
-The directory structure after the defined data path is assumed to be of the form provided by Voyager if the date is specified as a subdirectory for each target, more explicitly, it is of the form: `{target_name}/*/{fits_files}`.  This default can be altered to accommodate other scenarios by editing the `fits_file_patterns` entry in `config.yml`
-
-To start the app, run the following, it will download the docker image, `gshau/astroimaging-planner`, from the docker repository.  
-```
-docker-compose up
-```
 
 ## App Configuration
 The config file `conf/config.yml` contains the configuration needed to personalize the app.  This includes the file patterns for detecting subframes, site and horizon data, and custom fits header entries.  Below is an example configuration:
@@ -167,12 +187,17 @@ fits_file_patterns:
     - "skip"
 
 # Default target status when initially parsing data
-default_target_status: ''
+default_target_status: 
+  - 'acquired'
+  - 'active'
+  - 'pending'
 
-# Inactive profiles to hide from the UI
+# Default profiles to start new session with
 default_profiles: 
-  - ap92 asi6200mm
-inactive_profiles: #{}
+  - ontc1010 qsi690
+# Inactive profiles to hide from the UI
+inactive_profiles:
+  - borg55fl asi2600mc
   - rasa8 asi2600mc
 
 # target progress display mode - stack or group
@@ -181,9 +206,18 @@ progress_mode: 'group'
 # Last number of days to show target progress, regardless of filters
 progress_days_ago: 0
 
+# Minimum frame overlap fraction to match fits files to sequence/roboclip targets
+min_frame_overlap_fraction: 0.95
+
+# Number of threads used when processing star data
+threads_for_star_processing: 2
+
+watchdog_update_frequency: 15
+monitor_mode_update_frequency: 15
+
 horizon_data:
   flat_horizon_alt: 10
-  horizon_file: "conf/custom_horizon.txt"  # comment this line out, and behavior reverts to flat altitude
+  # horizon_file: "conf/custom_horizon.txt" 
   alt_az_seperator: " "
   header_length: 3
 
@@ -194,75 +228,34 @@ debug: "True"
 # Default location settings
 lat: 43.37
 lon: -88.37
-utc_offset: -6
-mpsas: 20.1
-bandwidth: 120
+
+# Link override for GOES satellite
+goes_satellite_link: "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36"
+
+# Atmospheric extinction coefficient
 k_extinction: 0.2
-time_resolution: 300
 
+# Time resolution of target figure on first tab
+time_resolution: 60
 
+# Minimum Target-moon distance
+min_moon_distance: 30
+
+# Twilight/Dawn solar altitude
+solar_altitude_for_night: -18
+
+# Sensor map - for cleaning up the naming of some entries
 sensor_map:
   'null': null
   "QSI 690ws HW 12.01.00 FW 06.03.04": "QSI690-wsg8"
   "QHYCCD-Cameras-Capture": "QHY16200A"
 ```
 
-## Equipment
-The equipment file in `conf/equipment.yml` contains the equipment descriptions that will be matched to entries in the Roboclip database.  Example configuration:
-```
-equipment:
-  sensors:
-    qsi690:
-      type: 'mono'
-      pixel_size: 3.69
-      n_x: 3388
-      n_y: 2712
-      filters:
-        - 'L'
-        - 'R'
-        - 'G'
-        - 'B'
-        - 'Ha'
-        - 'OIII'
-        - 'SII'
-    asi6200mm:
-      type: 'mono'
-      pixel_size: 3.76
-      n_x: 9576
-      n_y: 6388
-      filters:
-        - 'L'
-        - 'R'
-        - 'G'
-        - 'B'
-        - 'Ha'
-        - 'OIII'
-        - 'SII'
-  optics:
-    ap92:
-      aperture: 92
-      focal_length: 489
-    ontc1010:
-      aperture: 254
-      focal_length: 1150
-```
-To merge the Roboclip database and stored subexposure metadata, these components are needed:
-1. The names for sensors and optics listed in this equipment file should match the RoboClip group name
-2. The sensor name in this file should be contained in the `INSTRUME` entry of the FITs header
-3. The focal length should match those values stored in the `FOCALLEN` entry of the FITs header within a 2mm margin of error.
-
-## Custom Horizon
-There's an option to allow for a custom horizon, where if the target falls below this horizon, it's rendered as a thinner and more transparent altitude trace in the top figure.  The location and format of this file is specified in the `conf/config.yml` file.  If no file is given, a flat horizon level can be specified.  
-# Roadmap
-## Future development
-I have in development a contrast view, which takes into account the bandwidth of filters and the SNR with certain levels of LP, whether it be artificial light from the city, or natural light from the Moon. This also can be extended to include the effect of aerosols in the atmosphere like the smoke we’ve been getting over much of the US this year.
-
 # License
 Distributed under the GPLv3 License. See `LICENSE` for more information.
 
-
 # Donate
-If this project helped you with your astrophotography planning and data review, please consider donating!  
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](UJ63AXALXGAP4)
+If this project helped you with your astrophotography planning and data review, please consider donating!
 
+<a href="https://www.buymeacoffee.com/gshau" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 

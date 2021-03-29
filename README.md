@@ -15,7 +15,7 @@ These are the main components to the dashboard:
 The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/), or [N.I.N.A](https://nighttime-imaging.eu/) sequence files.  
 
 ## Running the app
-1. Install [Docker](https://docs.docker.com/get-docker/)
+1. Install and run [Docker](https://docs.docker.com/get-docker/)
 2. Download and extract the [source code](https://github.com/gshau/TheAstroImagingPlanner/archive/refs/heads/master.zip)
 3. Edit the [`conf/env.conf`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/conf/env.conf) file and specify the following
     - `DATA_PATH` - directory where you store subframes.

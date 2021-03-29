@@ -195,7 +195,7 @@ def _add_contrast(
 ):
 
     target, df = target_df
-    log.info(f"Adding Contrast: {target}: {time.time() - t0:.3f}")
+    log.debug(f"Adding Contrast: {target}: {time.time() - t0:.3f}")
     if target in ["moon", "sun"]:
         return target, df
     (

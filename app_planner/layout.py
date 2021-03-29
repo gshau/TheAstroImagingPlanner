@@ -718,7 +718,6 @@ def serve_layout(app):
         markdown_from_files = {}
         for md_file in md_files:
             root_name = os.path.basename(md_file).replace(".md", "")
-            log.info(root_name)
             with open(md_file, "r") as file:
                 markdown_from_files[root_name] = "".join(file.readlines())
         help_container = dbc.Container(

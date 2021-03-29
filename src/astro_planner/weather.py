@@ -55,8 +55,6 @@ class NWS_Forecast:
             "wind-speed sustained",
             "humidity relative",
         ]
-        log.info("data length")
-        log.info(len(data))
         try:
             df_weather = pd.DataFrame(data).set_index("date").astype(np.float)
             df_weather.index.name = f"NWS Forecast for {location_data}"

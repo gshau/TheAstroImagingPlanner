@@ -762,7 +762,6 @@ def get_progress_graph(
         .dropna()
     )
 
-    log.info(df_summary[exposure_col])
     exposure = df_summary[exposure_col] / 3600
     accepted_exposure = exposure[exposure > 0].sum()
     rejected_exposure = -exposure[exposure < 0].sum()

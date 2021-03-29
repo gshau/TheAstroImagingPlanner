@@ -42,7 +42,6 @@ def get_coordinates(targets, date_string, site, time_resolution_in_sec=60):
     utc_dates_series = pd.Series(utc_dates)
 
     for target in targets:
-        log.info(target)
         df = get_alt_az(
             utc_dates_series,
             latitude=site.lat,

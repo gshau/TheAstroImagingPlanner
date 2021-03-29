@@ -20,7 +20,25 @@ from image_grading.preprocessing import (
 )
 from astro_planner.target import target_file_reader, normalize_target_name
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(module)s %(message)s")
+
+import logging.handlers
+
+handler = logging.handlers.WatchedFileHandler(
+    os.environ.get("LOGFILE", "./watchdog.log"), mode="w"
+)
+
+formatter = logging.Formatter(fmt="%(asctime)s %(levelname)s %(module)s %(message)s")
+handler.setFormatter(formatter)
+root = logging.getLogger()
+
+root.setLevel(os.environ.get("LOGLEVEL", "INFO"))
+root.addHandler(handler)
+
+logging.basicConfig(
+    level=os.environ.get("LOGLEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(module)s %(message)s",
+)
+
 log = logging.getLogger(__name__)
 
 client = mqtt.Client()

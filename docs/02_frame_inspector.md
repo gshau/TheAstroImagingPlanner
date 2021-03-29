@@ -6,7 +6,7 @@ The Frame Inspector tab allows you to drill down into the data you have stored. 
 
 - Monitor mode - monitor for new files. Acquired data and subframe graphs will update with the new data as it comes in. The indicator for this mode is at the top right of the page.
 - Label Points - add target names to each point in the scatter plot.
-- 
+
 
 ### Frame Acceptance Criteria
 The thresholds for accepting or rejecting frames allow you to adjust your tolerance for good/bad frames.  
@@ -34,7 +34,7 @@ These quick access options set the X and Y axes for the subframe data scatter gr
 - `Star Count vs. Sky Background (ADU)` - useful to check for sky conditions.  Vastly lower star counts indicate either thin clouds, haze or fog.  
 - `Focus Position vs. Temperature` - useful to check changes in focus position with different temperatures.  With this data, you can determine the temperature compensation coefficient for your setup.  Also, it can help determine filter offsets.  
 - `Sky Background (ADU) vs. Altitude` - helpful to see the effect of different light pollution gradients in your skies.
-- `Spacing Metric vs. Star Trailing` - 
+- `Spacing Metric vs. Star Trailing`
 - `Eccentricity vs. Star Trailing`
 
 

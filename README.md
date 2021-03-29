@@ -23,7 +23,7 @@ The targets are collected from either a [Voyager](https://software.starkeeper.it
     - `APP_VERSION` - the app version you'd like to run.
 4. Run the [`run-app.bat`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/run-app.bat) file if on Windows, or the [`run-app.sh`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/run-app.sh) file if on Linux/MacOS.  
 5. The watchdog processes all the stored data (it can take some time, depending on how much data is available and computing resources).  
-6. Once the watchdog starts to process star data, the app should be ready to use. ou can navigate to `http://localhost:8050`
+6. Once the watchdog starts to process star data, the app should be ready to use. ou can navigate to [http://localhost:8050](http://localhost:8050)
 7. To update the app, you can run the [`update-app`](https://github.com/gshau/TheAstroImagingPlanner/blob/master/update-app.sh) file to pull the latest build from Docker Hub.
 
 

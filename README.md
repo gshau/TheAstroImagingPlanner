@@ -1,16 +1,14 @@
 
 
 # About This Project
-The goal of this dashboard project is to offer the ability to view at a glance the planning and progress of astronomical targets for imaging.  
+The goals of this dashboard project are to:
+- Offer the ability to view at a glance the planning and progress of imaging sessions of astronomical targets.  
+- Provide the ability to examine all subframe data to diagnose star shape issues such as tilt and/or sensor spacing issues.
 
-On the left are settings to change the date and site location in case you are planning weeks, etc. in advance of a trip. 
-These are the main components to the dashboard:
+These are the primary components to the dashboard:
 1. Target tracking and status - what are the best times in the night to image targets, allowing you to decide when to move on to another target
-2. Tracking target progress - how much data each target has, broken down by filter and instrument
 2. Acquired data - a birds-eye view of how much data has been collected on each target
-3. Inspection of subexposure data - inspect subexposure data, including all FITs header data, extracted stars, and other star analyses.  Integrates with the main file store where all subexposure is stored.
-5. Standalone image/star inspector for ad-hoc inspection of new frames
-3. Weather forecast data
+3. Inspection of subexposure data - inspect subexposure data, including all FITs header data, extracted stars, and other star analyses.  Integrates with the main file store where all subexposure data is stored.
 
 The targets are collected from either a [Voyager](https://software.starkeeper.it/) RoboClip Database, [Sequence Generator Pro](https://www.sequencegeneratorpro.com/sgpro/), or [N.I.N.A](https://nighttime-imaging.eu/) sequence files.  
 

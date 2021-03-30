@@ -829,13 +829,13 @@ def get_progress_graph(
         xaxis_title="Object",
         title={
             "text": f"Acquired Data, Exposure Total = {total_exposure:.2f} hr<br> Accepted = {accepted_exposure:.2f} hr, Rejected = {rejected_exposure:.2f} hr",
-            "y": 0.95,
+            "y": 0.96,
             "x": 0.5,
             "xanchor": "center",
             "yanchor": "top",
         },
         height=600,
-        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0.02),
         title_x=0.5,
         transition={"duration": 250},
     )
@@ -2119,6 +2119,11 @@ def rejection_criteria_callback(
     )
 
 
+def duration(date):
+    dt = pd.to_datetime(date)
+    return (dt.max() - dt.min()).total_seconds()
+
+
 @app.callback(
     [
         Output("target-scatter-graph", "figure"),
@@ -2228,6 +2233,15 @@ def update_scatter_plot(
         targets=target_matches,
         apply_rejection_criteria=True,
     )
+
+    df_eff = df_reject_criteria_all.groupby(["date_night_of", "FOCALLEN"]).agg(
+        {"EXPOSURE": ["sum", "last", "count"], "DATE-OBS": duration}
+    )
+    df_eff.columns = ["_".join(col).strip() for col in df_eff.columns.values]
+    df_eff["efficiency"] = df_eff["EXPOSURE_sum"] / (
+        df_eff["DATE-OBS_duration"] + df_eff["EXPOSURE_last"]
+    )
+    progress_graph.figure.layout.title.text = f'{progress_graph.figure.layout.title.text}<br>Acquisition Efficiency: {100 * df_eff["efficiency"].mean():.1f}%'
 
     progress_graph.figure.layout.height = 600
 

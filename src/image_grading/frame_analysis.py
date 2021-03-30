@@ -139,8 +139,37 @@ def show_inspector_image(
     with_overlay=False,
     use_plotly=True,
 ):
-    data = getdata(filename, header=False)
+    data = getdata(filename, header=False).astype(float)
     nx, ny = data.shape
+    # Check if data is RGGB bayer array
+    is_bayer = False
+    if (nx % 2 == 0) and (ny % 2 == 0):
+        g1 = data[1::2, ::2]
+        g2 = data[::2, 1::2]
+        r = data[::2, ::2]
+        b = data[1::2, 1::2]
+
+        g = (g1 + g2) / 2
+        g_diff = g1 - g2
+        g_med = np.median(np.abs(g_diff))
+        rg_med = np.median(np.abs(r - g))
+        bg_med = np.median(np.abs(b - g))
+        rb_med = np.median(np.abs(r - b))
+
+        if g_med < (bg_med) / 2:
+            is_bayer = True
+            data = np.array(
+                [r / np.median(r) * np.median(g), g, b / np.median(b) * np.median(g)]
+            )
+            data = data.swapaxes(0, 2)
+            data = data.swapaxes(0, 1)
+
+    if is_bayer:
+        nx, ny, nc = data.shape
+    else:
+        data = data.reshape(nx, ny, 1)
+        nc = 1
+
     base_filename = os.path.basename(filename)
     title = f"Full Preview for<br>{base_filename}"
 
@@ -164,7 +193,7 @@ def show_inspector_image(
 
         nx_canvas = n_cols * window_size + (n_cols - 1) * border
         ny_canvas = n_rows * window_size + (n_rows - 1) * border
-        canvas = np.ones((nx_canvas, ny_canvas)) * 2 ** 16
+        canvas = np.ones((nx_canvas, ny_canvas, nc)) * 2 ** 16
 
         for xlim, ylim in product(x_set, y_set):
             xlim_canvas = [
@@ -176,13 +205,17 @@ def show_inspector_image(
                 ylim[0] * (border + window_size) + window_size - 1,
             ]
             canvas[
-                xlim_canvas[0] : xlim_canvas[1], ylim_canvas[0] : ylim_canvas[1]
-            ] = data[xlim[1] : xlim[2], ylim[1] : ylim[2]]
+                xlim_canvas[0] : xlim_canvas[1], ylim_canvas[0] : ylim_canvas[1], :
+            ] = data[xlim[1] : xlim[2], ylim[1] : ylim[2], :]
         data = canvas
         title = f"Aberration Inspector for<br>{base_filename}"
 
+    data = np.clip(auto_stf(data), 0, 1)
+    if nc == 1:
+        data = data[:, :, 0]
+
     p = px.imshow(
-        auto_stf(data),
+        data,
         color_continuous_scale="gray",
         binary_string=True,
         binary_compression_level=4,

@@ -17,6 +17,7 @@ import dash_leaflet as dl
 
 
 from dash.exceptions import PreventUpdate
+from sklearn.preprocessing import MinMaxScaler
 
 import pandas as pd
 import numpy as np
@@ -2280,6 +2281,18 @@ def update_scatter_plot(
     i_filter = 0
 
     t0 = time.time()
+
+    size_ref_global = True
+    default_marker_size = 10
+    df0["marker_size"] = default_marker_size
+    if size_col:
+        default_marker_size = df0[size_col].median()
+        if np.isnan(default_marker_size):
+            default_marker_size = 10
+        df0["marker_size"] = MinMaxScaler(feature_range=(7, 15)).fit_transform(
+            df0[[size_col]].fillna(default_marker_size)
+        )
+
     for filter_index, filter, status_is_ok, low_star_count, high_fwhm in inputs:
 
         log.debug(
@@ -2292,14 +2305,11 @@ def update_scatter_plot(
         selection &= df0["high_fwhm"] == high_fwhm
         df1 = df0[selection].reset_index()
 
-        sizeref = 1
-        size = 10
-        if size_col:
-            sizeref = float(2.0 * df1[size_col].max() / (5 ** 2))
-            default_size = df1[size_col].median()
-            if np.isnan(default_size):
-                default_size = 1
-            size = df1[size_col].fillna(default_size)
+        if size_col and not size_ref_global:
+            default_size = 10
+            df1["marker_size"] = MinMaxScaler(feature_range=(7, 15)).fit_transform(
+                df1[[size_col]].fillna(default_size)
+            )
 
         legend_name = filter
         if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
@@ -2349,7 +2359,7 @@ def update_scatter_plot(
                 text=df1["OBJECT"],
                 textposition="bottom right",
                 textfont=dict(color=color, size=8),
-                marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
+                marker=dict(color=color, size=df1["marker_size"], symbol=symbol),
                 customdata=df1["filename"],
                 cliponaxis=False,
             )

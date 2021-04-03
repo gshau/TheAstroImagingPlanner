@@ -87,7 +87,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     moon_separation = pd.Series(distance(df_moon, df_target), index=df_target.index)
 
     b_moon = sbm._bmoon(
-        df_locs["moon"]["phase"].values,
+        df_locs["moon"]["phase_angle"].values,
         moon_separation.values,
         df_moon["alt"].values,
         df_target["alt"].values,
@@ -102,7 +102,8 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     # opposition effect increase to _+35%
     # http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
     b_moon *= (
-        1 + np.exp(-((np.abs(df_moon["phase"].values)) ** 2) / (2 * 3 ** 2)) * 0.35
+        1
+        + np.exp(-((np.abs(df_moon["phase_angle"].values)) ** 2) / (2 * 3 ** 2)) * 0.35
     )
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
@@ -240,7 +241,7 @@ def add_contrast(
 ):
     result = {}
     t0 = time.time()
-    df_loc["moon"]["phase"] = (
+    df_loc["moon"]["phase_angle"] = (
         distance(df_loc["moon"], df_loc["sun"], lat_key="dec", long_key="ra") + 360
     ) % 360 - 180
 

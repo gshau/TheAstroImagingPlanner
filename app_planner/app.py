@@ -464,10 +464,18 @@ def get_data(
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
 
+    df_moon = target_coords["moon"]
+    log.info(df_moon.columns)
+    moon_transit = str(df_moon["alt"].idxmax())
+    df_moon["text"] = df_moon.apply(
+        lambda row: f"Moon<br>Transit: {moon_transit}<br>Phase: {row['phase']:.1f}%",
+        axis=1,
+    )
+
     moon_data = dict(
-        x=target_coords["moon"].index,
-        y=target_coords["moon"]["alt"],
-        text="Moon",
+        x=df_moon.index,
+        y=df_moon["alt"],
+        text=df_moon["text"],
         opacity=1,
         line=dict(color="#333333", width=4),
         name="Moon",
@@ -573,9 +581,9 @@ def get_data(
                         continue
 
                     df0.loc[~show_trace, value] = np.nan
-
+                    transit_time = str(df0["alt"].idxmax())
                     text = df0.apply(
-                        lambda row: f"Profile: {profile}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        lambda row: f"Profile: {profile}<br>Transit: {transit_time}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
                         axis=1,
                     )
 

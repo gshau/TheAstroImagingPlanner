@@ -1670,7 +1670,10 @@ def update_target_graph(
         {"matching_targets": "TARGET"}, axis=1
     )
     df_merged_exposure_targets = pd.merge(
-        df_merged_exposure_targets, df_target_status, on=["GROUP", "TARGET"]
+        df_merged_exposure_targets,
+        df_target_status,
+        on=["GROUP", "TARGET"],
+        how="outer",
     )
 
     matching_objects = list(

@@ -147,6 +147,7 @@ def get_exposure_summary(df_data):
         "DECJ2000",
     ]
     group_cols = ["OBJECT"] + cols + ["FILTER"]
+    group_cols = [col for col in group_cols if col in df_data.columns]
     df0 = df_data.groupby(group_cols).agg({EXPOSURE_COL: "sum"}) / 3600
     df0 = df0[EXPOSURE_COL].unstack(group_cols.index("FILTER")).fillna(0).reset_index()
     return df0
@@ -156,34 +157,46 @@ def merge_targets_with_stored_metadata(df_data, df_targets):
 
     df_match = match_targets_to_data(df_targets, df_data)
 
-    df_merged = pd.merge(
-        pd.merge(df_data, df_match.drop("OBJECT", axis=1), on="filename", how="outer"),
-        df_targets,
-        on="TARGET",
-        how="outer",
-    )
+    if "OBJECT" in df_match.columns:
+        df_match = df_match.drop("OBJECT", axis=1)
 
-    df_merged["frame_overlap_fraction"] = np.clip(
-        1 - df_merged["distance"] / (df_merged["fov_y"] / 2), 1, 0
-    )
+    if df_match.shape[0] > 0:
+        df_merged = pd.merge(
+            pd.merge(df_data, df_match, on="filename", how="outer"),
+            df_targets,
+            on="TARGET",
+            how="outer",
+        )
 
-    df_exposure = get_exposure_summary(df_merged)
+        df_merged["frame_overlap_fraction"] = np.clip(
+            1 - df_merged["distance"] / (df_merged["fov_y"] / 2), 1, 0
+        )
+
+        df_exposure = get_exposure_summary(df_merged)
+    else:
+        log.info("No matching targets!")
+        df_merged = df_data.copy()
+        df_merged["TARGET"] = df_merged["OBJECT"]
+        df_merged["GROUP"] = "UNMATCHED GROUP"
+        df_merged["frame_overlap_fraction"] = 0.0
+        df_exposure = get_exposure_summary(df_merged)
 
     log.info(df_exposure.columns)
     group = df_exposure.groupby(["OBJECT"])
-    df_matching_targets_for_object = group.apply(
-        lambda row: list(np.unique([t for t in row.TARGET]))
-    ).to_frame("matching_targets")
-    df_matching_groups_for_object = group.apply(
-        lambda row: list(np.unique([g for g in row.GROUP]))
-    ).to_frame("matching_groups")
+    if "GROUP" in df_exposure.columns:
+        df_matching_groups_for_object = group.apply(
+            lambda row: list(np.unique([g for g in row.GROUP]))
+        ).to_frame("matching_groups")
+        df_exposure = df_exposure.join(df_matching_groups_for_object)
 
-    df_exposure = (
-        df_exposure.drop("TARGET", axis=1).drop_duplicates().set_index("OBJECT")
-    )
-
-    df_exposure = df_exposure.join(df_matching_groups_for_object)
-    df_exposure = df_exposure.join(df_matching_targets_for_object)
+    if "TARGET" in df_exposure.columns:
+        df_matching_targets_for_object = group.apply(
+            lambda row: list(np.unique([t for t in row.TARGET]))
+        ).to_frame("matching_targets")
+        df_exposure = (
+            df_exposure.drop("TARGET", axis=1).drop_duplicates().set_index("OBJECT")
+        )
+        df_exposure = df_exposure.join(df_matching_targets_for_object)
 
     df_exposure = df_exposure.reset_index()
 

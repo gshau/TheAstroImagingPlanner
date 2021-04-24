@@ -85,6 +85,7 @@ app = dash.Dash(__name__, external_stylesheets=[theme], server=server)
 
 app.title = "The AstroImaging Planner"
 
+TABLE_EXPORT_FORMAT = "csv"
 
 mqtt_client = mqtt.Client()
 mqtt_client.connect("mqtt", 1883, 60)
@@ -1741,6 +1742,7 @@ def update_target_graph(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
+                export_format=TABLE_EXPORT_FORMAT,
             )
         ]
     )
@@ -1944,6 +1946,7 @@ def update_files_table(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
+                export_format=TABLE_EXPORT_FORMAT,
             )
         ]
     )
@@ -2020,6 +2023,7 @@ def update_files_table(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
+                export_format=TABLE_EXPORT_FORMAT,
             )
         ]
     )

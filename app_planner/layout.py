@@ -20,7 +20,7 @@ with open(f"{base_dir}/conf/config.yml", "r") as f:
 
 DEFAULT_LAT = CONFIG.get("lat", 43.37)
 DEFAULT_LON = CONFIG.get("lon", -88.37)
-DEFAULT_MPSAS = CONFIG.get("mpsas", 19.5)
+DEFAULT_MPSAS = CONFIG.get("mpsas", None)
 DEFAULT_BANDWIDTH = CONFIG.get("bandwidth", 120)
 DEFAULT_K_EXTINCTION = CONFIG.get("k_extinction", 0.2)
 MIN_MOON_DISTANCE = CONFIG.get("min_moon_distance", 30)

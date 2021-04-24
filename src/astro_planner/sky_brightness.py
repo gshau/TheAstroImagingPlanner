@@ -10,8 +10,8 @@ class LightPollutionMap:
     # Portnov, Boris; Rybnikova, Nataliya A.; Furgoni, Riccardo (2016):
     # Supplement to: The New World Atlas of Artificial Night Sky Brightness.
     # GFZ Data Services. http://doi.org/10.5880/GFZ.1.4.2016.001
-    def __init__(self):
-        filename = "/app/data/sky_atlas/World_Atlas_2015_compressed.tif"
+    def __init__(self, filename="/app/data/sky_atlas/World_Atlas_2015_compressed.tif"):
+        self.filename = filename
         self.dataset = rasterio.open(filename)
         self.background_brightness = 0.174  # units of mcd/m^2
         self.background_mpsas = 22  # units of magnitude per square arc-second

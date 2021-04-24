@@ -37,8 +37,9 @@ def get_moon_data(time_utc, latitude, longitude):
             )
         )
     df = pd.DataFrame(moon_records)
-    df = get_alt_az(df["time"], latitude, longitude, df["ra"], df["dec"])
-    return df
+    df0 = get_alt_az(df["time"], latitude, longitude, df["ra"], df["dec"])
+    df0["phase"] = df["phase"].values
+    return df0
 
 
 def get_sun_data(time_utc, latitude, longitude):

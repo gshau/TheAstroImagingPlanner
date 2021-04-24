@@ -42,7 +42,8 @@ def parse_latlon_string(string, with_hour=False):
             result += np.float(array[2]) / 3600
         return result
     except:
-        raise Exception("Issue with conversion: {}".format(string))
+        log.warning(f"Issue with conversion: {string}")
+        return np.nan
 
 
 class ObservingSite:

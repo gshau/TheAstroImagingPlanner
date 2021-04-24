@@ -76,18 +76,15 @@ def logistic(x, x0, tau):
     return 1 / (1 + np.exp((x - x0) / tau))
 
 
-def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
+def get_sky_bkg(df_target, df_sun, df_moon, mpsas, k_ext):
 
-    df_target = df_locs[target_name]
     time_index = df_target.index
     sbm = SkyBackgroundModel(mpsas=mpsas, k=k_ext)
 
-    df_moon = df_locs["moon"]
-    df_sun = df_locs["sun"]
     moon_separation = pd.Series(distance(df_moon, df_target), index=df_target.index)
 
     b_moon = sbm._bmoon(
-        df_locs["moon"]["phase"].values,
+        df_moon["phase_angle"].values,
         moon_separation.values,
         df_moon["alt"].values,
         df_target["alt"].values,
@@ -102,7 +99,8 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     # opposition effect increase to _+35%
     # http://articles.adsabs.harvard.edu/cgi-bin/nph-iarticle_query?1991PASP..103.1033K&defaultprint=YES&filetype=.pdf
     b_moon *= (
-        1 + np.exp(-((np.abs(df_moon["phase"].values)) ** 2) / (2 * 3 ** 2)) * 0.35
+        1
+        + np.exp(-((np.abs(df_moon["phase_angle"].values)) ** 2) / (2 * 3 ** 2)) * 0.35
     )
 
     # Ad-hoc solar model - good from -5 to -15 altitude: https://www.eso.org/~fpatat/science/skybright/twilight.pdf
@@ -144,7 +142,7 @@ def get_sky_bkg(df_locs, target_name, mpsas, k_ext):
     moon_separation.loc[df_target["alt"] < 0] = np.nan
     moon_separation.loc[sky_bkg < 0] = np.nan
 
-    return sky_bkg.dropna(), sky_bkg_no_moon.dropna(), moon_separation.dropna()
+    return sky_bkg, sky_bkg_no_moon, moon_separation
 
 
 def get_contrast(
@@ -155,9 +153,17 @@ def get_contrast(
     k_ext=0.2,
     include_airmass=True,
 ):
+    df_target = df_locs[target_name]
+    df_sun = df_locs["sun"]
+    df_moon = df_locs["moon"]
+
     sky_bkg, sky_bkg_no_moon, moon_separation = get_sky_bkg(
-        df_locs, target_name, mpsas, k_ext=k_ext
+        df_target, df_sun, df_moon, mpsas, k_ext=k_ext
     )
+
+    sky_bkg.dropna(inplace=True)
+    sky_bkg_no_moon.dropna(inplace=True)
+    moon_separation.dropna(inplace=True)
 
     bkg = 2.5 ** (-sky_bkg)
     bkg_no_moon = 2.5 ** (-sky_bkg_no_moon)
@@ -240,7 +246,7 @@ def add_contrast(
 ):
     result = {}
     t0 = time.time()
-    df_loc["moon"]["phase"] = (
+    df_loc["moon"]["phase_angle"] = (
         distance(df_loc["moon"], df_loc["sun"], lat_key="dec", long_key="ra") + 360
     ) % 360 - 180
 

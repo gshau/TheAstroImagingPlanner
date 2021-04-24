@@ -17,6 +17,7 @@ import dash_leaflet as dl
 
 
 from dash.exceptions import PreventUpdate
+from sklearn.preprocessing import MinMaxScaler
 
 import pandas as pd
 import numpy as np
@@ -84,6 +85,7 @@ app = dash.Dash(__name__, external_stylesheets=[theme], server=server)
 
 app.title = "The AstroImaging Planner"
 
+TABLE_EXPORT_FORMAT = "csv"
 
 mqtt_client = mqtt.Client()
 mqtt_client.connect("mqtt", 1883, 60)
@@ -464,10 +466,18 @@ def get_data(
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
 
+    df_moon = target_coords["moon"]
+    log.info(df_moon.columns)
+    moon_transit = str(df_moon["alt"].idxmax())
+    df_moon["text"] = df_moon.apply(
+        lambda row: f"Moon<br>Transit: {moon_transit}<br>Phase: {row['phase']:.1f}%",
+        axis=1,
+    )
+
     moon_data = dict(
-        x=target_coords["moon"].index,
-        y=target_coords["moon"]["alt"],
-        text="Moon",
+        x=df_moon.index,
+        y=df_moon["alt"],
+        text=df_moon["text"],
         opacity=1,
         line=dict(color="#333333", width=4),
         name="Moon",
@@ -573,9 +583,9 @@ def get_data(
                         continue
 
                     df0.loc[~show_trace, value] = np.nan
-
+                    transit_time = str(df0["alt"].idxmax())
                     text = df0.apply(
-                        lambda row: f"Profile: {profile}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        lambda row: f"Profile: {profile}<br>Transit: {transit_time}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
                         axis=1,
                     )
 
@@ -829,13 +839,13 @@ def get_progress_graph(
         xaxis_title="Object",
         title={
             "text": f"Acquired Data, Exposure Total = {total_exposure:.2f} hr<br> Accepted = {accepted_exposure:.2f} hr, Rejected = {rejected_exposure:.2f} hr",
-            "y": 0.95,
+            "y": 0.96,
             "x": 0.5,
             "xanchor": "center",
             "yanchor": "top",
         },
         height=600,
-        legend=dict(orientation="h", yanchor="bottom", y=1.03, xanchor="left", x=0.02),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0.02),
         title_x=0.5,
         transition={"duration": 250},
     )
@@ -1661,7 +1671,10 @@ def update_target_graph(
         {"matching_targets": "TARGET"}, axis=1
     )
     df_merged_exposure_targets = pd.merge(
-        df_merged_exposure_targets, df_target_status, on=["GROUP", "TARGET"]
+        df_merged_exposure_targets,
+        df_target_status,
+        on=["GROUP", "TARGET"],
+        how="outer",
     )
 
     matching_objects = list(
@@ -1729,6 +1742,7 @@ def update_target_graph(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
+                export_format=TABLE_EXPORT_FORMAT,
             )
         ]
     )
@@ -1932,6 +1946,7 @@ def update_files_table(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
+                export_format=TABLE_EXPORT_FORMAT,
             )
         ]
     )
@@ -2008,6 +2023,7 @@ def update_files_table(
                     "backgroundColor": "rgb(230, 230, 230)",
                     "fontWeight": "bold",
                 },
+                export_format=TABLE_EXPORT_FORMAT,
             )
         ]
     )
@@ -2117,6 +2133,11 @@ def rejection_criteria_callback(
         star_trail_strength_thr,
         min_star_reduction,
     )
+
+
+def duration(date):
+    dt = pd.to_datetime(date)
+    return (dt.max() - dt.min()).total_seconds()
 
 
 @app.callback(
@@ -2229,6 +2250,15 @@ def update_scatter_plot(
         apply_rejection_criteria=True,
     )
 
+    df_eff = df_reject_criteria_all.groupby(["date_night_of", "FOCALLEN"]).agg(
+        {"EXPOSURE": ["sum", "last", "count"], "DATE-OBS": duration}
+    )
+    df_eff.columns = ["_".join(col).strip() for col in df_eff.columns.values]
+    df_eff["efficiency"] = df_eff["EXPOSURE_sum"] / (
+        df_eff["DATE-OBS_duration"] + df_eff["EXPOSURE_last"]
+    )
+    progress_graph.figure.layout.title.text = f'{progress_graph.figure.layout.title.text}<br>Acquisition Efficiency: {100 * df_eff["efficiency"].mean():.1f}%'
+
     progress_graph.figure.layout.height = 600
 
     df0["text"] = df0.apply(
@@ -2258,6 +2288,18 @@ def update_scatter_plot(
     i_filter = 0
 
     t0 = time.time()
+
+    size_ref_global = True
+    default_marker_size = 10
+    df0["marker_size"] = default_marker_size
+    if size_col:
+        default_marker_size = df0[size_col].median()
+        if np.isnan(default_marker_size):
+            default_marker_size = 10
+        df0["marker_size"] = MinMaxScaler(feature_range=(7, 15)).fit_transform(
+            df0[[size_col]].fillna(default_marker_size)
+        )
+
     for filter_index, filter, status_is_ok, low_star_count, high_fwhm in inputs:
 
         log.debug(
@@ -2270,14 +2312,11 @@ def update_scatter_plot(
         selection &= df0["high_fwhm"] == high_fwhm
         df1 = df0[selection].reset_index()
 
-        sizeref = 1
-        size = 10
-        if size_col:
-            sizeref = float(2.0 * df1[size_col].max() / (5 ** 2))
-            default_size = df1[size_col].median()
-            if np.isnan(default_size):
-                default_size = 1
-            size = df1[size_col].fillna(default_size)
+        if size_col and not size_ref_global:
+            default_size = 10
+            df1["marker_size"] = MinMaxScaler(feature_range=(7, 15)).fit_transform(
+                df1[[size_col]].fillna(default_size)
+            )
 
         legend_name = filter
         if filter in [HA_FILTER, OIII_FILTER, SII_FILTER]:
@@ -2327,7 +2366,7 @@ def update_scatter_plot(
                 text=df1["OBJECT"],
                 textposition="bottom right",
                 textfont=dict(color=color, size=8),
-                marker=dict(color=color, size=size, sizeref=sizeref, symbol=symbol),
+                marker=dict(color=color, size=df1["marker_size"], symbol=symbol),
                 customdata=df1["filename"],
                 cliponaxis=False,
             )

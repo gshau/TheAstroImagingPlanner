@@ -75,6 +75,28 @@ def on_message(client, obj, msg):
         sys.exit()
 
 
+def add_column_to_table(c, table_name, column_name, column_type):
+    has_column = False
+    for row in c.execute(
+        """
+    SELECT column_name 
+  FROM information_schema.columns
+ WHERE table_name = '{table_name}'
+ """.format(
+            table_name=table_name
+        )
+    ):
+        print(row[0])
+        if row[0] == column_name:
+            has_column = True
+    if not has_column:
+        c.execute(
+            "ALTER TABLE {} ADD COLUMN {} {}".format(
+                table_name, column_name, column_type
+            )
+        )
+
+
 client.on_message = on_message
 client.on_connect = on_connect
 client.connect("mqtt", 1883, 60)
@@ -90,7 +112,7 @@ def update_db_with_targets(config=CONFIG, target_dir=TARGET_DIR, file_list=None)
 def init_target_status():
     status_query = """
     CREATE TABLE IF NOT EXISTS target_status
-        ("TARGET" varchar(512), "GROUP" varchar(512), status varchar(512));
+        ("TARGET" varchar(512), "GROUP" varchar(512), status varchar(512), goal varchar(2048), priority integer, metadata varchar(2048));
     ALTER TABLE target_status DROP CONSTRAINT IF EXISTS target_group_uq;
     ALTER TABLE target_status
         ADD CONSTRAINT target_group_uq
@@ -98,6 +120,9 @@ def init_target_status():
         """
     with POSTGRES_ENGINE.connect() as con:
         con.execute(status_query)
+        add_column_to_table(con, "target_status", "metadata", "varchar(2048)")
+        add_column_to_table(con, "target_status", "priority", "integer")
+        add_column_to_table(con, "target_status", "goal", "varchar(2048)")
 
     target_create_query = """
     CREATE TABLE IF NOT EXISTS targets
@@ -113,11 +138,15 @@ def init_target_status():
     df0 = df_targets.reset_index()[["TARGET", "GROUP"]]
     df0["TARGET"] = df0["TARGET"].apply(normalize_target_name)
     df0["status"] = "pending"
+    df0["priority"] = 3
+    df0["goal"] = "{}"
+    df0["metadata"] = "{}"
+
     data = list(df0.values)
 
     query_template = """INSERT INTO target_status
-        ("TARGET", "GROUP", status)
-        VALUES (%s, %s, %s)
+        ("TARGET", "GROUP", status, priority, goal, metadata)
+        VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT ("TARGET", "GROUP") DO NOTHING;"""
     with POSTGRES_ENGINE.connect() as con:
         con.execute(query_template, data)

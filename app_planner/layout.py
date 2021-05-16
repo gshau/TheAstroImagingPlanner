@@ -137,6 +137,27 @@ def serve_layout(app):
             row=True,
         )
 
+        target_priority_selector = dbc.FormGroup(
+            [
+                dbc.Col(
+                    dbc.RadioItems(
+                        options=[
+                            {"label": "Very High", "value": 5},
+                            {"label": "High", "value": 4},
+                            {"label": "Medium", "value": 3},
+                            {"label": "Low", "value": 2},
+                            {"label": "Very Low", "value": 1},
+                        ],
+                        labelStyle={"display": "block"},
+                        inputStyle={"margin-right": "10px"},
+                        id="target-priority-selector",
+                    ),
+                    width=10,
+                ),
+            ],
+            row=True,
+        )
+
         date_picker = dbc.Row(
             [
                 dbc.Col(
@@ -237,6 +258,32 @@ def serve_layout(app):
                                 {"label": "Active", "value": "active"},
                                 {"label": "Acquired", "value": "acquired"},
                                 {"label": "Closed", "value": "closed"},
+                            ],
+                            value=[],
+                            multi=True,
+                        ),
+                    ],
+                    style={"textAlign": "center"},
+                    className="dash-bootstrap",
+                )
+            ]
+        )
+
+        priority_picker = dbc.Col(
+            [
+                html.Div(
+                    [
+                        html.Label(
+                            "Selected Target Priority", style={"textAlign": "center"},
+                        ),
+                        dcc.Dropdown(
+                            id="priority-match",
+                            options=[
+                                {"label": "Very High", "value": 5},
+                                {"label": "High", "value": 4},
+                                {"label": "Medium", "value": 3},
+                                {"label": "Low", "value": 2},
+                                {"label": "Very Low", "value": 1},
                             ],
                             value=[],
                             multi=True,
@@ -566,11 +613,31 @@ def serve_layout(app):
                                     html.Br(),
                                     dbc.Row(status_picker, justify="around"),
                                     html.Br(),
+                                    dbc.Row(priority_picker, justify="around"),
+                                    html.Br(),
                                     dbc.Row(filter_targets_check, justify="around"),
                                     html.Br(),
                                     dbc.Row(target_status_picker, justify="around"),
                                     html.Br(),
-                                    dbc.Row(target_status_selector, justify="around"),
+                                    dbc.Row(
+                                        [
+                                            dbc.Col(
+                                                [
+                                                    html.Label("Status"),
+                                                    target_status_selector,
+                                                ],
+                                                width=6,
+                                            ),
+                                            dbc.Col(
+                                                [
+                                                    html.Label("Priority"),
+                                                    target_priority_selector,
+                                                ],
+                                                width=6,
+                                            ),
+                                        ],
+                                        justify="around",
+                                    ),
                                     html.Br(),
                                     dbc.Row(location_selection, justify="around"),
                                     html.Br(),

@@ -354,19 +354,20 @@ def get_target_data():
 VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 
-def update_targets_with_status(target_names, status, profile_list):
+def update_targets_with_status(target_names, status, priority, profile_list):
 
     query_template = """INSERT INTO target_status
-    ("TARGET", "GROUP", status)
-    VALUES (%s, %s, %s)
-    ON CONFLICT ("TARGET", "GROUP") DO UPDATE set status = EXCLUDED.status;"""
+    ("TARGET", "GROUP", status, priority)
+    VALUES (%s, %s, %s, %s)
+    ON CONFLICT ("TARGET", "GROUP") DO UPDATE set status = EXCLUDED.status, priority = EXCLUDED.priority;"""
 
     df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
-    if status in VALID_STATUS:
+    if status in VALID_STATUS and priority in [1, 2, 3, 4, 5]:
         selection = df_target_status["GROUP"].isin(profile_list)
         selection &= df_target_status["TARGET"].isin(target_names)
         df0 = df_target_status[selection][["TARGET", "GROUP"]]
         df0["status"] = status
+        df0["priority"] = priority
         if df0.shape[0] > 0:
             data = list(df0.values)
             with POSTGRES_ENGINE.connect() as con:
@@ -959,7 +960,7 @@ def store_target_coordinate_data(date_string, site_data):
 
 
 def filter_targets_for_matches_and_filters(
-    targets, status_matches, filters, profile_list
+    targets, status_matches, priority_matches, filters, profile_list
 ):
     df_target_status = get_df_from_redis("df_target_status")
     target_data = get_target_data()
@@ -980,6 +981,14 @@ def filter_targets_for_matches_and_filters(
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
+        
+        if priority_matches:
+            matching_targets = df_target_status[
+                df_target_status["priority"].isin(priority_matches)
+            ]["TARGET"].values
+            targets = [target for target in targets if target.name in matching_targets]
+
+            log.debug(f"Target matching priority {priority_matches}: {targets}")
 
     return targets
 
@@ -1274,7 +1283,10 @@ def update_target_for_status_callback(profile_list, status_match):
 
 
 @app.callback(
-    Output("target-status-selector", "value"),
+    [
+        Output("target-status-selector", "value"),
+        Output("target-priority-selector", "value"),
+    ],
     [Input("target-status-match", "value")],
     [State("store-target-status", "data"), State("profile-selection", "value")],
 )
@@ -1285,26 +1297,37 @@ def update_radio_status_for_targets_callback(
     if targets and profile_list:
         selection = df_target_status["TARGET"].isin(targets)
         selection &= df_target_status["GROUP"].isin(profile_list)
-        status_set = df_target_status[selection]["status"].unique()
-        if len(status_set) == 1:
-            log.debug(f"Fetching targets: {targets} with status of {status_set}")
-            return list(status_set)[0]
+        status_priority_set = df_target_status[selection][
+            ["status", "priority"]
+        ].drop_duplicates()
+        if status_priority_set.shape[0] == 1:
+            log.debug(
+                f"Fetching targets: {targets} with status of {status_priority_set}"
+            )
+            status_priority = list(status_priority_set.values[0])
+            return status_priority
         else:
             log.debug(
-                f"Conflict fetching targets: {targets} with status of {status_set}"
+                f"Conflict fetching targets: {targets} with status of {status_priority_set}"
             )
+    return None, None
 
 
 @app.callback(
     Output("store-target-status", "data"),
-    [Input("target-status-selector", "value")],
+    [
+        Input("target-status-selector", "value"),
+        Input("target-priority-selector", "value"),
+    ],
     [State("target-status-match", "value"), State("profile-selection", "value")],
 )
-def update_target_with_status_callback(status, targets, profile_list):
+def update_target_with_status_callback(status, priority, targets, profile_list):
 
     df_target_status = get_df_from_redis("df_target_status")
     if status:
-        df_target_status = update_targets_with_status(targets, status, profile_list)
+        df_target_status = update_targets_with_status(
+            targets, status, priority, profile_list
+        )
     push_df_to_redis(df_target_status, "df_target_status")
     return ""
 
@@ -1499,6 +1522,7 @@ def update_contrast(
         Input("y-axis-type", "value"),
         Input("filter-seasonal-targets", "on"),
         Input("status-match", "value"),
+        Input("priority-match", "value"),
         Input("filter-match", "value"),
         Input("min-moon-distance", "value"),
     ],
@@ -1510,6 +1534,7 @@ def store_data(
     value,
     filter_seasonal_targets,
     status_matches,
+    priority_matches,
     filters,
     min_moon_distance,
     profile_list,
@@ -1525,7 +1550,7 @@ def store_data(
         min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
 
     targets = filter_targets_for_matches_and_filters(
-        all_targets, status_matches, filters, profile_list
+        all_targets, status_matches, priority_matches, filters, profile_list
     )
     target_names = [t.name for t in targets]
     target_names.append("sun")

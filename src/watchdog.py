@@ -7,6 +7,8 @@ import glob
 import pandas as pd
 
 import paho.mqtt.client as mqtt
+from direct_redis import DirectRedis
+
 
 from image_grading.preprocessing import (
     update_db_with_matching_files,
@@ -42,6 +44,25 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 client = mqtt.Client()
+
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS = DirectRedis(host=REDIS_HOST, port=6379, db=0)
+
+
+def push_to_redis(element, key):
+    t0 = time.time()
+    REDIS.set(key, element)
+    t_elapsed = time.time() - t0
+    log.debug(f"Pushing for {key:30s} took {t_elapsed:.3f} seconds")
+
+
+def get_list_from_redis(key):
+    t0 = time.time()
+    result = REDIS.get(key)
+    t_elapsed = time.time() - t0
+    log.debug(f"Reading for {key:30s} took {t_elapsed:.3f} seconds")
+    return result
 
 
 def on_connect(client, obj, flags, rc):
@@ -126,6 +147,7 @@ def update_targets(config=CONFIG, target_dir=DATA_DIR, file_list=None):
             except:
                 log.info(f"Issue with {filename}", exc_info=True)
         df_targets = pd.concat(df_list)
+        # push_to_redis(df_targets, "df_targets")
         if df_targets.shape[0] > 0:
             log.debug("Pushing new targets to to db")
             push_rows_to_table(

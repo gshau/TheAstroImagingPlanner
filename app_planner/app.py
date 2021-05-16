@@ -529,11 +529,12 @@ def get_data(
         data = [sun_up_data, sun_dn_data]
     n_targets = len(target_coords)
     colors = sns.color_palette(n_colors=n_targets).as_hex()
-
-    if target_names:
+    # targets_available = [t for t in df_targets["TARGET"].unique() if t in target_names]
+    targets_available = target_names
+    if targets_available:
         # Sort targets by transit time
         records = []
-        for target_name in target_names:
+        for target_name in targets_available:
             max_alt_time = target_coords[target_name]["alt"].idxmax()
             records.append(dict(target_name=target_name, transit=max_alt_time))
         df_transit = pd.DataFrame(records).sort_values(by="transit")
@@ -554,12 +555,13 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
+
             notes_text = df_targets.loc[
                 df_targets["TARGET"] == target_name, "NOTE"
-            ].values.flatten()[0]
+            ].values.flatten()  # [0]
             profile = df_targets.loc[
                 df_targets["TARGET"] == target_name, "GROUP"
-            ].values.flatten()[0]
+            ].values.flatten()  # [0]
             skip_below_horizon = True
             for horizon_status in ["above", "below"]:
                 if (horizon_status == "below") and skip_below_horizon:
@@ -2254,10 +2256,19 @@ def update_scatter_plot(
         {"EXPOSURE": ["sum", "last", "count"], "DATE-OBS": duration}
     )
     df_eff.columns = ["_".join(col).strip() for col in df_eff.columns.values]
-    df_eff["efficiency"] = df_eff["EXPOSURE_sum"] / (
-        df_eff["DATE-OBS_duration"] + df_eff["EXPOSURE_last"]
+    relative_efficiency = (
+        df_eff["EXPOSURE_sum"] / (df_eff["DATE-OBS_duration"] + df_eff["EXPOSURE_last"])
+    ).mean()
+
+    df_eff = df_reject_criteria_all.groupby(["date_night_of"]).agg(
+        {"EXPOSURE": ["sum", "last", "count"], "DATE-OBS": duration}
     )
-    progress_graph.figure.layout.title.text = f'{progress_graph.figure.layout.title.text}<br>Acquisition Efficiency: {100 * df_eff["efficiency"].mean():.1f}%'
+    df_eff.columns = ["_".join(col).strip() for col in df_eff.columns.values]
+    absolute_efficiency = (
+        df_eff["EXPOSURE_sum"] / (df_eff["DATE-OBS_duration"] + df_eff["EXPOSURE_last"])
+    ).mean()
+
+    progress_graph.figure.layout.title.text = f"{progress_graph.figure.layout.title.text}<br>Acquisition / Total Efficiency: {100 * relative_efficiency:.1f}% / {100 * absolute_efficiency:.1f}%"
 
     progress_graph.figure.layout.height = 600
 

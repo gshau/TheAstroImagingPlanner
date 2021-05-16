@@ -131,7 +131,9 @@ def get_sky_bkg(df_target, df_sun, df_moon, mpsas, k_ext):
     sky_bkg.loc[df_target["alt"] < 0] = np.nan
     sky_bkg.loc[sky_bkg < 0] = np.nan
 
-    sky_bkg_no_moon = pd.Series(sbm._b_to_mpsas(b_altitude_lp), index=df_target.index)
+    sky_bkg_no_moon = pd.Series(
+        sbm._b_to_mpsas(b_altitude_lp + b_sun), index=df_target.index
+    )
     sky_bkg_no_moon += airglow_airmass_dependence
     sky_bkg_no_moon.index = time_index
 

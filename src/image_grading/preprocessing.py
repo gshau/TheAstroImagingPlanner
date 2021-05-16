@@ -63,14 +63,14 @@ def append_to_list_on_redis(element, key):
 
 def push_to_redis(element, key):
     t0 = time.time()
-    REDIS.set(key, json.dumps(element))
+    REDIS.set(key, element)
     t_elapsed = time.time() - t0
     log.debug(f"Pushing for {key:30s} took {t_elapsed:.3f} seconds")
 
 
 def get_list_from_redis(key):
     t0 = time.time()
-    result = json.loads(REDIS.get(key))
+    result = REDIS.get(key)
     t_elapsed = time.time() - t0
     log.debug(f"Reading for {key:30s} took {t_elapsed:.3f} seconds")
     return result
@@ -194,6 +194,8 @@ def process_header_from_fits(filename, skip_missing_entries):
         df_header["file_dir"] = file_dir
         df_header["file_full_path"] = filename
         df_header["filename"] = file_base
+        valid_columns = [col for col in df_header.columns if len(col) > 0]
+        df_header = df_header[valid_columns]
 
         cols = [
             "filename",

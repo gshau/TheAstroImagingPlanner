@@ -606,13 +606,6 @@ def update_star_metrics(
 
             log.info(f"New stars: {n_stars}")
 
-            # push_rows_to_table(
-            #     result["stars"],
-            #     POSTGRES_ENGINE,
-            #     table_name="star_metrics",
-            #     if_exists="append",
-            # )
-
             # Aggregate star metrics table
             push_rows_to_table(
                 result["agg_stars"],

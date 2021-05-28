@@ -86,7 +86,6 @@ def add_column_to_table(c, table_name, column_name, column_type):
             table_name=table_name
         )
     ):
-        print(row[0])
         if row[0] == column_name:
             has_column = True
     if not has_column:

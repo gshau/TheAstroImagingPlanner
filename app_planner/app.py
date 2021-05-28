@@ -495,9 +495,15 @@ def get_data(
 
     # Get sun up/down
     sun = target_coords["sun"]
-    sun_above_threshold = (sun.alt > sun_alt_for_twilight).astype(int)
-    sun_up = np.where(np.gradient(sun_above_threshold) > 0)[0][0]
-    sun_dn = np.where(np.gradient(sun_above_threshold) < 0)[0][0]
+    sun_below_threshold = (sun.alt < sun_alt_for_twilight).astype(int)
+    has_dark_sky = sun_below_threshold.sum() > 0
+
+    if has_dark_sky:
+        sun_up = np.where(np.gradient(sun_below_threshold) < 0)[0][0]
+        sun_dn = np.where(np.gradient(sun_below_threshold) > 0)[0][0]
+    else:
+        sun_up = 0
+        sun_dn = 0
 
     log.info(f"Sun down: {sun.index[sun_dn]}")
     log.info(f"Sun up: {sun.index[sun_up]}")
@@ -506,7 +512,7 @@ def get_data(
     duraion_sun_down_hrs = duraion_sun_down.total_seconds() / 3600.0
 
     log.info(f"Sun down duration: {duraion_sun_down_hrs:.2f} hours")
-
+    data = [sun_data, moon_data]
     sun_up_data = dict(
         x=[sun.index[sun_up], sun.index[sun_up], sun.index[-1], sun.index[-1]],
         y=[0, 90, 90, 0],
@@ -525,11 +531,17 @@ def get_data(
         fill="toself",
         name="Sun down",
     )
-    data = [sun_data, sun_up_data, sun_dn_data, moon_data]
+    data.append(sun_up_data)
+    data.append(sun_dn_data)
+
     if (value == "contrast") or (value == "airmass") or (value == "sky_mpsas"):
-        data = [sun_up_data, sun_dn_data]
+        if has_dark_sky:
+            data = [sun_up_data, sun_dn_data]
+        else:
+            data = []
     n_targets = len(target_coords)
-    colors = sns.color_palette(n_colors=n_targets).as_hex()
+    colors = sns.color_palette("deep", n_colors=n_targets).as_hex()
+    colors = sns.color_palette("bright", n_colors=n_targets).as_hex()
     # targets_available = [t for t in df_targets["TARGET"].unique() if t in target_names]
     targets_available = target_names
     if targets_available:
@@ -545,14 +557,21 @@ def get_data(
             zip(colors, sorted_target_names)
         ):
             df = target_coords[target_name]
-
             if filter_targets:
-                meridian_at_night = (df["alt"].idxmax() > sun.index[sun_dn]) & (
-                    df["alt"].idxmax() < sun.index[sun_up]
-                )
-                high_at_night = (
-                    df.loc[sun.index[sun_dn] : sun.index[sun_up], "alt"].max() > 60
-                )
+                if has_dark_sky:
+                    meridian_at_night = (df["alt"].idxmax() > sun.index[sun_dn]) & (
+                        df["alt"].idxmax() < sun.index[sun_up]
+                    )
+                    high_at_night = (
+                        df.loc[sun.index[sun_dn] : sun.index[sun_up], "alt"].max() > 60
+                    )
+                else:
+                    meridian_at_night = False
+                    push_df_to_redis(df, "df")
+                    push_df_to_redis(sun, "sun")
+                    midnight_index = sun["alt"].idxmin()
+                    high_at_night = df.loc[midnight_index, "alt"] > 60
+
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
@@ -981,7 +1000,7 @@ def filter_targets_for_matches_and_filters(
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
-        
+
         if priority_matches:
             matching_targets = df_target_status[
                 df_target_status["priority"].isin(priority_matches)

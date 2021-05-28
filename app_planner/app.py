@@ -354,19 +354,20 @@ def get_target_data():
 VALID_STATUS = ["pending", "active", "acquired", "closed"]
 
 
-def update_targets_with_status(target_names, status, profile_list):
+def update_targets_with_status(target_names, status, priority, profile_list):
 
     query_template = """INSERT INTO target_status
-    ("TARGET", "GROUP", status)
-    VALUES (%s, %s, %s)
-    ON CONFLICT ("TARGET", "GROUP") DO UPDATE set status = EXCLUDED.status;"""
+    ("TARGET", "GROUP", status, priority)
+    VALUES (%s, %s, %s, %s)
+    ON CONFLICT ("TARGET", "GROUP") DO UPDATE set status = EXCLUDED.status, priority = EXCLUDED.priority;"""
 
     df_target_status = pd.read_sql("SELECT * FROM target_status;", POSTGRES_ENGINE)
-    if status in VALID_STATUS:
+    if status in VALID_STATUS and priority in [1, 2, 3, 4, 5]:
         selection = df_target_status["GROUP"].isin(profile_list)
         selection &= df_target_status["TARGET"].isin(target_names)
         df0 = df_target_status[selection][["TARGET", "GROUP"]]
         df0["status"] = status
+        df0["priority"] = priority
         if df0.shape[0] > 0:
             data = list(df0.values)
             with POSTGRES_ENGINE.connect() as con:
@@ -462,6 +463,9 @@ def get_data(
     min_moon_distance=30,
 ):
 
+    df_target_status = get_df_from_redis("df_target_status")
+    df_target_status = df_target_status.set_index("TARGET")
+
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
@@ -494,9 +498,15 @@ def get_data(
 
     # Get sun up/down
     sun = target_coords["sun"]
-    sun_above_threshold = (sun.alt > sun_alt_for_twilight).astype(int)
-    sun_up = np.where(np.gradient(sun_above_threshold) > 0)[0][0]
-    sun_dn = np.where(np.gradient(sun_above_threshold) < 0)[0][0]
+    sun_below_threshold = (sun.alt < sun_alt_for_twilight).astype(int)
+    has_dark_sky = sun_below_threshold.sum() > 0
+
+    if has_dark_sky:
+        sun_up = np.where(np.gradient(sun_below_threshold) < 0)[0][0]
+        sun_dn = np.where(np.gradient(sun_below_threshold) > 0)[0][0]
+    else:
+        sun_up = 0
+        sun_dn = 0
 
     log.info(f"Sun down: {sun.index[sun_dn]}")
     log.info(f"Sun up: {sun.index[sun_up]}")
@@ -505,7 +515,7 @@ def get_data(
     duraion_sun_down_hrs = duraion_sun_down.total_seconds() / 3600.0
 
     log.info(f"Sun down duration: {duraion_sun_down_hrs:.2f} hours")
-
+    data = [sun_data, moon_data]
     sun_up_data = dict(
         x=[sun.index[sun_up], sun.index[sun_up], sun.index[-1], sun.index[-1]],
         y=[0, 90, 90, 0],
@@ -524,11 +534,17 @@ def get_data(
         fill="toself",
         name="Sun down",
     )
-    data = [sun_data, sun_up_data, sun_dn_data, moon_data]
+    data.append(sun_up_data)
+    data.append(sun_dn_data)
+
     if (value == "contrast") or (value == "airmass") or (value == "sky_mpsas"):
-        data = [sun_up_data, sun_dn_data]
+        if has_dark_sky:
+            data = [sun_up_data, sun_dn_data]
+        else:
+            data = []
     n_targets = len(target_coords)
-    colors = sns.color_palette(n_colors=n_targets).as_hex()
+    colors = sns.color_palette("deep", n_colors=n_targets).as_hex()
+    colors = sns.color_palette("bright", n_colors=n_targets).as_hex()
     # targets_available = [t for t in df_targets["TARGET"].unique() if t in target_names]
     targets_available = target_names
     if targets_available:
@@ -544,18 +560,31 @@ def get_data(
             zip(colors, sorted_target_names)
         ):
             df = target_coords[target_name]
-
             if filter_targets:
-                meridian_at_night = (df["alt"].idxmax() > sun.index[sun_dn]) & (
-                    df["alt"].idxmax() < sun.index[sun_up]
-                )
-                high_at_night = (
-                    df.loc[sun.index[sun_dn] : sun.index[sun_up], "alt"].max() > 60
-                )
+                if has_dark_sky:
+                    meridian_at_night = (df["alt"].idxmax() > sun.index[sun_dn]) & (
+                        df["alt"].idxmax() < sun.index[sun_up]
+                    )
+                    high_at_night = (
+                        df.loc[sun.index[sun_dn] : sun.index[sun_up], "alt"].max() > 60
+                    )
+                else:
+                    meridian_at_night = False
+                    push_df_to_redis(df, "df")
+                    push_df_to_redis(sun, "sun")
+                    midnight_index = sun["alt"].idxmin()
+                    high_at_night = df.loc[midnight_index, "alt"] > 60
+
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
-
+            df0 = df_target_status.loc[target_name]
+            if isinstance(df0, pd.DataFrame):
+                status = df0["status"].values[0]
+                priority = df0["priority"].values[0]
+            else:
+                status = df0["status"]
+                priority = df0["priority"]
             notes_text = df_targets.loc[
                 df_targets["TARGET"] == target_name, "NOTE"
             ].values.flatten()  # [0]
@@ -574,11 +603,19 @@ def get_data(
                     in_legend = True
                     opacity = 1
                     width = 2
-                    if horizon_status == "below":
-                        show_trace = df["alt"] > -90
-                        in_legend = False
-                        opacity = 0.15
-                        width = 1
+                    # if priority:
+                    opacity = (1 + priority / 5.0) / 2
+                    width = priority / 1.25
+                    dash_style_dict = dict(
+                        pending="dash", closed="dot", active="", acquired="dashdot"
+                    )
+                    dash_style_dict = {}
+                    dash_style = dash_style_dict.get(status, "")
+                    # if horizon_status == "below":
+                    #     show_trace = df["alt"] > -90
+                    #     in_legend = False
+                    #     opacity = 0.15
+                    #     width = 1
 
                     if show_trace.sum() == 0:
                         render_target = False
@@ -587,7 +624,7 @@ def get_data(
                     df0.loc[~show_trace, value] = np.nan
                     transit_time = str(df0["alt"].idxmax())
                     text = df0.apply(
-                        lambda row: f"Profile: {profile}<br>Transit: {transit_time}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        lambda row: f"Target: {target_name}<br>Profile: {profile}<br>Transit: {transit_time}<br>Status: {status}<br>Priority: {priority}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
                         axis=1,
                     )
 
@@ -596,7 +633,7 @@ def get_data(
                             x=df0.index,
                             y=df0[value],
                             mode="lines",
-                            line=dict(color=color, width=width),
+                            line=dict(color=color, width=width, dash=dash_style),
                             showlegend=in_legend,
                             name=target_name,
                             connectgaps=False,
@@ -959,7 +996,7 @@ def store_target_coordinate_data(date_string, site_data):
 
 
 def filter_targets_for_matches_and_filters(
-    targets, status_matches, filters, profile_list
+    targets, status_matches, priority_matches, filters, profile_list
 ):
     df_target_status = get_df_from_redis("df_target_status")
     target_data = get_target_data()
@@ -980,6 +1017,14 @@ def filter_targets_for_matches_and_filters(
             targets = [target for target in targets if target.name in matching_targets]
 
             log.debug(f"Target matching status {status_matches}: {targets}")
+
+        if priority_matches:
+            matching_targets = df_target_status[
+                df_target_status["priority"].isin(priority_matches)
+            ]["TARGET"].values
+            targets = [target for target in targets if target.name in matching_targets]
+
+            log.debug(f"Target matching priority {priority_matches}: {targets}")
 
     return targets
 
@@ -1274,7 +1319,10 @@ def update_target_for_status_callback(profile_list, status_match):
 
 
 @app.callback(
-    Output("target-status-selector", "value"),
+    [
+        Output("target-status-selector", "value"),
+        Output("target-priority-selector", "value"),
+    ],
     [Input("target-status-match", "value")],
     [State("store-target-status", "data"), State("profile-selection", "value")],
 )
@@ -1285,26 +1333,37 @@ def update_radio_status_for_targets_callback(
     if targets and profile_list:
         selection = df_target_status["TARGET"].isin(targets)
         selection &= df_target_status["GROUP"].isin(profile_list)
-        status_set = df_target_status[selection]["status"].unique()
-        if len(status_set) == 1:
-            log.debug(f"Fetching targets: {targets} with status of {status_set}")
-            return list(status_set)[0]
+        status_priority_set = df_target_status[selection][
+            ["status", "priority"]
+        ].drop_duplicates()
+        if status_priority_set.shape[0] == 1:
+            log.debug(
+                f"Fetching targets: {targets} with status of {status_priority_set}"
+            )
+            status_priority = list(status_priority_set.values[0])
+            return status_priority
         else:
             log.debug(
-                f"Conflict fetching targets: {targets} with status of {status_set}"
+                f"Conflict fetching targets: {targets} with status of {status_priority_set}"
             )
+    return None, None
 
 
 @app.callback(
     Output("store-target-status", "data"),
-    [Input("target-status-selector", "value")],
+    [
+        Input("target-status-selector", "value"),
+        Input("target-priority-selector", "value"),
+    ],
     [State("target-status-match", "value"), State("profile-selection", "value")],
 )
-def update_target_with_status_callback(status, targets, profile_list):
+def update_target_with_status_callback(status, priority, targets, profile_list):
 
     df_target_status = get_df_from_redis("df_target_status")
     if status:
-        df_target_status = update_targets_with_status(targets, status, profile_list)
+        df_target_status = update_targets_with_status(
+            targets, status, priority, profile_list
+        )
     push_df_to_redis(df_target_status, "df_target_status")
     return ""
 
@@ -1499,6 +1558,7 @@ def update_contrast(
         Input("y-axis-type", "value"),
         Input("filter-seasonal-targets", "on"),
         Input("status-match", "value"),
+        Input("priority-match", "value"),
         Input("filter-match", "value"),
         Input("min-moon-distance", "value"),
     ],
@@ -1510,6 +1570,7 @@ def store_data(
     value,
     filter_seasonal_targets,
     status_matches,
+    priority_matches,
     filters,
     min_moon_distance,
     profile_list,
@@ -1525,7 +1586,7 @@ def store_data(
         min_moon_distance = DEFAULT_MIN_MOON_DISTANCE
 
     targets = filter_targets_for_matches_and_filters(
-        all_targets, status_matches, filters, profile_list
+        all_targets, status_matches, priority_matches, filters, profile_list
     )
     target_names = [t.name for t in targets]
     target_names.append("sun")

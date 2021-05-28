@@ -463,6 +463,9 @@ def get_data(
     min_moon_distance=30,
 ):
 
+    df_target_status = get_df_from_redis("df_target_status")
+    df_target_status = df_target_status.set_index("TARGET")
+
     target_names = [
         name for name in (list(target_coords.keys())) if name not in ["sun", "moon"]
     ]
@@ -575,7 +578,13 @@ def get_data(
                 if not (meridian_at_night or high_at_night):
                     continue
             render_target = True
-
+            df0 = df_target_status.loc[target_name]
+            if isinstance(df0, pd.DataFrame):
+                status = df0["status"].values[0]
+                priority = df0["priority"].values[0]
+            else:
+                status = df0["status"]
+                priority = df0["priority"]
             notes_text = df_targets.loc[
                 df_targets["TARGET"] == target_name, "NOTE"
             ].values.flatten()  # [0]
@@ -594,11 +603,19 @@ def get_data(
                     in_legend = True
                     opacity = 1
                     width = 2
-                    if horizon_status == "below":
-                        show_trace = df["alt"] > -90
-                        in_legend = False
-                        opacity = 0.15
-                        width = 1
+                    # if priority:
+                    opacity = (1 + priority / 5.0) / 2
+                    width = priority / 1.25
+                    dash_style_dict = dict(
+                        pending="dash", closed="dot", active="", acquired="dashdot"
+                    )
+                    dash_style_dict = {}
+                    dash_style = dash_style_dict.get(status, "")
+                    # if horizon_status == "below":
+                    #     show_trace = df["alt"] > -90
+                    #     in_legend = False
+                    #     opacity = 0.15
+                    #     width = 1
 
                     if show_trace.sum() == 0:
                         render_target = False
@@ -607,7 +624,7 @@ def get_data(
                     df0.loc[~show_trace, value] = np.nan
                     transit_time = str(df0["alt"].idxmax())
                     text = df0.apply(
-                        lambda row: f"Profile: {profile}<br>Transit: {transit_time}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        lambda row: f"Target: {target_name}<br>Profile: {profile}<br>Transit: {transit_time}<br>Status: {status}<br>Priority: {priority}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
                         axis=1,
                     )
 
@@ -616,7 +633,7 @@ def get_data(
                             x=df0.index,
                             y=df0[value],
                             mode="lines",
-                            line=dict(color=color, width=width),
+                            line=dict(color=color, width=width, dash=dash_style),
                             showlegend=in_legend,
                             name=target_name,
                             connectgaps=False,

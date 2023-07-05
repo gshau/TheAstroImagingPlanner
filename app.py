@@ -1,5 +1,4 @@
 import time
-import sys
 import queue
 import threading
 import json
@@ -2932,18 +2931,12 @@ def change_env(n, env, n_force_update):
         p.daemon = True
         p.start()
 
-    # df_header = pd.read_sql(
-    #     """select filename from fits_headers fh where is_valid_header = True""", conn
-    # )
-    # push_object_to_global_store(df_header, "df_header")
     print(f"n_force_update: {n_force_update}")
-    # return f"Environ: {env}", "/", n
     return (
         f"Environ: {env}",
         html.Div(
             [
-                html.H3(f"Loading new profile"),
-                # html.A(html.Button("Click to refresh"), href="/"),
+                html.H3("Loading new profile"),
                 html.Meta(httpEquiv="refresh", content="0"),
             ]
         ),

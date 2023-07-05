@@ -1,0 +1,89 @@
+db_file: data.db
+env: demo
+filter_map:
+  B:
+  - Blue
+  G:
+  - Green
+  Ha:
+  - HA
+  - H-alpha
+  L:
+  - Luminance
+  - Lum
+  OIII:
+  - O3
+  - O-III
+  OSC:
+  - '** BayerMatrix **'
+  - __ BayerMatrix __
+  R:
+  - Red
+  SII:
+  - S2
+  - S-II
+fits_file_patterns:
+  allow:
+  - '**/*.[fF][iI][tT]'
+  - '**/*.[fF][iI][tT][s]'
+  reject:
+  - auto_process
+  - master_calibration
+  - stacked
+  - skip
+  - sweep
+goes_satellite_link: https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36
+horizon_data:
+  alt_az_seperator: ' '
+  flat_horizon_alt: 10
+  header_length: 3
+  horizon_file: conf/custom_horizon.txt
+inactive_profiles: []
+inspector_thresholds:
+  ecc_thr: 0.6
+  gradient_thr: 0.1
+  iqr_scale: 1.5
+  star_frac_thr: 0.5
+  trail_thr: 8
+  z_score: 5
+monitor_mode_update_frequency: 15
+n_threads: 4
+planner_config:
+  k_extinction: 0.2
+  lat: 40
+  lon: -90
+  min_frame_overlap_fraction: 0.75
+  min_moon_distance: 30
+  mpsas: 22
+  profiles: []
+  solar_altitude_for_night: -6
+  target_priorities: []
+  target_status:
+  - Active
+  - Pending
+  time_resolution: 300
+  utc_offset: -5
+directories:
+  calibration_dirs: []
+  data_dirs: []
+  preproc_out_dirs: []
+  target_dirs: []
+running_mode:
+- inspector
+- planner
+sensor_map: {}
+theme: LITERA
+use_simple_bkg_eval: true
+valid_priorities:
+- Very Low
+- Low
+- Medium
+- High
+- Very High
+valid_status:
+- Pending
+- Active
+- Acquired
+- Closed
+- Dropped
+- Testing

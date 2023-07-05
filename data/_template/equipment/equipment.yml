@@ -1,0 +1,163 @@
+profiles:
+  'ontc1010 qsi690':
+    telescope: 'ontc1010'
+    sensor: 'qsi690'
+    filters:
+      L:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      R:
+          default_bin: 2
+          default_exposure: 180
+          default_blocks: 4
+      G:
+          default_bin: 2
+          default_exposure: 180
+          default_blocks: 4
+      B:
+          default_bin: 2
+          default_exposure: 180
+          default_blocks: 4
+      Ha:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      OIII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      SII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+  'ap92 asi6200mm':
+    telescope: 'ap92'
+    sensor: 'asi6200mm'
+    filters:
+      L:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      R:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      G:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      B:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      Ha:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      OIII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      SII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+  'ap92 asi294mm':
+    telescope: 'ap92'
+    sensor: 'asi294mm'
+    filters:
+      L:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      R:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      G:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      B:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      Ha:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      OIII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      SII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+  'ap130 asi2600mm':
+    telescope: 'ap130'
+    sensor: 'asi2600mm'
+    filters:
+      L:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      R:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      G:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      B:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      Ha:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      OIII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      SII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+  'e160 asi6200mm':
+    telescope: 'e160'
+    sensor: 'asi6200mm'
+    filters:
+      L:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      R:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      G:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      B:
+          default_bin: 1
+          default_exposure: 300
+          default_blocks: 4
+      Ha:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      OIII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+      SII:
+          default_bin: 1
+          default_exposure: 900
+          default_blocks: 4
+
+

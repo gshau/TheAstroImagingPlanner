@@ -1,26 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 import yaml
 
+dir = '../..'
 venv = 'venv'
 
 datas = []
-datas += [(f'./{venv}/lib/python3.11/site-packages/click', './click')]
-datas += [(f'./{venv}/lib/python3.11/site-packages/dash_leaflet', './dash_leaflet')]
-datas += [(f'./{venv}/lib/python3.11/site-packages/rasterio', './rasterio')]
-datas += [(f'./{venv}/lib/python3.11/site-packages/dash_daq', './dash_daq')]
-datas += [(f'./{venv}/lib/python3.11/site-packages/pysiril', './pysiril')]
-datas += [(f'./{venv}/lib/python3.11/site-packages/dash_iconify', './dash_iconify')]
-datas += [(f'./{venv}/lib/python3.11/site-packages/dash_mantine_components', './dash_mantine_components')]
-datas += [('./assets', './assets')]
+datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_leaflet', './dash_leaflet')]
+datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/rasterio', './rasterio')]
+datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_daq', './dash_daq')]
+datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/pysiril', './pysiril')]
+datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_iconify', './dash_iconify')]
+datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_mantine_components', './dash_mantine_components')]
+datas += [(f'./{dir}/assets', './assets')]
 
-datas += [('./data/_template', './data/_template')]
-datas += [('./data/banner.txt', './data/')]
-datas += [('./data/license', './data/license')]
-datas += [('./data/logs', './data/logs')]
+datas += [(f'./{dir}/data/_template', './data/_template')]
+datas += [(f'./{dir}/data/banner.txt', './data/')]
+datas += [(f'./{dir}/data/logs', './data/logs')]
 
-datas += [('./docs', './docs')]
-datas += [('./git.hash', './')]
-datas += [('./metadata.yml', './')]
+datas += [(f'./{dir}/docs', './docs')]
+datas += [(f'./{dir}/git.hash', './')]
+datas += [(f'./{dir}/metadata.yml', './')]
 
 hiddenimports = []
 hiddenimports += ['sep']
@@ -36,12 +35,12 @@ binaries = [('/usr/local/bin/mdb-*', '.')]
 binaries += [('/usr/local/lib/*mdb*.dylib', '.')]
 binaries += [('/usr/local/opt/glib/lib/libglib-2.0.0.dylib', '.')]
 binaries += [('/usr/local/opt/gettext/lib/libintl.8.dylib', '.')]
-#binaries += [(f'./{venv}/lib/python3.11/site-packages/pyodbc.cpython-311-darwin.so', '.')]
+#binaries += [(f'./{dir}/{venv}/lib/python3.11/site-packages/pyodbc.cpython-311-darwin.so', '.')]
 
 
-pathex = [f'./{venv}/lib/python3.11/site-packages']
+pathex = [f'./{dir}/{venv}/lib/python3.11/site-packages']
 
-a = Analysis(['main.py'],
+a = Analysis([f'{dir}/main.py'],
              pathex=pathex,
              binaries=binaries,
              datas=datas,
@@ -56,7 +55,7 @@ a = Analysis(['main.py'],
 
 pyz = PYZ(a.pure, a.zipped_data)
 
-with open('./metadata.yml', 'r') as f:
+with open(f'./metadata.yml', 'r') as f:
     metadata = yaml.safe_load(f)
     version = metadata.get('Version')
 
@@ -104,6 +103,6 @@ info_plist = {
 
 app = BUNDLE(coll,
              name='AstroImagingPlanner.app',
-             icon='assets/icons/AIP.icns',
+             icon=f'{dir}/assets/icons/AIP.icns',
              bundle_identifier='com.astroimagingplanner',
              info_plist=info_plist)

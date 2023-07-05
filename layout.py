@@ -19,6 +19,9 @@ from astro_planner.utils import get_config
 from astro_planner.logger import log
 from config import PlannerConfig, VoyagerConfig, InspectorThresholds
 
+
+DONATE_SITE = "https://www.paypal.com/donate/?hosted_button_id=NKLT3YXPK2SDJ"
+
 yaxis_map = {
     "alt": "Altitude",
     "airmass": "Airmass",
@@ -248,15 +251,15 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
         navbar = dbc.NavbarSimple(
             id="navbar",
             children=[
-                dbc.NavItem(
-                    dbc.NavLink(
-                        "Project Repository",
-                        id="github-link",
-                        href="https://github.com/gshau/AstroPlanner/",
-                        className="fa-github",
-                        target="_blank",
-                    )
-                ),
+                # dbc.NavItem(
+                #     dbc.NavLink(
+                #         "Project Repository",
+                #         id="github-link",
+                #         href="https://github.com/gshau/AstroPlanner/",
+                #         className="fa-github",
+                #         target="_blank",
+                #     )
+                # ),
                 dbc.NavItem(
                     dbc.NavLink(
                         "Clear Outside Report",
@@ -289,11 +292,20 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                         target="_blank",
                     )
                 ),
+                dbc.NavItem(
+                    dbc.NavLink(
+                        "Donate",
+                        id="donate-link",
+                        href=DONATE_SITE,
+                        # className="fa-github",
+                        target="_blank",
+                    )
+                ),
             ],
             brand="The AstroImaging Planner",
             brand_href="https://github.com/gshau/AstroPlanner/",
             color="primary",
-            dark=True,
+            # dark=True,
             style={"display": "none"},
         )
 
@@ -1101,9 +1113,10 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                 daq.BooleanSwitch(
                                     id="planner-toggle",
                                     on=False,
-                                    label="Use Planner",
+                                    label="Use Planner (Inactive)",
                                     labelPosition="top",
                                     color=switch_color,
+                                    style={"display": "none"},
                                 ),
                             ],
                             width=3,
@@ -1117,9 +1130,10 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                 daq.BooleanSwitch(
                                     id="inspector-toggle",
                                     on=False,
-                                    label="Use Data Review",
+                                    label="Use Data Review (Inactive)",
                                     labelPosition="top",
                                     color=switch_color,
+                                    style={"display": "none"},
                                 ),
                             ],
                             width=3,
@@ -1132,6 +1146,7 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                     label="Remove Frame Data When Deleted (Inactive)",
                                     labelPosition="top",
                                     color=switch_color,
+                                    style={"display": "none"},
                                 ),
                             ],
                             width=3,
@@ -1595,27 +1610,45 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                             dbc.Col(settings_accordian, width=8),
                             dbc.Col(
                                 [
-                                    dbc.Button(
-                                        "Save All Settings",
-                                        id="config-save",
-                                        n_clicks=0,
-                                        color="success",
+                                    dbc.Row(
+                                        [
+                                            dbc.Button(
+                                                "Save All Settings",
+                                                id="config-save",
+                                                n_clicks=0,
+                                                color="success",
+                                            ),
+                                            dbc.Button(
+                                                "Show config",
+                                                id="config-show",
+                                                n_clicks=0,
+                                                color="success",
+                                                style=DEBUG_STYLE,
+                                            ),
+                                            html.Div(
+                                                f"Version: {version} - Build {git_hash}"
+                                            ),
+                                            dcc.Textarea(
+                                                id="config-text",
+                                                value=yaml.dump(config),
+                                                style={
+                                                    "width": "80%",
+                                                    "height": 600,
+                                                },
+                                            ),
+                                        ]
                                     ),
-                                    dbc.Button(
-                                        "Show config",
-                                        id="config-show",
-                                        n_clicks=0,
-                                        color="success",
-                                        style=DEBUG_STYLE,
-                                    ),
-                                    html.Div(f"Version: {version} - Build {git_hash}"),
-                                    dcc.Textarea(
-                                        id="config-text",
-                                        value=yaml.dump(config),
-                                        style={
-                                            "width": "80%",
-                                            "height": 600,
-                                        },
+                                    dbc.Row(
+                                        [
+                                            dbc.Button(
+                                                "Donate",
+                                                id="donate",
+                                                href=DONATE_SITE,
+                                                target="_blank",
+                                                n_clicks=0,
+                                                color="success",
+                                            ),
+                                        ]
                                     ),
                                 ],
                                 width=4,

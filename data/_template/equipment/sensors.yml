@@ -1,0 +1,148 @@
+sensors:
+  asi2600mm:      
+    pixel_size: 3.76
+    n_x: 6248
+    n_y: 4176
+    bit_depth: 16
+    quantum_efficiency: 0.91
+    gain: 1
+    read_noise: 3.2
+    full_well: 50000
+    bias_level_adu: 500
+    filters:
+      L: 
+        make: astrodon
+        filter_id: L
+      R: 
+        make: astrodon
+        filter_id: R
+      G: 
+        make: astrodon
+        filter_id: G
+      B: 
+        make: astrodon
+        filter_id: B
+      Ha:
+        make: chroma
+        filter_id: Ha_3nm
+      OIII:
+        make: chroma
+        filter_id: OIII_3nm
+      SII:
+        make: chroma
+        filter_id: SII_3nm
+  qsi690:      
+    pixel_size: 3.69
+    n_x: 3388
+    n_y: 2712
+    bit_depth: 16
+    quantum_efficiency: 0.77
+    gain: 0.37
+    read_noise: 0
+    full_well: 18000
+    bias_level_adu: 500
+    filters:
+      L: 
+        make: astrodon
+        filter_id: L
+      R: 
+        make: astrodon
+        filter_id: R
+      G: 
+        make: astrodon
+        filter_id: G
+      B: 
+        make: astrodon
+        filter_id: B
+      Ha:
+        make: astrodon
+        filter_id: Ha_5nm
+      OIII:
+        make: astrodon
+        filter_id: OIII_3nm
+      SII:
+        make: astrodon
+        filter_id: SII_5nm
+  asi294mm:      
+    pixel_size: 2.31
+    n_x: 8288
+    n_y: 5644
+    bit_depth: 12
+    quantum_efficiency: 0.90
+    gain: 1
+    read_noise: 0
+    bias_level_adu: 500
+    filters:
+      L: 
+        make: astrodon
+        filter_id: L
+      R: 
+        make: astrodon
+        filter_id: R
+      G: 
+        make: astrodon
+        filter_id: G
+      B: 
+        make: astrodon
+        filter_id: B
+      Ha:
+        make: astrodon
+        filter_id: Ha_5nm
+        default_bin: 1
+        default_exposure: 900
+        default_blocks: 4
+      OIII:
+        make: astrodon
+        filter_id: OIII_5nm
+        default_bin: 1
+        default_exposure: 900
+        default_blocks: 4
+      SII:
+        make: astrodon
+        filter_id: SII_5nm
+        default_bin: 1
+        default_exposure: 900
+        default_blocks: 4    
+  asi6200mm:      
+    pixel_size: 3.76
+    n_x: 9576
+    n_y: 6388
+    bit_depth: 16
+    quantum_efficiency: 0.91
+    gain: 1
+    read_noise: 0
+    bias_level_adu: 500
+    filters:
+      L: 
+        make: chroma
+        filter_id: L
+      R: 
+        make: chroma
+        filter_id: R
+      G: 
+        make: chroma
+        filter_id: G
+      B: 
+        make: chroma
+        filter_id: B
+      Ha:
+        make: chroma
+        filter_id: Ha_3nm
+      OIII:
+        make: chroma
+        filter_id: OIII_3nm
+      SII:
+        make: chroma
+        filter_id: SII_3nm
+  asi2600mc:      
+    pixel_size: 3.76
+    n_x: 6248
+    n_y: 4176
+    bit_depth: 16
+    quantum_efficiency: 0.91
+    gain: 1
+    read_noise: 0
+    bias_level_adu: 500
+    filters:
+      OSC:
+        bandpass: 300

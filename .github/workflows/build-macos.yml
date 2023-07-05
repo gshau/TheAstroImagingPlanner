@@ -1,0 +1,33 @@
+name: Build MacOS Binary
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS]
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Bootstrap environment
+      run: ./bin/macos/bootstrap.sh
+
+    - name: Clean Workspace
+      run: ./bin/macos/clean.sh
+
+    - name: Build Binary
+      run: ./bin/macos/build.sh
+
+    - name: Make DMG
+      run: ./bin/macos/make_dmg.sh
+
+    - name: Upload Binary
+      uses: actions/upload-artifact@v2
+      with:
+        name: AstroImagingPlanner.dmg
+        path: dist/AstroImagingPlanner.dmg  # Replace with the path to the generated binary file
+  
+  

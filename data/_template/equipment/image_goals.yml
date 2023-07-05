@@ -1,0 +1,91 @@
+lum:
+  - filter_name: L
+    total_exposure: 3600
+    sub_exposure: 300
+    binning: 1
+
+lrgb_1222:
+  - filter_name: L
+    total_exposure: 3600
+    sub_exposure: 300
+    binning: 1
+  - filter_name: R
+    total_exposure: 900
+    sub_exposure: 180
+    binning: 2
+  - filter_name: G
+    total_exposure: 900
+    sub_exposure: 180
+    binning: 2
+  - filter_name: B
+    total_exposure: 900
+    sub_exposure: 180
+    binning: 2
+
+lrgb_1111:
+  - filter_name: L
+    total_exposure: 3600
+    sub_exposure: 300
+    binning: 1
+  - filter_name: R
+    total_exposure: 1200
+    sub_exposure: 300
+    binning: 1
+  - filter_name: G
+    total_exposure: 1200
+    sub_exposure: 300
+    binning: 1
+  - filter_name: B
+    total_exposure: 1200
+    sub_exposure: 300
+    binning: 1
+
+
+bicolor:
+  - filter_name: Ha
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+  - filter_name: OIII
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+
+sho:
+  - filter_name: Ha
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+  - filter_name: OIII
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+  - filter_name: SII
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+
+ha:
+  - filter_name: Ha
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+
+oiii:
+  - filter_name: OIII
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1
+
+
+sii:
+  - filter_name: SII
+    total_exposure: 3600
+    sub_exposure: 900
+    binning: 1

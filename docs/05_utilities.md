@@ -1,18 +1,37 @@
                                                 
+
+## Directory Settings
+- `Target Directory` - where all target data is located - either Voyager Roboclip database, or SGP/NINA sequence files
+- `Raw FITs Directory` - where all raw light subframes are located
+- `Calibration FITs Directory` - where all calibration subframes are located
+- `Preprocessed Output Directory` - where preprocessing output will be stored
+
+## FITs File Processing Settings
+- `Thread Count` - number of CPU threads used to process subframes
+- `Save Settings` - saves current settings into config file
+
+## Profile List
+A list of Voyager profiles or SGP/NINA files to show in planning tab
+## Connect With Voyager 
+If on, allows for syncing accpet/reject status of subframes with Voyager Advanced.  
+- `Voyager Connection` - list of inputs required to connect with Voyager
+  - `Voyager Hostname` - ip address for Voyager
+  - `Voyager Port` - port for Voyager connection, typically 5950
+  - `Voyager User` - username
+  - `Voyager Password` - password
+## Silence Alerts
+If on, prevents notification box showing newly processed/removed files in the app's database.
+
+
 ## Utilities
 [//]: # (src/assets/utilities_tab.png)
 The utilities tab gives some control over some portions of the app.  
- - `Clear All Tables` - clears all tables (restart from scratch)
- - `Clear Targets Table` - clears only the target table
- - `Clear Header Tables` - clears FITs header tables including status
- - `Clear Star Tables` - clears all star metrics data
- - `Download Planner Log` - download the log for the planner
- - `Download Watchdog Log` - download the log for all backend work the watchdog does, including fits header reading, star metric eval, etc.
- - `Restart App` - restart the main app
- - `Restart Watchdog` - restart the watchdog
- - `Show File Skiplist` - Show a list of files the watchdog skipped due to an error (most likely a key missing FITs header - see below for a list of required header entries). 
- - `Clear File Skiplist` - Clear the skiplist to allow for those files to be reprocessed
-
+ - `Download App Log` - download the log
+ - `Download Target Data` - downloads target data
+ - `Download Target Status` - downloads target status
+ - `Download FITs Data Tables` - downloads all FITs data 
+ 
+ 
 Note: The FITs header must contain the following entries to be processed correctly:
  ```
   "OBJECT"

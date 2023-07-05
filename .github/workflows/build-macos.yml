@@ -2,10 +2,10 @@ name: Create Dev Release
 
 on:
   push:
-    # tags:
-    #   - 'v*'
-    branches:
-      - dev
+    tags:
+      - 'v*'
+    # branches:
+    #   - dev
 
 jobs:
   build:

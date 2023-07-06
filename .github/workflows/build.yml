@@ -25,38 +25,38 @@ jobs:
         prerelease: false
 
 
-  build_mac_job:
-    runs-on: [self-hosted, macOS]
-    needs: create_release_job
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v2
+  # build_mac_job:
+  #   runs-on: [self-hosted, macOS]
+  #   needs: create_release_job
+  #   steps:
+  #   - name: Checkout Repository
+  #     uses: actions/checkout@v2
 
-    - name: Bootstrap environment
-      run: ./bin/macos/bootstrap.sh
+  #   - name: Bootstrap environment
+  #     run: ./bin/macos/bootstrap.sh
 
-    - name: Clean Workspace
-      run: ./bin/macos/clean.sh
+  #   - name: Clean Workspace
+  #     run: ./bin/macos/clean.sh
 
-    - name: Build Binary
-      run: ./bin/macos/build.sh
+  #   - name: Build Binary
+  #     run: ./bin/macos/build.sh
 
-    - name: Make DMG
-      run: ./bin/macos/make_dmg.sh
+  #   - name: Make DMG
+  #     run: ./bin/macos/make_dmg.sh
 
-    - name: Upload Release Asset
-      id: upload-release-asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release_job.outputs.upload_url }}
-        asset_path: ./dist/AstroImagingPlanner.dmg
-        asset_name: AstroImagingPlanner.dmg
-        asset_content_type: application/octet-stream
-        # asset_path: ./Readme.md
-        # asset_name: Readme
-        # asset_content_type: text/plain
+  #   - name: Upload Release Asset
+  #     id: upload-release-asset
+  #     uses: actions/upload-release-asset@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       upload_url: ${{ needs.create_release_job.outputs.upload_url }}
+  #       asset_path: ./dist/AstroImagingPlanner.dmg
+  #       asset_name: AstroImagingPlanner.dmg
+  #       asset_content_type: application/octet-stream
+  #       # asset_path: ./Readme.md
+  #       # asset_name: Readme
+  #       # asset_content_type: text/plain
                 
         
   
@@ -69,13 +69,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Bootstrap
-        run: .\bootstrap.bat
+        run: .\bin\windows\bootstrap.bat
 
       - name: Clean
-        run: .\clean.bat
+        run: .\bin\windows\clean.bat
 
       - name: Build
-        run: .\build.bat
+        run: .\bin\windows\build.bat
 
       - name: Upload Installer
         id: upload-release-asset

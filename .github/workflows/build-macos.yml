@@ -25,8 +25,9 @@ jobs:
         prerelease: false
 
 
-  build_mac:
+  build_mac_job:
     runs-on: [self-hosted, macOS]
+    needs: create_release_job
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v2

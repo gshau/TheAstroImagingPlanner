@@ -5,6 +5,7 @@ dir = '..\..'
 
 datas = []
 datas += [(f"{dir}/venv/Lib/site-packages/dash_leaflet", "dash_leaflet")]
+datas += [(f'{dir}/venv/Lib/site-packages/rasterio', './rasterio')]
 datas += [(f"{dir}/venv/Lib/site-packages/pysiril", "pysiril")]
 datas += [(f"{dir}/venv/Lib/site-packages/dash_daq", "dash_daq")]
 datas += [(f"{dir}/venv/Lib/site-packages/dash_iconify", './dash_iconify')]

@@ -63,7 +63,7 @@ jobs:
   
   build_windows_job:
     runs-on: [self-hosted, windows, x64]
-
+    needs: create_release_job
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2

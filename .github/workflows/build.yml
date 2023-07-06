@@ -2,8 +2,8 @@ name: Create Dev Release
 
 on:
   push:
-    # tags:
-    #   - 'v*'
+    tags:
+      - 'v*'
     branches:
       - dev
 
@@ -78,7 +78,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release_job.outputs.upload_url }}
-          asset_path: '.\installers\Install AstroImaging Planner.exe'
+          asset_path: '.\build_assets\windows\installers\Install AstroImaging Planner.exe'
           asset_name: 'Install AstroImaging Planner.exe'
           asset_content_type: application/octet-stream          
 

@@ -89,6 +89,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.create_release_job.outputs.upload_url }}
-          asset_path: ".\installers\Update AstroImaging Planner.exe"
+          asset_path: '.\installers\Update AstroImaging Planner.exe'
           asset_name: "Update AstroImaging Planner.exe"
           asset_content_type: application/octet-stream                    

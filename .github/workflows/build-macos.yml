@@ -31,17 +31,17 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v2
 
-    - name: Bootstrap environment
-      run: ./bin/macos/bootstrap.sh
+    # - name: Bootstrap environment
+    #   run: ./bin/macos/bootstrap.sh
 
-    - name: Clean Workspace
-      run: ./bin/macos/clean.sh
+    # - name: Clean Workspace
+    #   run: ./bin/macos/clean.sh
 
-    - name: Build Binary
-      run: ./bin/macos/build.sh
+    # - name: Build Binary
+    #   run: ./bin/macos/build.sh
 
-    - name: Make DMG
-      run: ./bin/macos/make_dmg.sh
+    # - name: Make DMG
+    #   run: ./bin/macos/make_dmg.sh
 
     - name: Upload Release Asset
       id: upload-release-asset
@@ -50,9 +50,13 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.create_release_job.outputs.upload_url }}
-        asset_path: ./dist/AstroImagingPlanner.dmg
-        asset_name: AstroImagingPlanner.dmg
-        asset_content_type: application/octet-stream
+        # asset_path: ./dist/AstroImagingPlanner.dmg
+        # asset_name: AstroImagingPlanner.dmg
+        # asset_content_type: application/octet-stream
+        asset_path: ./Readme.md
+        asset_name: Readme
+        asset_content_type: text/plain
+                
         
   
   

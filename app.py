@@ -9,6 +9,8 @@ import yaml
 import os
 import webbrowser
 import pytz
+import webbrowser
+import requests
 
 import plotly.io as pio
 
@@ -843,6 +845,41 @@ def update_mpsas_data_callback(lat, lon, mpsas):
     if atlas_available:
         mpsas = np.round(get_mpsas_from_lat_lon(lat, lon), 2)
     return mpsas
+
+
+@app.callback(Output("download-lpmap", "style"), Input("dummy-id", "children"))
+def update_download_lpmap_style_callback(x):
+    atlas_available = os.path.exists(
+        f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+    )
+
+    if not atlas_available:
+        return {}
+    return {"display": "none"}
+
+
+@app.callback(
+    Output("aip-profile-change-button", "n_clicks"),
+    [Input("download-lpmap", "n_clicks")],
+    prevent_initial_call=True,
+)
+def download_file(n_clicks):
+    if n_clicks is not None and n_clicks > 0:
+        # URL of the file to be downloaded
+        file_url = "https://github.com/gshau/TheAstroImagingPlanner/releases/download/lp-map-v1.0/World_Atlas_2015_compressed.tif"
+
+        # Path where the file will be saved
+        save_path = f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+
+        # Download the file and save it to the specified path
+        response = requests.get(file_url)
+        with open(save_path, "wb") as file:
+            file.write(response.content)
+
+        # Reset the button click counter
+        return 0
+    else:
+        return 0
 
 
 @app.callback(
@@ -3390,6 +3427,8 @@ def run_dash(
     app.preproc_progress = 0
     app.preproc_count = 0
     app.preproc_status = ""
+
+    open_browser(port)
 
     app.run(
         debug=debug,

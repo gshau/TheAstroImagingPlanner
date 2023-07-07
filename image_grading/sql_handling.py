@@ -37,29 +37,30 @@ def push_rows_to_table(
         log.debug(f"Modified {n_rows} existing entries")
 
 
-def check_if_table_exists(engine, table_name):
-    conn = engine.raw_connection()
+def check_if_table_exists(conn, table_name):
     try:
-        cursor = conn.cursor()
-        cursor.execute(
-            f"""select * from information_schema.tables where table_name='{table_name}'"""
+        df = pd.read_sql(
+            f"""SELECT * FROM sqlite_schema WHERE type='table' AND name='{table_name}'""",
+            conn,
         )
-        table_exists = bool(cursor.rowcount)
-        cursor.close()
-        conn.commit()
-        return table_exists
+        return df.shape[0] == 1
     finally:
-        conn.close()
+        pass
 
 
 def check_file_in_table(conn, file_list, table_name):
     try:
-        df = pd.read_sql(f"""select filename from {table_name}""", conn)
-        new_files = [
-            file
-            for file in file_list
-            if os.path.basename(file) not in df["filename"].values
-        ]
+        table_exists = check_if_table_exists(conn, table_name=table_name)
+        if table_exists:
+            df = pd.read_sql(f"""select filename from {table_name}""", conn)
+            new_files = [
+                file
+                for file in file_list
+                if os.path.basename(file) not in df["filename"].values
+            ]
+            return new_files
+        else:
+            return file_list
     except:
         log.info(f"Problem parsing {table_name}, it may not exist", exc_info=EXC_INFO)
         new_files = file_list

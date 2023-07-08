@@ -1,0 +1,81 @@
+name: Create Dev Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create_release_job:
+    runs-on: [self-hosted, macOS]
+    outputs: 
+      upload_url: ${{ steps.create_release.outputs.upload_url }} 
+    steps:
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}
+        draft: true
+        prerelease: false
+
+
+  build_mac_job:
+    runs-on: [self-hosted, macOS]
+    needs: create_release_job
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v2
+
+    - name: Bootstrap environment
+      run: ./bin/macos/bootstrap.sh
+
+    - name: Clean Workspace
+      run: ./bin/macos/clean.sh
+
+    - name: Build Binary
+      run: ./bin/macos/build.sh
+
+    - name: Make DMG
+      run: ./bin/macos/make_dmg.sh
+
+    - name: Upload Release Asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create_release_job.outputs.upload_url }}
+        asset_path: ./dist/AstroImagingPlanner.dmg
+        asset_name: AstroImagingPlanner-${{ github.ref_name }}.dmg
+        asset_content_type: application/octet-stream
+  
+  build_windows_job:
+    runs-on: [self-hosted, windows, x64]
+    needs: create_release_job
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Bootstrap
+        run: .\bin\windows\bootstrap.bat
+
+      - name: Clean
+        run: .\bin\windows\clean.bat
+
+      - name: Build
+        run: .\bin\windows\build.bat
+
+      - name: Upload Installer
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create_release_job.outputs.upload_url }}
+          asset_path: '.\build_assets\windows\installers\Install AstroImaging Planner.exe'
+          asset_name: 'Install_AstroImagingPlanner-${{ github.ref_name }}.exe'
+          asset_content_type: application/octet-stream

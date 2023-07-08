@@ -8,7 +8,7 @@ from shutil import copyfile
 from inspect import getframeinfo, stack
 
 from astro_planner.logger import log
-from astro_planner.globals import ENV, BASE_DIR
+from astro_planner.globals import ENV, BASE_DIR, DATA_DIR
 
 
 def debug_info(message):
@@ -33,7 +33,7 @@ def timer(func):
 
 
 def get_env_dir(env=ENV):
-    env_dir = f"{BASE_DIR}/data/user/{env}"
+    env_dir = f"{DATA_DIR}/data/user/{env}"
     if not os.path.exists(env_dir):
         os.makedirs(env_dir)
     return env_dir
@@ -43,7 +43,7 @@ def get_config(env=ENV):
     env_dir = get_env_dir(env=env)
     config_filename = f"{env_dir}/config.yml"
     if not os.path.exists(config_filename):
-        template_filename = f"{BASE_DIR}/data/_template/config_template.yml"
+        template_filename = f"{DATA_DIR}/data/_template/config_template.yml"
         copyfile(template_filename, config_filename)
     with open(config_filename, "r") as f:
         config = yaml.safe_load(f)
@@ -62,7 +62,7 @@ def get_db_conn(config):
 
 
 def get_fits_header_map(base_dir=BASE_DIR):
-    with open(f"{base_dir}/data/_template/fits_header.yml", "r") as f:
+    with open(f"{DATA_DIR}/data/_template/fits_header.yml", "r") as f:
         fits_header_map = yaml.safe_load(f)
     return fits_header_map
 

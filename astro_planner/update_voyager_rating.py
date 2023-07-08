@@ -7,7 +7,6 @@ import hashlib
 import json
 import time
 import uuid
-import uuid
 import requests
 
 
@@ -203,8 +202,8 @@ class VoyagerConnectionManager(Thread):
 def receive_message_callback(e, m):
     if e == "RemoteActionResult":
         # log.info(e, m)
-        l = m.get("ParamRet").get("list")
-        return l
+        result = m.get("ParamRet").get("list")
+        return result
 
 
 def get_attr_from_list(list_arg, search_key, search_value, attr_name):
@@ -221,7 +220,6 @@ async def main(
     server_url="localhost",
     server_port=5950,
 ):
-
     assert target_names is None or df_ratings is None
 
     websocket.enableTrace(False)

@@ -355,7 +355,9 @@ def process_target(
             extra_filter=extra_filter,
         )
         if matching_files is not None:
-            lights = [l for l in lights if os.path.basename(l) in matching_files]
+            lights = [
+                light for light in lights if os.path.basename(light) in matching_files
+            ]
         calibration_files = match_light_with_calibration(lights_record, df_calibration)
         flats = calibration_files.get("flat", [])
         bias = calibration_files.get("bias", [])

@@ -1215,7 +1215,7 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             ]
         )
 
-        # with open(f"{BASE_DIR}/data/license/license.txt", "r") as f:
+        # with open(f"{DATA_DIR}/data/license/license.txt", "r") as f:
         #     license_text = "".join(f.readlines())
 
         # license_div = html.Div(

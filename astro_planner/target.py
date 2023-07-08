@@ -17,7 +17,6 @@ from collections import defaultdict
 from xml.etree import ElementTree
 
 import json
-import os
 from .logger import log
 from .globals import IS_WINDOWS
 from .update_voyager_rating import (

@@ -22,7 +22,7 @@ from astro_planner.logger import log
 # log = logging.getLogger(__name__)
 
 # handler = logging.handlers.WatchedFileHandler(
-#     f"{BASE_DIR}/data/logs/autopreproc.log", mode="w"
+#     f"{DATA_DIR}/data/logs/autopreproc.log", mode="w"
 # )
 
 # formatter = logging.Formatter(

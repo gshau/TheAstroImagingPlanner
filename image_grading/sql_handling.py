@@ -13,7 +13,7 @@ def push_rows_to_table(
     try:
         df0.to_sql(
             table_name, conn, if_exists=if_exists, index=index
-        )  ## issue here for targets
+        )  # issue here for targets
         n_rows = df0.shape[0]
         log.debug(f"Added {n_rows} new entries")
     except:

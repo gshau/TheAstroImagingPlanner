@@ -6,6 +6,7 @@ from pathlib import Path
 
 path = Path(__file__).resolve().parents[1]
 BASE_DIR = os.environ.get("BASE_DIR", path)
+DATA_DIR = BASE_DIR
 
 
 EXPOSURE_COL = "Exposure"
@@ -60,7 +61,6 @@ FILTER_MAP = {
     R_FILTER: ["Red"],
     G_FILTER: ["Green"],
     B_FILTER: ["Blue"],
-    L_FILTER: ["Lum"],
     L_FILTER: ["Luminance"],
     HA_FILTER: ["HA"],
     OIII_FILTER: ["O3"],
@@ -100,4 +100,4 @@ TRANSLATED_FILTERS = {
 
 IS_WINDOWS = os.name == "nt"
 
-IS_PROD = bool(os.getenv('IS_PROD', True))
+IS_PROD = bool(os.getenv("IS_PROD", True))

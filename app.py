@@ -9,7 +9,6 @@ import yaml
 import os
 import webbrowser
 import pytz
-import webbrowser
 import requests
 
 import plotly.io as pio
@@ -79,7 +78,7 @@ from layout import serve_layout, yaxis_map, make_options
 
 from astropy.utils.exceptions import AstropyWarning
 from astro_planner.globals import (
-    BASE_DIR,
+    DATA_DIR,
     INSTRUMENT_COL,
     EXPOSURE_COL,
     FOCALLENGTH_COL,
@@ -837,7 +836,7 @@ def toggle_location_modal_callback(n1, n2, is_open, config):
 )
 def update_mpsas_data_callback(lat, lon, mpsas):
     atlas_available = os.path.exists(
-        f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+        f"{DATA_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
     )
 
     lat = np.round(lat, 4)
@@ -850,7 +849,7 @@ def update_mpsas_data_callback(lat, lon, mpsas):
 @app.callback(Output("download-lpmap", "style"), Input("dummy-id", "children"))
 def update_download_lpmap_style_callback(x):
     atlas_available = os.path.exists(
-        f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+        f"{DATA_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
     )
 
     if not atlas_available:
@@ -869,7 +868,7 @@ def download_file(n_clicks):
         file_url = "https://github.com/gshau/TheAstroImagingPlanner/releases/download/lp-map-v1.0/World_Atlas_2015_compressed.tif"
 
         # Path where the file will be saved
-        save_path = f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+        save_path = f"{DATA_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
 
         # Download the file and save it to the specified path
         response = requests.get(file_url)
@@ -926,7 +925,7 @@ def update_bortle_location_callback(mpsas, lat, lon):
     tab_text = f"Lat: {lat:.2f} Lon: {lon:.2f}"
 
     atlas_available = os.path.exists(
-        f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+        f"{DATA_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
     )
 
     if atlas_available:
@@ -1138,7 +1137,7 @@ def set_bulk_options_callback(n, config):
         label = str(valid_status_name).replace("_", " ").title()
         status_options.append({"value": valid_status_name, "label": label})
 
-    with open(f"{BASE_DIR}/data/_template/equipment/image_goals.yml", "r") as f:
+    with open(f"{DATA_DIR}/data/_template/equipment/image_goals.yml", "r") as f:
         image_goals = yaml.load(f, Loader=yaml.SafeLoader)
     image_goal_names = list(image_goals.keys())
     image_goal_options = make_options(image_goal_names)
@@ -1220,7 +1219,7 @@ def bulk_update_status_priority_callback(
         elif button_id == "select-none":
             selected_rows = []
         elif button_id == "goal-dropdown" and goal_dropdown is not None:
-            with open(f"{BASE_DIR}/data/_template/equipment/image_goals.yml", "r") as f:
+            with open(f"{DATA_DIR}/data/_template/equipment/image_goals.yml", "r") as f:
                 image_goals = yaml.load(f, Loader=yaml.SafeLoader)
             goal_data = image_goals.get(goal_dropdown)
             for selected_row in selected_rows:
@@ -1408,11 +1407,11 @@ def download_data_callback(n1, n2, n3, n4, n5, n6, config):
                             zf.write(absname, arcname)
                     zf.close()
 
-                zip(f"{BASE_DIR}/data/user/{env}", f"{BASE_DIR}/data/user/{env}.zip")
+                zip(f"{DATA_DIR}/data/user/{env}", f"{DATA_DIR}/data/user/{env}.zip")
                 children = ["zip file saved to Downloads folder"]
                 return (
                     dcc.send_file(
-                        f"{BASE_DIR}/data/user/{env}.zip", f"{env}_{timestamp}.zip"
+                        f"{DATA_DIR}/data/user/{env}.zip", f"{env}_{timestamp}.zip"
                     ),
                     children,
                     is_open,
@@ -1423,7 +1422,7 @@ def download_data_callback(n1, n2, n3, n4, n5, n6, config):
                 children = ["database saved to Downloads folder"]
                 return (
                     dcc.send_file(
-                        f"{BASE_DIR}/data/user/{env}/data.db",
+                        f"{DATA_DIR}/data/user/{env}/data.db",
                         f"data_{env}_{timestamp}.db",
                     ),
                     children,
@@ -1436,10 +1435,10 @@ def download_data_callback(n1, n2, n3, n4, n5, n6, config):
         update_data(conn, config)
 
         if object_name == "log":
-            log.info(f"{BASE_DIR}/data/logs/planner.log")
+            log.info(f"{DATA_DIR}/data/logs/planner.log")
             children = ["log saved to Downloads folder"]
             return (
-                dcc.send_file(f"{BASE_DIR}/data/logs/planner.log"),
+                dcc.send_file(f"{DATA_DIR}/data/logs/planner.log"),
                 children,
                 is_open,
                 duration,
@@ -2988,7 +2987,7 @@ def get_aip_profiles():
 
     profiles = [
         os.path.basename(path)
-        for path in glob.glob(f"{BASE_DIR}/data/user/*")
+        for path in glob.glob(f"{DATA_DIR}/data/user/*")
         if os.path.isdir(path)
     ]
     profiles = sorted(
@@ -3443,7 +3442,7 @@ def run_dash(
 
 def startup(config):
     log.info("=" * 80)
-    lines = open(f"{BASE_DIR}/data/banner.txt", "r").read().split("\n")
+    lines = open(f"{DATA_DIR}/data/banner.txt", "r").read().split("\n")
     for line in lines:
         log.info(line)
     log.info("https://github.com/gshau/AIP".center(80, " "))

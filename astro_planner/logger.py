@@ -1,7 +1,7 @@
 import logging
 import logging.handlers
 import os
-from .globals import BASE_DIR
+from .globals import DATA_DIR
 
 
 logging.basicConfig(
@@ -11,7 +11,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 handler = logging.handlers.WatchedFileHandler(
-    f"{BASE_DIR}/data/logs/planner.log", mode="w"
+    f"{DATA_DIR}/data/logs/planner.log", mode="w"
 )
 
 formatter = logging.Formatter(

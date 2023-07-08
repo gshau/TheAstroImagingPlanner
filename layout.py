@@ -426,10 +426,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                 "bright",
                                 "pastel",
                                 "dark",
-                                "colorblind",
-                                "husl",
-                                "hls",
-                                "ch:s=.25,rot=-.25",
                             ]
                         ],
                         value=planner_config.color_palette,
@@ -761,15 +757,18 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                         [leaflet_map, html.Div(id="location-text")],
                                     ),
                                     html.Br(),
-                                    # dcc.Markdown(
-                                    #     """Note: if the map does not render, please adjust the size of the main window.
-                                    #     This is a known bug, and we are awaiting a fix."""
-                                    # ),
                                 ]
                             )
                         ),
                         dbc.ModalFooter(
                             [
+                                dbc.Button(
+                                    "Download Skymap",
+                                    id="download-lpmap",
+                                    color="info",
+                                    className="mr-1",
+                                    style={"display": "none"},
+                                ),
                                 dbc.Button(
                                     "Close",
                                     id="close-location",
@@ -2459,51 +2458,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             type="default",
         )
 
-        # tabs = dbc.Tabs(
-        #     id="tabs",
-        #     active_tab="tab-settings",
-        #     children=[
-        #         dbc.Tab(
-        #             id="tab-target-review",
-        #             label="Target Planning",
-        #             # label=DashIconify(icon="flat-ui:settings", width=30),
-        #             # label=[html.I(className="bi bi-check-circle-fill me-2")],
-        #             tab_id="tab-target",
-        #             labelClassName="text-primary",
-        #             label_style={"font-size": 16},
-        #             tab_style={"display": "none"},
-        #         ),
-        #         dbc.Tab(
-        #             id="tab-inspector",
-        #             label="Frame Inspector",
-        #             tab_id="tab-inspector",
-        #             labelClassName="text-info",
-        #             label_style={"font-size": 16},
-        #             tab_style={"display": "none"},
-        #         ),
-        #         dbc.Tab(
-        #             id="tab-targets-table",
-        #             label="Target Tables",
-        #             tab_id="tab-targets-table",
-        #             labelClassName="text-success",
-        #             label_style={"font-size": 16},
-        #             tab_style={"display": "none"},
-        #         ),
-        #         dbc.Tab(
-        #             label="Settings & Utilities",
-        #             tab_id="tab-settings",
-        #             labelClassName="text-danger",
-        #             label_style={"font-size": 16},
-        #         ),
-        #         dbc.Tab(
-        #             label="Help",
-        #             tab_id="tab-help",
-        #             labelClassName="text-warning",
-        #             label_style={"font-size": 16},
-        #         ),
-        #     ],
-        # )
-
         i_color = 9
         tabs = dmc.Tabs(
             [
@@ -2717,7 +2671,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 html.Div(id="dummy-use-planner-check", style={"display": "none"}),
                 html.Div(
                     id="dummy-profile",
-                    #  style={"display": "none"},
                 ),
                 dcc.Download(id="all-download-data"),
             ],

@@ -8,7 +8,7 @@
 
 #define AppName "AstroImaging Planner"
 #define AppExeName "AstroImagingPlanner.exe"
-#define AppVersion GetVersionNumbersString(".\dist\AIP\AstroImagingPlanner.exe")
+#define AppVersion GetVersionNumbersString("..\..\dist\AIP\AstroImagingPlanner.exe")
 #define AppId "AIP"
 #define InstallerMode "Install"
 
@@ -33,9 +33,9 @@ ArchitecturesAllowed=x64
 ; done in "64-bit mode" on x64, meaning it should use the native
 ; 64-bit Program Files directory and the 64-bit view of the registry.
 ArchitecturesInstallIn64BitMode=x64
-OutputBaseFilename="{#InstallerMode} {#AppName}-v{#AppVersion}"
+OutputBaseFilename="{#InstallerMode} {#AppName}"
 OutputDir="./installers/"
-SetupIconFile=".\assets\windows\favicon.ico"
+SetupIconFile="..\..\assets\windows\favicon.ico"
 
 [Types]
 Name: "onlyAIP"; Description: "{#InstallerMode} The AstroImaging Planner"
@@ -47,9 +47,9 @@ Name: "aip"; Description: "AstroImaging Planner component"; Types: onlyAIP
 Name: "access"; Description: "Access driver component"; Types: full onlyAccess
 
 [Files]
-Source: ".\dist\AIP\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Components: aip
-Source: "driver\AccessDatabaseEngine.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: not IsWin64; Flags: ignoreversion; Components: access
-Source: "driver\AccessDatabaseEngine_X64.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: IsWin64; Flags: ignoreversion; Components: access
+Source: "..\..\dist\AIP\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Components: aip
+Source: "..\..\driver\AccessDatabaseEngine.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: not IsWin64; Flags: ignoreversion; Components: access
+Source: "..\..\driver\AccessDatabaseEngine_X64.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: IsWin64; Flags: ignoreversion; Components: access
 
 
 [Tasks]

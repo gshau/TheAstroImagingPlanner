@@ -254,10 +254,18 @@ async def main(
         target_names = df_ratings["OBJECT"].unique()
 
     for target_name in target_names:
-        ref_guid_target = get_attr_from_list(
-            target_list, "targetname", target_name, "guid"
-        )
+
+        # Remove Underscore to Match Voyager
+        voyager_target_name = target_name.replace("_", " ")
+
+        # Get the UID From Voyager for the specific Target (None if not found)
+        ref_guid_target = get_attr_from_list( target_list, "targetname", voyager_target_name, "guid")
         log.info(f"ref_guid_target: {ref_guid_target}")
+
+        # Check Next Target if Not Found
+        # Original Target May Have Been Deleted or Renamed
+        if ref_guid_target is None:
+            continue
 
         # Get shots under target
         params = {}
@@ -271,7 +279,7 @@ async def main(
         )
 
         shot_list += connection_manager.msg_list
-        log.info(shot_list)
+        log.info(f"Number of Shots: {len(shot_list)}")
 
         if df_ratings is None:
             r = requests.get(f"http://127.0.0.1:5678/status/{target_name}")

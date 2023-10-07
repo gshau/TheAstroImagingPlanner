@@ -138,7 +138,9 @@ def update_frame_metrics(
 
             else:
                 result = process_frame(
-                    file_set, extract_thresh=extract_thresh, use_simple=use_simple
+                    file_set,
+                    extract_thresh=extract_thresh,
+                    use_simple=use_simple,
                 )
 
             if "stars" not in result:
@@ -146,36 +148,25 @@ def update_frame_metrics(
             n_stars = result["stars"].shape[0]
 
             log.info(f"New stars: {n_stars}")
+            if n_stars <= 1:
+                log.warning("Too few stars found")
+                continue
             with conn:
                 # Aggregate star metrics table
-                push_rows_to_table(
-                    result["agg_stars"],
-                    conn,
-                    table_name="aggregated_star_metrics",
-                    if_exists="append",
-                    index=True,
-                    index_name="filename",
-                )
-
-                # XY table
-                push_rows_to_table(
-                    result["xy_frame"],
-                    conn,
-                    table_name="xy_frame_metrics",
-                    if_exists="append",
-                    index=True,
-                    index_name="filename",
-                )
-
-                # Gradient table
-                push_rows_to_table(
-                    result["frame_gradients"],
-                    conn,
-                    table_name="frame_gradients",
-                    if_exists="append",
-                    index=True,
-                    index_name="filename",
-                )
+                for result_key, table_name in zip(
+                    ["agg_stars", "xy_frame", "frame_gradients"],
+                    ["aggregated_star_metrics", "xy_frame_metrics", "frame_gradients"],
+                ):
+                    print(result_key, table_name)
+                    print(result[result_key].head())
+                    push_rows_to_table(
+                        result[result_key],
+                        conn,
+                        table_name=table_name,
+                        if_exists="append",
+                        index=True,
+                        index_name="filename",
+                    )
 
             if n_stars > 0:
                 log.info(

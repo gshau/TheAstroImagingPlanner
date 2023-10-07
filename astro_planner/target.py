@@ -128,7 +128,6 @@ async def get_robotargets_roboclip(server_url, server_port, auth_token):
     result = await connection_manager.send_command(
         "AuthenticateUserBase", {"Base": encoded_token.decode("ascii")}
     )
-    #     log.info(f"RESULT 0: {result}")
 
     df_robotargets = pd.DataFrame(await get_robotargets(connection_manager))
     df_roboclip = pd.DataFrame(await get_roboclip_targets(connection_manager))

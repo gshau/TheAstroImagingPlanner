@@ -6,8 +6,10 @@ import hashlib
 import glob
 import os
 from threading import local
+import time
 
 from astro_planner.globals import BINNING_COL, EXPOSURE_COL, FOCALLENGTH_COL
+from astropy.io import fits
 
 from .logger import log
 from .fit_header import get_lights, match_light_with_calibration, FILE_TYPES
@@ -27,6 +29,12 @@ def create_symlink(src, dst):
         os.symlink(src, dst)
 
 
+def status_wrap(success):
+    if not success[0]:
+        # log.warning("Issue!")
+        raise Exception("Issue")
+
+
 class ProcessTarget:
     def __init__(self, target_name, output_dir, master_cal_dir):
         self.target_name = target_name.replace(" ", "_")
@@ -43,6 +51,8 @@ class ProcessTarget:
         self.has_dark = len(glob.glob(f"{self.dark_dir}/*.FIT")) > 0
         self.has_light = len(glob.glob(f"{self.light_dir}/*.FIT")) > 0
 
+        self.delay = 0.05
+
         self.bias_digest = None
         self.flat_digest = None
         self.dark_digest = None
@@ -58,21 +68,25 @@ class ProcessTarget:
         os.makedirs(f"""{self.flat_dir}""", exist_ok=True)
         os.makedirs(f"""{self.dark_dir}""", exist_ok=True)
         os.makedirs(f"""{self.light_dir}""", exist_ok=True)
+        # self.app = Siril(delai_start=1)
         try:
             if sys.platform.startswith("win32"):
-                # siril_path = os.environ.get('SIRIL_PATH', r"C:\\Program Files\\SiriL\\bin\\siril.exe")
-                # log.info(f'Using siril_path = {siril_path}')
-                # self.app = Siril(siril_path, False)
                 self.app = Siril(delai_start=1)
             else:
-                self.app = Siril(bStable=False, delai_start=1)
+                self.app = Siril(
+                    siril_exe="/Applications/SiriL.app/Contents/MacOS/siril-cli",
+                    delai_start=1,
+                    bStable=True,
+                )
+                time.sleep(self.delay)
         except:
             raise FileNotFoundError("Siril not found")
         self.cmd = Wrapper(self.app)
         self.app.Open()
-
+        time.sleep(self.delay)
         self.cmd.set32bits()
         self.cmd.setext("fit")
+        time.sleep(self.delay)
 
     def store_metadata(self, filename, detail_list):
         metadata_filename = filename.replace(".fit", ".txt")
@@ -90,7 +104,6 @@ class ProcessTarget:
 
     def helper(self, ftype, filter=None):
         not_cached = True
-
         r = dict(
             bias=self.bias_dir,
             dark=self.dark_dir,
@@ -98,10 +111,17 @@ class ProcessTarget:
             light=self.light_dir,
         )
 
+        log.info(ftype)
+        log.info(r)
         file_list = sorted([os.path.basename(f) for f in glob.glob(f"{r[ftype]}/*")])
+        log.info(file_list)
         digest = get_hash_of_file_list(file_list)
         master_file = f"{self.master_cal_dir}/{ftype}_{digest}_stacked.fit"
         local_master_file = f"{self.process_dir}/{ftype}_{digest}_stacked.fit"
+
+        log.info(f"master_file: {master_file}")
+        log.info(f"local_master_file: {local_master_file}")
+
         if filter is not None:
             master_file = f"{self.master_cal_dir}/{ftype}_{digest}_{filter}_stacked.fit"
             local_master_file = (
@@ -131,11 +151,15 @@ class ProcessTarget:
             self.master_bias = f"bias_{digest}"
             if not_cached:
                 self.cmd.cd(self.bias_dir)
+                time.sleep(self.delay)
                 self.cmd.convert(self.master_bias, out=self.process_dir, fitseq=True)
+                time.sleep(self.delay)
                 self.cmd.cd(self.process_dir)
+                time.sleep(self.delay)
                 self.cmd.stack(
                     self.master_bias, type="rej", sigma_low=3, sigma_high=3, norm="no"
                 )
+                time.sleep(self.delay)
 
                 shutil.copy(local_master_file, master_file)
                 self.store_metadata(local_master_file, detail_list=["bias"])
@@ -154,8 +178,11 @@ class ProcessTarget:
             self.master_dark = f"dark_{digest}"
             if not_cached:
                 self.cmd.cd(self.dark_dir)
+                time.sleep(self.delay)
                 self.cmd.convert(self.master_dark, out=self.process_dir, fitseq=True)
+                time.sleep(self.delay)
                 self.cmd.cd(self.process_dir)
+                time.sleep(self.delay)
                 self.cmd.stack(
                     self.master_dark,
                     type="rej",
@@ -163,7 +190,9 @@ class ProcessTarget:
                     sigma_high=3,
                     norm="no",
                 )
-
+                time.sleep(self.delay)
+                print("master_file: ", master_file)
+                print("local_master_file: ", local_master_file)
                 shutil.copy(local_master_file, master_file)
                 self.store_metadata(local_master_file, detail_list=["dark"])
                 self.store_metadata(master_file, detail_list=["dark"])
@@ -181,14 +210,18 @@ class ProcessTarget:
             self.master_flat = f"flat_{digest}_{filter}"
             if not_cached:
                 self.cmd.cd(self.flat_dir)
+                time.sleep(self.delay)
                 self.cmd.convert(self.master_flat, out=self.process_dir, fitseq=True)
+                time.sleep(self.delay)
                 self.cmd.cd(self.process_dir)
+                time.sleep(self.delay)
                 preproc_kwargs = {}
                 if self.has_bias:
                     preproc_kwargs["bias"] = f"{self.master_bias}_stacked"
                 if self.has_dark:
                     preproc_kwargs["dark"] = f"{self.master_dark}_stacked"
                 self.cmd.preprocess(self.master_flat, **preproc_kwargs)
+                time.sleep(self.delay)
                 self.cmd.stack(
                     f"pp_{self.master_flat}",
                     type="rej",
@@ -196,6 +229,7 @@ class ProcessTarget:
                     sigma_high=3,
                     norm="mul",
                 )
+                time.sleep(self.delay)
                 local_master_file = local_master_file.replace(
                     self.master_flat, f"pp_{self.master_flat}"
                 )
@@ -230,12 +264,19 @@ class ProcessTarget:
             self.master_light = f"light_{digest}_{filter}"
             self.light_file_list = file_list
             self.light_file_count = len(file_list)
-
-            self.cmd.cd(self.light_dir)
-            self.cmd.convert(
-                f"light_{digest}_{filter}", out=self.process_dir, fitseq=True
+            log.info(f"moving to {self.light_dir}")
+            status_wrap(self.cmd.cd(self.light_dir))
+            time.sleep(self.delay)
+            log.info(f"converting")
+            status_wrap(
+                self.cmd.convert(
+                    f"light_{digest}_{filter}", out=self.process_dir, fitseq=True
+                )
             )
-            self.cmd.cd(self.process_dir)
+            time.sleep(self.delay)
+            log.info(f"moving to {self.process_dir}")
+            status_wrap(self.cmd.cd(self.process_dir))
+            time.sleep(self.delay)
 
             flat = None
             dark = None
@@ -246,19 +287,25 @@ class ProcessTarget:
                     flat = f"pp_{flat}"
             if self.has_dark:
                 dark = f"{self.master_dark}_stacked"
-
-            self.cmd.preprocess(
-                f"light_{digest}_{filter}",
-                dark=dark,
-                flat=flat,
-                cfa=cfa,
-                equalize_cfa=False,
-                debayer=cfa,
+            log.info(f"preprocessing light_{digest}_{filter}")
+            status_wrap(
+                self.cmd.preprocess(
+                    f"light_{digest}_{filter}",
+                    dark=dark,
+                    flat=flat,
+                    cfa=cfa,
+                    equalize_cfa=False,
+                    debayer=cfa,
+                )
             )
+            time.sleep(self.delay)
 
-            self.cmd.register(f"pp_light_{digest}_{filter}")
+            log.info(f"registering pp_light_{digest}_{filter}")
+            status_wrap(self.cmd.register(f"pp_light_{digest}_{filter}"))
+            time.sleep(self.delay)
             if ref_frame is not None:
-                self.cmd.setref(f"pp_light_{digest}_{filter}", ref_frame)
+                status_wrap(self.cmd.setref(f"pp_light_{digest}_{filter}", ref_frame))
+                time.sleep(self.delay)
 
             df_lights = df_header[
                 df_header["filename"]
@@ -271,26 +318,28 @@ class ProcessTarget:
 
             suffix = "_".join([f"{k}_{v}" for k, v in stack_kwargs.items()])
             suffix = f"{suffix}_{self.light_file_count}subs_{self.light_total_exposure_min}min"
-            out_file = f"{self.target_name}_master_{filter}_{digest}{suffix}".replace(
-                " ", "_"
+            out_file = (
+                f"{self.target_name}_master_{filter}_{digest}__TEMP__{suffix}".replace(
+                    " ", "_"
+                )
             )
             log.info(f"{out_file}, stack_kwargs: {stack_kwargs}")
-            self.cmd.stack(
-                f"r_pp_light_{digest}_{filter}",
-                type="rej",
-                sigma_low=3,
-                sigma_high=3,
-                norm="addscale",
-                output_norm=True,
-                out=f"../{out_file}",
-                **stack_kwargs,
+            status_wrap(
+                self.cmd.stack(
+                    f"r_pp_light_{digest}_{filter}",
+                    type="rej",
+                    sigma_low=3,
+                    sigma_high=3,
+                    norm="addscale",
+                    output_norm=True,
+                    out=f"../{out_file}",
+                    **stack_kwargs,
+                )
             )
-            filename_out = f"../{out_file}.fit"
-            self.store_metadata(
-                filename_out, detail_list=["light", "flat", "dark", "bias"]
-            )
-            from astropy.io import fits
 
+            log.info("fits open")
+            filename_out = f"{self.process_dir}/../{out_file}.fit"
+            log.info(f"Store metadata {filename_out}")
             with fits.open(filename_out, mode="update") as hdul:
                 hdr = hdul[0].header
                 hdr.set("OBJECT", target_name.rstrip().lstrip())
@@ -300,12 +349,20 @@ class ProcessTarget:
                 hdr.set("IMAGETYP", "MASTER LIGHT")
                 hdr.set("AIP-CMT", "Processed with The AstroImaging Planner and Siril")
                 hdul.flush()
+            self.store_metadata(
+                filename_out.replace("__TEMP__", ""),
+                detail_list=["light", "flat", "dark", "bias"],
+            )
 
+            shutil.move(filename_out, filename_out.replace("__TEMP__", ""))
+
+            log.info("unlink")
             os.unlink(f"{self.process_dir}/light_{digest}_{filter}.fit")
             os.unlink(f"{self.process_dir}/pp_light_{digest}_{filter}.fit")
             os.unlink(f"{self.process_dir}/r_pp_light_{digest}_{filter}.fit")
 
             self.cmd.close()
+            log.info("Done")
 
         return filename_out
 

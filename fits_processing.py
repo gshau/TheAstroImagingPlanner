@@ -270,7 +270,7 @@ class RunFileProcessor:
         log.info(new_files)
 
         self.stop_loop = False
-        chunk_size = self.config.get("n_threads", 2) * 2
+        chunk_size = self.config.get("chunk_size", 4)
         extract_thresh = self.config.get("extract_thresh", 0.5)
         if len(new_files) > 0:
             self.pending_file_list = new_files

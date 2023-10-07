@@ -935,7 +935,6 @@ def update_bortle_location_callback(mpsas, lat, lon):
         ]
         tab_text = f"{tab_text} Sky Brightness: {mpsas:.2f} mpsas"
 
-    log.info(card_body)
     text = dbc.Card(dbc.CardBody(card_body))
 
     return text, tab_text, bortle_badge
@@ -992,6 +991,9 @@ def update_time_location_data_callback(lat, lon, date_string=None):
 def update_target_for_status_callback(
     profile_list, status_match, priority_match, config
 ):
+    if "planner" not in config.get("running_mode", []):
+        raise PreventUpdate
+
     df_target_status = get_object_from_global_store("df_target_status")
     df_target_status = df_target_status[df_target_status["GROUP"].isin(profile_list)]
     targets = sorted(list(df_target_status["TARGET"].values))
@@ -1317,7 +1319,7 @@ def set_target_review_status_callback(
 
     if tab is None:
         tab = "tab-settings"
-    # tab = "tab-target"
+        tab = "tab-inspector"
     if "planner" not in config.get("running_mode", []):
         planning_disabled = True
     review_tab_style = {}
@@ -2277,6 +2279,13 @@ def update_inspector_dates_callback(
     )
 
 
+def get_called_button_id():
+    ctx = dash.callback_context
+    if ctx.triggered:
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        return button_id
+
+
 @app.callback(
     Output("dummy-rejection-criteria-id", "children"),
     [
@@ -2903,6 +2912,7 @@ def toggle_collapse(n, is_open):
 )
 def toggle_siril_callback(is_on):
     style = {"display": "none"}
+    # style = {}
     if is_on:
         style = {}
     disabled = not is_on
@@ -2991,7 +3001,11 @@ def get_aip_profiles():
         if os.path.isdir(path)
     ]
     profiles = sorted(
-        [p for p in profiles if p in ["testing", "demo", "secondary", "primary"]]
+        [
+            p
+            for p in profiles
+            # if p in ["testing", "demo", "secondary", "primary", "all_raw"]
+        ]
     )
     return profiles
 
@@ -3396,6 +3410,7 @@ def run_dash(
     monitor_mode_on=True,
     rfp=None,
     running_mode="All",
+    threaded=True,
     queue=None,
     ready_queue=None,
 ):
@@ -3434,7 +3449,7 @@ def run_dash(
         host="127.0.0.1",
         port=port,
         dev_tools_serve_dev_bundles=debug,
-        threaded=True,
+        threaded=threaded,
         use_reloader=debug,
         dev_tools_ui=debug,
     )
@@ -3477,6 +3492,7 @@ def start_watcher(config, rfp, q):
 def run_app(
     port=5678,
     debug=False,
+    threaded=True,
     no_processor=False,
     disable_monitor_mode=False,
     running_mode="All",
@@ -3495,7 +3511,6 @@ def run_app(
     q.put_nowait(config)
     use_processor = not no_processor
     rfp = RunFileProcessor(config)
-
     if use_processor:
         log.info("Using processor")
         debug = False
@@ -3508,6 +3523,7 @@ def run_app(
         port,
         config,
         debug=debug,
+        threaded=threaded,
         monitor_mode_on=not disable_monitor_mode,
         running_mode=running_mode,
         rfp=rfp,

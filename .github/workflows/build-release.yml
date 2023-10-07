@@ -50,7 +50,7 @@ jobs:
       with:
         upload_url: ${{ needs.create_release_job.outputs.upload_url }}
         asset_path: ./dist/AstroImagingPlanner.dmg
-        asset_name: AstroImagingPlanner-${{ github.ref_name }}.dmg
+        asset_name: AstroImagingPlanner-MacOS-${{ github.ref_name }}.dmg
         asset_content_type: application/octet-stream
   
   build_windows_job:
@@ -77,5 +77,5 @@ jobs:
         with:
           upload_url: ${{ needs.create_release_job.outputs.upload_url }}
           asset_path: '.\build_assets\windows\installers\Install AstroImaging Planner.exe'
-          asset_name: 'Install_AstroImagingPlanner-${{ github.ref_name }}.exe'
+          asset_name: 'Install_AstroImagingPlanner-Windows-${{ github.ref_name }}.exe'
           asset_content_type: application/octet-stream

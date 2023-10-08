@@ -23,8 +23,6 @@ datas += [(f'./{dir}/metadata.yml', './')]
 
 hiddenimports = []
 hiddenimports += ["sep"]
-hiddenimports += ["pandas_access"]
-hiddenimports += ["rsa"]
 hiddenimports += ["timezonefinder"]
 hiddenimports += ["astro_planner"]
 hiddenimports += ["fast_ephemeris"]

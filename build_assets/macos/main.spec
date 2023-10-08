@@ -25,19 +25,14 @@ datas += [(f'./{dir}/metadata.yml', './')]
 
 hiddenimports = []
 hiddenimports += ['sep']
-hiddenimports += ['pandas_access']
-hiddenimports += ['rsa']
 hiddenimports += ['timezonefinder']
 hiddenimports += ['astro_planner']
 hiddenimports += ['fast_ephemeris']
 hiddenimports += ['image_grading']
 hiddenimports += ['rasterio._shim']
 
-binaries = [('/usr/local/bin/mdb-*', '.')]
-binaries += [('/usr/local/lib/*mdb*.dylib', '.')]
 binaries += [('/usr/local/opt/glib/lib/libglib-2.0.0.dylib', '.')]
 binaries += [('/usr/local/opt/gettext/lib/libintl.8.dylib', '.')]
-#binaries += [(f'./{dir}/{venv}/lib/python3.11/site-packages/pyodbc.cpython-311-darwin.so', '.')]
 
 
 pathex = [f'./{dir}/{venv}/lib/python3.11/site-packages']

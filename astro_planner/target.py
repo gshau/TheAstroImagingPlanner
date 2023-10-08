@@ -198,49 +198,9 @@ class Targets:
 class RoboClipTargets(Targets):
     def __init__(self, filename, mdb_export_path=""):
         super().__init__()
-        if IS_WINDOWS:
-            DRV = "{Microsoft Access Driver (*.mdb, *.accdb)}"
-            import pyodbc
 
-            # connect to db
-            con = pyodbc.connect(f"DRIVER={DRV};DBQ={filename}")
-            cur = con.cursor()
-
-            # run a query and get the results
-            SQL = "SELECT * FROM Roboclip;"  # your query goes here
-            rows = cur.execute(SQL).fetchall()
-            cur.close()
-            con.close()
-
-            columns = [
-                "GUID",
-                "ID",
-                "TARGET",
-                "RAJ2000",
-                "DECJ2000",
-                "PA",
-                "GRUPPO",
-                "NOTE",
-                "DATACRE",
-                "IsMosaic",
-                "FROW",
-                "FCOL",
-                "TILES",
-                "overlap",
-                "angleAdj",
-                "DX",
-                "DY",
-                "PixelSize",
-                "Focallen",
-            ]
-
-            df_targets = pd.DataFrame.from_records(rows)
-            df_targets.columns = columns
-        else:
-            # cmd = [f"{mdb_export_path}/mdb-export", filename, "RoboClip"]
-            # proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-            conn = sqlite3.connect(filename)
-            df_targets = pd.read_s("select * from RoboClip", conn)
+        conn = sqlite3.connect(filename)
+        df_targets = pd.read_s("select * from RoboClip", conn)
         self.df_targets = df_targets
 
         self.df_targets.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)

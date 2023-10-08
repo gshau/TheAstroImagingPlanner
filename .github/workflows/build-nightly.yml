@@ -53,15 +53,15 @@ jobs:
       - name: Build
         run: .\bin\windows\build.bat
 
-    - name: Upload Release Asset
-      id: upload-release-asset
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        repo_name: gshau/TheAstroImagingPlanner
-        file: '.\build_assets\windows\installers\Install AstroImaging Planner.exe'
-        asset_name: 'Install_AstroImagingPlanner-Windows-latest.exe'
-        tag: latest-${{ github.ref_name }}
-        release_name: latest-${{ github.ref_name }}
-        overwrite: true
-        body: "Nightly release"
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          repo_name: gshau/TheAstroImagingPlanner
+          file: '.\build_assets\windows\installers\Install AstroImaging Planner.exe'
+          asset_name: 'Install_AstroImagingPlanner-Windows-latest.exe'
+          tag: latest-${{ github.ref_name }}
+          release_name: latest-${{ github.ref_name }}
+          overwrite: true
+          body: "Nightly release"

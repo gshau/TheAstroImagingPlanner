@@ -20,7 +20,7 @@ scikit-image==0.21.0
 statsmodels==0.14.0
 pyinstaller==5.12.0
 watchdog==2.1.6
-requests==2.26.0
+requests==2.31.0
 click==8.1.3
 tqdm==4.65.0
 ./wheels/pysiril-0.0.15-py3-none-any.whl

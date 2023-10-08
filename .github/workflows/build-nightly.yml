@@ -21,7 +21,7 @@ jobs:
         release_name: latest-${{ github.ref_name }}
         draft: false
         prerelease: false
-        allowUpdates: true
+        rm: true
 
 
   build_mac_job:

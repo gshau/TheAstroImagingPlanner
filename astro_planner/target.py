@@ -200,7 +200,7 @@ class RoboClipTargets(Targets):
         super().__init__()
 
         conn = sqlite3.connect(filename)
-        df_targets = pd.read_s("select * from RoboClip", conn)
+        df_targets = pd.read_sql("select * from RoboClip", conn)
         self.df_targets = df_targets
 
         self.df_targets.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)

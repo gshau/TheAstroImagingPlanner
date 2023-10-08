@@ -120,7 +120,7 @@ def update_targets(
     if not file_list:
         file_list = []
         for target_dir in target_dirs:
-            for extension in ["mdb", "sgf", "xml", "ninaTargetSet"]:
+            for extension in ["db", "sgf", "xml", "ninaTargetSet"]:
                 file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
     if len(file_list) == 0:
         return None

@@ -864,6 +864,8 @@ def download_file(n_clicks):
         file_url = "https://github.com/gshau/TheAstroImagingPlanner/releases/download/lp-map-v1.0/World_Atlas_2015_compressed.tif"
 
         # Path where the file will be saved
+        if not os.path.exists(f"{DATA_DIR}/data/sky_atlas"):
+            os.makedirs(f"{DATA_DIR}/data/sky_atlas")
         save_path = f"{DATA_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
 
         # Download the file and save it to the specified path

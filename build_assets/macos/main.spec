@@ -12,7 +12,6 @@ datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/pysiril', './pysiril')]
 datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_iconify', './dash_iconify')]
 datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_mantine_components', './dash_mantine_components')]
 datas += [(f'./{dir}/assets', './assets')]
-datas += [(f'./{dir}/data/sky_atlas', './data/sky_atlas')]
 
 
 datas += [(f'./{dir}/data/_template', './data/_template')]
@@ -31,6 +30,7 @@ hiddenimports += ['fast_ephemeris']
 hiddenimports += ['image_grading']
 hiddenimports += ['rasterio._shim']
 
+binaries = []
 binaries += [('/usr/local/opt/glib/lib/libglib-2.0.0.dylib', '.')]
 binaries += [('/usr/local/opt/gettext/lib/libintl.8.dylib', '.')]
 

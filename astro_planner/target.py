@@ -6,7 +6,7 @@ import websocket
 import base64
 
 
-import subprocess
+import sqlite3
 import pandas as pd
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -237,9 +237,10 @@ class RoboClipTargets(Targets):
             df_targets = pd.DataFrame.from_records(rows)
             df_targets.columns = columns
         else:
-            cmd = [f"{mdb_export_path}/mdb-export", filename, "RoboClip"]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-            df_targets = pd.read_csv(proc.stdout)
+            # cmd = [f"{mdb_export_path}/mdb-export", filename, "RoboClip"]
+            # proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            conn = sqlite3.connect(filename)
+            df_targets = pd.read_s("select * from RoboClip", conn)
         self.df_targets = df_targets
 
         self.df_targets.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)

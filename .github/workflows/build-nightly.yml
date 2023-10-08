@@ -58,6 +58,7 @@ jobs:
       uses: actions/upload-release-action@v2
       with:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
+        repo_name: gshau/TheAstroImagingPlanner
         file: ./dist/AstroImagingPlanner.dmg
         asset_name: AstroImagingPlanner-latest.dmg
         tag: latest-${{ github.ref_name }}

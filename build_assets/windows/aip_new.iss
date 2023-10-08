@@ -39,17 +39,17 @@ SetupIconFile="..\..\assets\windows\favicon.ico"
 
 [Types]
 Name: "onlyAIP"; Description: "{#InstallerMode} The AstroImaging Planner"
-Name: "onlyAccess"; Description: "Install only MS Access Drivers"
-Name: "full"; Description: "{#InstallerMode} The AstroImaging Planner and MS Access Drivers"
+;Name: "onlyAccess"; Description: "Install only MS Access Drivers"
+;Name: "full"; Description: "{#InstallerMode} The AstroImaging Planner and MS Access Drivers"
 
 [Components]
 Name: "aip"; Description: "AstroImaging Planner component"; Types: onlyAIP
-Name: "access"; Description: "Access driver component"; Types: full onlyAccess
+;Name: "access"; Description: "Access driver component"; Types: full onlyAccess
 
 [Files]
 Source: "..\..\dist\AIP\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs; Components: aip
-Source: "..\..\driver\AccessDatabaseEngine.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: not IsWin64; Flags: ignoreversion; Components: access
-Source: "..\..\driver\AccessDatabaseEngine_X64.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: IsWin64; Flags: ignoreversion; Components: access
+;Source: "..\..\driver\AccessDatabaseEngine.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: not IsWin64; Flags: ignoreversion; Components: access
+;Source: "..\..\driver\AccessDatabaseEngine_X64.exe"; DestDir: "{app}\driver"; DestName: access_engine.exe; Check: IsWin64; Flags: ignoreversion; Components: access
 
 
 [Tasks]

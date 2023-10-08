@@ -1,11 +1,26 @@
 import string
 import random
 import os
+import getpass
+import sys
 from pathlib import Path
+import shutil
+
+
+IS_WINDOWS = sys.platform == "win32"
+IS_MAC = sys.platform == "darwin"
 
 
 path = Path(__file__).resolve().parents[1]
 BASE_DIR = os.environ.get("BASE_DIR", path)
+DATA_DIR = BASE_DIR
+
+if IS_MAC:
+    username = getpass.getuser()
+    DATA_DIR = f"/Users/{username}/Library/ApplicationSupport/AstroImagingPlanner"
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR, exist_ok=True)
+        shutil.copytree(f"{BASE_DIR}/data", f"{DATA_DIR}/data")
 
 
 EXPOSURE_COL = "Exposure"
@@ -60,7 +75,6 @@ FILTER_MAP = {
     R_FILTER: ["Red"],
     G_FILTER: ["Green"],
     B_FILTER: ["Blue"],
-    L_FILTER: ["Lum"],
     L_FILTER: ["Luminance"],
     HA_FILTER: ["HA"],
     OIII_FILTER: ["O3"],
@@ -98,6 +112,5 @@ TRANSLATED_FILTERS = {
 }
 
 
-IS_WINDOWS = os.name == "nt"
-
-IS_PROD = bool(os.getenv('IS_PROD', True))
+IS_PROD = bool(os.getenv("IS_PROD", True))
+# IS_PROD = False

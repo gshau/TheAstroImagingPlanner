@@ -3,6 +3,7 @@ import time
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, PatternMatchingEventHandler
 from astro_planner.logger import log
+from config import SwitchConfig
 
 
 class MyHandler(PatternMatchingEventHandler):
@@ -72,9 +73,18 @@ class Watcher:
                     if preproc_out_dirs is None:
                         preproc_out_dirs = []
 
-                    self.directories = (
-                        data_dirs + target_dirs + calibration_dirs + preproc_out_dirs
-                    )
+                    switch_config = SwitchConfig()
+                    switch_config.set_var(config.get("switch_config", {}))
+
+                    self.directories = []
+                    if switch_config.planner_switch:
+                        self.directories += target_dirs
+                    if switch_config.inspector_switch:
+                        self.directories += data_dirs
+                    if switch_config.siril_switch:
+                        self.directories += calibration_dirs
+                        self.directories += preproc_out_dirs
+
                     self.observer.stop()
                     self.observer.join()
                     self.observer = Observer()

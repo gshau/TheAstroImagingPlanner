@@ -66,7 +66,6 @@ def infer_group(equipment, df0):
 
 
 def match_targets_to_data(df_targets, df_data):
-
     # speed-up - consider NxM array
     dfsh = df_data[
         [
@@ -127,7 +126,6 @@ def get_exposure_summary(df_data):
 
 
 def merge_targets_with_stored_metadata(df_data, df_targets):
-
     log.info(f"Target size: {df_targets.shape[0]}")
     log.info(f"Data size: {df_data.shape[0]}")
     df_match = match_targets_to_data(df_targets, df_data)
@@ -190,7 +188,6 @@ def merge_targets_with_stored_metadata(df_data, df_targets):
             else:
                 df_exposure["matching_targets"] = ""
         except:
-
             log.warning(df_exposure.head(), exc_info=EXC_INFO)
             log.warning(df_matching_targets_for_object.head(), exc_info=EXC_INFO)
 

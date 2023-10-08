@@ -24,10 +24,6 @@ from astro_planner.sky_brightness import LightPollutionMap
 from config import PlannerConfig
 
 
-# TODO: REMOVE THIS IMPORT
-from dash import dcc
-
-
 def load_custom_horizon_function(config):
     horizon_data = config.get("horizon_data", {})
     horizon_file = horizon_data.get("horizon_file")
@@ -79,7 +75,6 @@ def get_target_ephemeris_data_for_plotly(
     min_moon_distance=30,
     color_palette="bright",
 ):
-
     df_target_status = df_target_status.query("GROUP in @profile_list").set_index(
         "TARGET"
     )
@@ -376,7 +371,6 @@ def filter_targets(targets, filters):
 def store_target_coordinate_data(
     target_data, date_string, lat, lon, utc_offset, config
 ):
-
     site = get_site(lat=lat, lon=lon, utc_offset=utc_offset)
     targets = []
     target_list = target_data.target_list

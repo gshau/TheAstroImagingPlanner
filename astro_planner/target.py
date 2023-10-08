@@ -6,7 +6,7 @@ import websocket
 import base64
 
 
-import subprocess
+import sqlite3
 import pandas as pd
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -17,7 +17,6 @@ from collections import defaultdict
 from xml.etree import ElementTree
 
 import json
-import os
 from .logger import log
 from .globals import IS_WINDOWS
 from .update_voyager_rating import (
@@ -129,7 +128,6 @@ async def get_robotargets_roboclip(server_url, server_port, auth_token):
     result = await connection_manager.send_command(
         "AuthenticateUserBase", {"Base": encoded_token.decode("ascii")}
     )
-    #     log.info(f"RESULT 0: {result}")
 
     df_robotargets = pd.DataFrame(await get_robotargets(connection_manager))
     df_roboclip = pd.DataFrame(await get_roboclip_targets(connection_manager))
@@ -200,48 +198,9 @@ class Targets:
 class RoboClipTargets(Targets):
     def __init__(self, filename, mdb_export_path=""):
         super().__init__()
-        if IS_WINDOWS:
-            DRV = "{Microsoft Access Driver (*.mdb, *.accdb)}"
-            import pyodbc
 
-            # connect to db
-            con = pyodbc.connect(f"DRIVER={DRV};DBQ={filename}")
-            cur = con.cursor()
-
-            # run a query and get the results
-            SQL = "SELECT * FROM Roboclip;"  # your query goes here
-            rows = cur.execute(SQL).fetchall()
-            cur.close()
-            con.close()
-
-            columns = [
-                "GUID",
-                "ID",
-                "TARGET",
-                "RAJ2000",
-                "DECJ2000",
-                "PA",
-                "GRUPPO",
-                "NOTE",
-                "DATACRE",
-                "IsMosaic",
-                "FROW",
-                "FCOL",
-                "TILES",
-                "overlap",
-                "angleAdj",
-                "DX",
-                "DY",
-                "PixelSize",
-                "Focallen",
-            ]
-
-            df_targets = pd.DataFrame.from_records(rows)
-            df_targets.columns = columns
-        else:
-            cmd = [f"{mdb_export_path}/mdb-export", filename, "RoboClip"]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-            df_targets = pd.read_csv(proc.stdout)
+        conn = sqlite3.connect(filename)
+        df_targets = pd.read_s("select * from RoboClip", conn)
         self.df_targets = df_targets
 
         self.df_targets.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)

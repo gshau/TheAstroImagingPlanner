@@ -12,7 +12,6 @@ datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/pysiril', './pysiril')]
 datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_iconify', './dash_iconify')]
 datas += [(f'./{dir}/{venv}/lib/python3.11/site-packages/dash_mantine_components', './dash_mantine_components')]
 datas += [(f'./{dir}/assets', './assets')]
-datas += [(f'./{dir}/data/sky_atlas', './data/sky_atlas')]
 
 
 datas += [(f'./{dir}/data/_template', './data/_template')]
@@ -25,19 +24,15 @@ datas += [(f'./{dir}/metadata.yml', './')]
 
 hiddenimports = []
 hiddenimports += ['sep']
-hiddenimports += ['pandas_access']
-hiddenimports += ['rsa']
 hiddenimports += ['timezonefinder']
 hiddenimports += ['astro_planner']
 hiddenimports += ['fast_ephemeris']
 hiddenimports += ['image_grading']
 hiddenimports += ['rasterio._shim']
 
-binaries = [('/usr/local/bin/mdb-*', '.')]
-binaries += [('/usr/local/lib/*mdb*.dylib', '.')]
+binaries = []
 binaries += [('/usr/local/opt/glib/lib/libglib-2.0.0.dylib', '.')]
 binaries += [('/usr/local/opt/gettext/lib/libintl.8.dylib', '.')]
-#binaries += [(f'./{dir}/{venv}/lib/python3.11/site-packages/pyodbc.cpython-311-darwin.so', '.')]
 
 
 pathex = [f'./{dir}/{venv}/lib/python3.11/site-packages']

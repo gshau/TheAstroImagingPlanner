@@ -63,11 +63,26 @@ class VoyagerConfig(ConfigDataBase):
     PASSWORD = "password"
     USER = "user"
     PORT = "port"
-    SWITCH = "voyager_switch"
 
     def __init__(self):
         self.hostname = ""
         self.password = ""
         self.user = ""
         self.port = ""
+
+
+class SwitchConfig(ConfigDataBase):
+    SIRIL_SWITCH = "siril_switch"
+    SILENCE_ALERTS_SWITCH = "silence_alerts_switch"
+    VOYAGER_SWITCH = "voyager_switch"
+    PLANNER_SWITCH = "planner_switch"
+    INSPECTOR_SWITCH = "inspector_switch"
+    CULL_DATA_SWITCH = "cull_data_switch"
+
+    def __init__(self):
+        self.silence_alerts_switch = False
+        self.siril_switch = False
         self.voyager_switch = False
+        self.planner_switch = True
+        self.inspector_switch = True
+        self.cull_data_switch = False

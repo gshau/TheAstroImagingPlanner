@@ -278,14 +278,19 @@ def preprocess_stars(df_s, xy_n_bins=10, r_n_bins=20, nx=None, ny=None):
     df_s["vec_v"] = np.sin(df_s["theta"] * np.pi / 180) * df_s["ellipticity"]
 
     y_max = df_s["y_ref"].max()
+    x_max = df_s["x_ref"].max()
     if ny:
         y_max = ny / 2
+    if nx:
+        x_max = nx / 2
     df_s["x_bin"] = np.round(
         np.round((df_s["x_ref"] / y_max) * xy_n_bins) * y_max / xy_n_bins
     )
     df_s["y_bin"] = np.round(
         np.round(((df_s["y_ref"]) / y_max) * xy_n_bins) * y_max / xy_n_bins
     )
+    # df_s["x_bin"] = np.round(((df_s["x_ref"] + x_max) / (2 * x_max)) * 3)
+    # df_s["y_bin"] = np.round(((df_s["y_ref"] + y_max) / (2 * y_max)) * 3)
     return df_s
 
 

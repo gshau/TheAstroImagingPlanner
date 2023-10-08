@@ -3,7 +3,7 @@ from rasterio.windows import Window
 
 import numpy as np
 
-from astro_planner.globals import BASE_DIR
+from astro_planner.globals import DATA_DIR
 
 
 class LightPollutionMap:
@@ -13,7 +13,7 @@ class LightPollutionMap:
     # Supplement to: The New World Atlas of Artificial Night Sky Brightness.
     # GFZ Data Services. http://doi.org/10.5880/GFZ.1.4.2016.001
     def __init__(
-        self, filename=f"{BASE_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
+        self, filename=f"{DATA_DIR}/data/sky_atlas/World_Atlas_2015_compressed.tif"
     ):
         self.filename = filename
         self.dataset = rasterio.open(filename)

@@ -6,27 +6,27 @@ on:
       - main
 
 jobs:
-  create_release_job:
-    runs-on: [self-hosted, macOS]
-    outputs: 
-      upload_url: ${{ steps.create_release.outputs.upload_url }} 
-    steps:
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: latest-${{ github.ref_name }}
-        release_name: latest-${{ github.ref_name }}
-        draft: false
-        prerelease: false
-        rm: true
+  # create_release_job:
+  #   runs-on: [self-hosted, macOS]
+  #   outputs: 
+  #     upload_url: ${{ steps.create_release.outputs.upload_url }} 
+  #   steps:
+  #   - name: Create Release
+  #     id: create_release
+  #     uses: actions/create-release@v1
+  #     env:
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #     with:
+  #       tag_name: latest-${{ github.ref_name }}
+  #       release_name: latest-${{ github.ref_name }}
+  #       draft: false
+  #       prerelease: false
+  #       rm: true
 
 
   build_mac_job:
     runs-on: [self-hosted, macOS]
-    needs: create_release_job
+    # needs: create_release_job
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v2
@@ -49,14 +49,14 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ needs.create_release_job.outputs.upload_url }}
+        upload_url: https://github.com/gshau/TheAstroImagingPlanner/releases/tag/latest-main
         asset_path: ./dist/AstroImagingPlanner.dmg
         asset_name: AstroImagingPlanner-latest.dmg
         asset_content_type: application/octet-stream
   
   build_windows_job:
     runs-on: [self-hosted, windows, x64]
-    needs: create_release_job
+    # needs: create_release_job
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -76,7 +76,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.create_release_job.outputs.upload_url }}
+          upload_url: https://github.com/gshau/TheAstroImagingPlanner/releases/tag/latest-main
           asset_path: '.\build_assets\windows\installers\Install AstroImaging Planner.exe'
           asset_name: 'Install_AstroImagingPlanner-latest.exe'
           asset_content_type: application/octet-stream

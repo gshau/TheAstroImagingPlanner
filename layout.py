@@ -17,7 +17,7 @@ from dash_iconify import DashIconify
 from astro_planner.globals import BASE_DIR, BINNING_COL, FOCALLENGTH_COL, IS_PROD
 from astro_planner.utils import get_config
 from astro_planner.logger import log
-from config import PlannerConfig, VoyagerConfig, InspectorThresholds
+from config import PlannerConfig, VoyagerConfig, SwitchConfig, InspectorThresholds
 
 
 DONATE_SITE = "https://www.paypal.com/donate/?hosted_button_id=NKLT3YXPK2SDJ"
@@ -76,6 +76,9 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
 
         voyager_config = VoyagerConfig()
         voyager_config.set_var(config.get("voyager_config", {}))
+
+        switch_config = SwitchConfig()
+        switch_config.set_var(config.get("switch_config", {}))
 
         yaxis_map = {
             "alt": "Altitude",
@@ -988,22 +991,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             style={"display": "none"},
         )
 
-        running_mode_checklist = html.Div(
-            [
-                dcc.Markdown("""## UI Visibility"""),
-                dbc.Checklist(
-                    options=[
-                        {"label": "Use Planner", "value": "planner"},
-                        {"label": "Use Inspector", "value": "inspector"},
-                    ],
-                    value=config.get("running_mode"),
-                    id="running-mode-switch",
-                    switch=True,
-                ),
-            ],
-            style={"display": "none"},
-        )
-
         thread_slider = html.Div(
             [
                 dbc.Row(
@@ -1016,7 +1003,24 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                 ),
                                 dbc.Input(
                                     id="thread-count-slider",
-                                    value=config.get("n_threads", 1),
+                                    value=config.get("n_threads", 2),
+                                    min=1,
+                                    max=multiprocessing.cpu_count() * 2,
+                                    step=1,
+                                    type="number",
+                                ),
+                            ],
+                            width=2,
+                        ),
+                        dbc.Col(
+                            [
+                                dbc.Label(
+                                    "Process Batch Size",
+                                    html_for="process-batch-size-slider",
+                                ),
+                                dbc.Input(
+                                    id="process-batch-size-slider",
+                                    value=config.get("process_file_batch_size", 8),
                                     min=1,
                                     max=multiprocessing.cpu_count(),
                                     step=1,
@@ -1089,13 +1093,9 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                     [
                         dbc.Col(
                             [
-                                # dbc.Label(
-                                #     "Silence Alerts",
-                                #     html_for="silence-alerts",
-                                # ),
                                 daq.BooleanSwitch(
-                                    id="silence-alerts",
-                                    on=False,
+                                    id=SwitchConfig.SILENCE_ALERTS_SWITCH,
+                                    on=switch_config.silence_alerts_switch,
                                     label="Silence Alerts",
                                     labelPosition="top",
                                     color=switch_color,
@@ -1105,34 +1105,12 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                         ),
                         dbc.Col(
                             [
-                                # dbc.Label(
-                                #     "Silence Alerts",
-                                #     html_for="silence-alerts",
-                                # ),
                                 daq.BooleanSwitch(
-                                    id="planner-toggle",
-                                    on=False,
-                                    label="Use Planner (Inactive)",
+                                    id=SwitchConfig.PLANNER_SWITCH,
+                                    on=switch_config.planner_switch,
+                                    label="Use Planner",
                                     labelPosition="top",
                                     color=switch_color,
-                                    style={"display": "none"},
-                                ),
-                            ],
-                            width=3,
-                        ),
-                        dbc.Col(
-                            [
-                                # dbc.Label(
-                                #     "Silence Alerts",
-                                #     html_for="silence-alerts",
-                                # ),
-                                daq.BooleanSwitch(
-                                    id="inspector-toggle",
-                                    on=False,
-                                    label="Use Data Review (Inactive)",
-                                    labelPosition="top",
-                                    color=switch_color,
-                                    style={"display": "none"},
                                 ),
                             ],
                             width=3,
@@ -1140,12 +1118,23 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                         dbc.Col(
                             [
                                 daq.BooleanSwitch(
-                                    id="remove-files-when-deleted",
-                                    on=False,
-                                    label="Remove Frame Data When Deleted (Inactive)",
+                                    id=SwitchConfig.INSPECTOR_SWITCH,
+                                    on=switch_config.inspector_switch,
+                                    label="Use Data Review",
                                     labelPosition="top",
                                     color=switch_color,
-                                    style={"display": "none"},
+                                ),
+                            ],
+                            width=3,
+                        ),
+                        dbc.Col(
+                            [
+                                daq.BooleanSwitch(
+                                    id=SwitchConfig.CULL_DATA_SWITCH,
+                                    on=switch_config.cull_data_switch,
+                                    label="Remove Frame Data When Deleted",
+                                    labelPosition="top",
+                                    color=switch_color,
                                 ),
                             ],
                             width=3,
@@ -1324,8 +1313,8 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             [
                 dbc.Label("Auto-preprocessing with Siril", html_for="siril-switch"),
                 daq.BooleanSwitch(
-                    id="siril-switch",
-                    on=voyager_config.voyager_switch,
+                    id=SwitchConfig.SIRIL_SWITCH,
+                    on=switch_config.siril_switch,
                     labelPosition="bottom",
                     color=switch_color,
                 ),
@@ -1336,11 +1325,11 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             [
                 dbc.Label(
                     "Connect With Voyager Advanced",
-                    html_for=VoyagerConfig.SWITCH,
+                    html_for=SwitchConfig.VOYAGER_SWITCH,
                 ),
                 daq.BooleanSwitch(
-                    id=VoyagerConfig.SWITCH,
-                    on=voyager_config.voyager_switch,
+                    id=SwitchConfig.VOYAGER_SWITCH,
+                    on=switch_config.voyager_switch,
                     labelPosition="bottom",
                     color=switch_color,
                 ),
@@ -1494,32 +1483,9 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                 width=20,
                             ),
                         ),
-                        dmc.AccordionPanel([input_dir_list, running_mode_checklist]),
+                        dmc.AccordionPanel([input_dir_list]),
                     ],
                     value="directories",
-                ),
-                dmc.AccordionItem(
-                    [
-                        dmc.AccordionControl(
-                            dcc.Markdown("### Target Groups/Sequences"),
-                            icon=DashIconify(
-                                icon="solar:telescope-outline",
-                                color=dmc.theme.DEFAULT_COLORS["cyan"][6],
-                                width=20,
-                            ),
-                        ),
-                        dmc.AccordionPanel(
-                            [
-                                html.Div(
-                                    [
-                                        dbc.Checklist(id="profile-list", switch=True),
-                                    ],
-                                    id="profile-list-div",
-                                )
-                            ]
-                        ),
-                    ],
-                    value="target-profiles",
                 ),
                 dmc.AccordionItem(
                     [
@@ -1565,6 +1531,29 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 dmc.AccordionItem(
                     [
                         dmc.AccordionControl(
+                            dcc.Markdown("### Target Groups/Sequences"),
+                            icon=DashIconify(
+                                icon="solar:telescope-outline",
+                                color=dmc.theme.DEFAULT_COLORS["cyan"][6],
+                                width=20,
+                            ),
+                        ),
+                        dmc.AccordionPanel(
+                            [
+                                html.Div(
+                                    [
+                                        dbc.Checklist(id="profile-list", switch=True),
+                                    ],
+                                    id="profile-list-div",
+                                )
+                            ]
+                        ),
+                    ],
+                    value="target-profiles",
+                ),
+                dmc.AccordionItem(
+                    [
+                        dmc.AccordionControl(
                             dcc.Markdown("### Downloads"),
                             icon=DashIconify(
                                 icon="material-symbols:download",
@@ -1592,11 +1581,11 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 # ),
             ],
             value=[
-                # "profile",
-                # "directories",
+                "profile",
+                "directories",
                 # "target-profiles",
                 "basic-settings",
-                # "special-settings",
+                "special-settings",
                 # "downloads",
                 # "license",
             ],
@@ -1835,7 +1824,8 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                     id="inspector-last-n-days",
                                     min=-365 * 10,
                                     max=365 * 10,
-                                    value=1 if IS_PROD else 0,
+                                    value=1,
+                                    #   if IS_PROD else 0,
                                     step=1,
                                     debounce=True,
                                     type="number",
@@ -2464,17 +2454,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 dmc.TabsList(
                     [
                         dmc.Tab(
-                            "Planning",
-                            icon=DashIconify(
-                                icon="mdi:planner-outline",
-                                color=dmc.theme.DEFAULT_COLORS["blue"][i_color],
-                            ),
-                            value="tab-target",
-                            id="tab-target-review",
-                            style={"display": "none"},
-                            color="blue",
-                        ),
-                        dmc.Tab(
                             "Data Review",
                             icon=DashIconify(
                                 icon="icon-park:checklist",
@@ -2484,6 +2463,17 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                             id="tab-inspector",
                             style={"display": "none"},
                             color="green",
+                        ),
+                        dmc.Tab(
+                            "Target Planning",
+                            icon=DashIconify(
+                                icon="mdi:planner-outline",
+                                color=dmc.theme.DEFAULT_COLORS["blue"][i_color],
+                            ),
+                            value="tab-target",
+                            id="tab-target-review",
+                            style={"display": "none"},
+                            color="blue",
                         ),
                         dmc.Tab(
                             "Target Data",

@@ -17,7 +17,7 @@ import plotly.io as pio
 import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc, dash_table
-from config import PlannerConfig, VoyagerConfig, InspectorThresholds
+from config import PlannerConfig, VoyagerConfig, SwitchConfig, InspectorThresholds
 
 
 import dash_leaflet as dl
@@ -158,6 +158,26 @@ def get_target_data(config):
     return target_df_to_data(df_targets)
 
 
+def use_inspector(config):
+    log.info(config.get("switch_config", {}).get("inspector_switch", False))
+    return config.get("switch_config", {}).get("inspector_switch", False)
+
+
+def use_planner(config):
+    log.info(config.get("switch_config", {}).get("planner_switch", False))
+    return config.get("switch_config", {}).get("planner_switch", False)
+
+
+def check_use_planner(config):
+    if not use_planner(config):
+        raise PreventUpdate
+
+
+def check_use_inspector(config):
+    if not use_inspector(config):
+        raise PreventUpdate
+
+
 @timer
 def update_data(conn, config, targets=[], global_dict=GLOBAL_DICT):
     log.info("***** CALLING UPDATE_DATA *****")
@@ -165,16 +185,11 @@ def update_data(conn, config, targets=[], global_dict=GLOBAL_DICT):
     t0 = time.time()
     log.debug(f"Time elapsed: {time.time() - t0:.2f}")
     t0 = time.time()
-    use_planner, use_inspector = get_running_modes(config)
     df_data = None
-    log.info(f"use_inspector: {use_inspector}, use_planner: {use_planner}")
-    if not use_inspector and not use_planner:
-        return config
-
     log.debug(f"Time elapsed: {time.time() - t0:.2f}")
     t0 = time.time()
 
-    if use_inspector:
+    if use_inspector(config):
         t0 = time.time()
         df_data = pull_data(conn, config)
         # is_demo = True
@@ -183,7 +198,7 @@ def update_data(conn, config, targets=[], global_dict=GLOBAL_DICT):
         push_object_to_global_store(df_data, "df_data", global_dict=global_dict)
         log.info(f"Time elapsed: {time.time() - t0:.2f}")
 
-    if use_planner:
+    if use_planner(config):
         target_data, df_targets, df_target_status = pull_target_data(conn, config)
         if (
             target_data is not None
@@ -207,8 +222,8 @@ def update_data(conn, config, targets=[], global_dict=GLOBAL_DICT):
     log.debug(f"Time elapsed: {time.time() - t0:.2f}")
     t0 = time.time()
     if (
-        use_planner
-        and use_inspector
+        use_planner(config)
+        and use_inspector(config)
         and df_data is not None
         and df_targets is not None
         and df_data.shape[0] > 0
@@ -229,16 +244,6 @@ def update_data(conn, config, targets=[], global_dict=GLOBAL_DICT):
     log.debug(f"Time elapsed: {time.time() - t0:.2f}")
     t0 = time.time()
     return config
-
-
-def get_running_modes(config):
-    if config is None:
-        config = {}
-    running_mode = config.get("running_mode", [])
-    use_planner = "planner" in running_mode
-    use_inspector = "inspector" in running_mode
-    log.info(f"Running mode: planner={use_planner}, inspector={use_inspector}")
-    return use_planner, use_inspector
 
 
 def invert_filter_map(filter_map):
@@ -531,7 +536,7 @@ def update_theme_callback(theme):
 
 @app.callback(
     [Output("voyager-inputs", "style"), Output("sync-ratings-col", "style")],
-    [Input(VoyagerConfig.SWITCH, "on")],
+    [Input(SwitchConfig.VOYAGER_SWITCH, "on")],
 )
 def show_voyager_inputs_callback(switch):
     if switch:
@@ -575,9 +580,7 @@ def sync_ratings_callback(
     [State("date-picker", "date"), State("store-config", "data")],
 )
 def set_date_callback(lat, lon, current_date, config):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
-
+    check_use_planner(config)
     df_data = get_object_from_global_store("df_data")
 
     utc_offset = get_utc_offset(lat, lon, current_date)
@@ -673,9 +676,7 @@ def update_output_callback(
     profiles_selected,
     config,
 ):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
-
+    check_use_planner(config)
     target_data = get_target_data(config)
     i = "None"
     profile_dropdown_is_disabled = True
@@ -722,9 +723,7 @@ def update_output_callback(
     [State("store-config", "data")],
 )
 def update_weather_data_callback(lat, lon, utc_offset, config):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
-
+    check_use_planner(config)
     site = get_site(
         lat=lat,
         lon=lon,
@@ -752,8 +751,7 @@ def update_weather_data_callback(lat, lon, utc_offset, config):
 def filter_targets_for_matches_and_filters(
     targets, status_matches, priority_matches, filters, profile_list, config
 ):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     df_target_status = get_object_from_global_store("df_target_status")
     target_data = get_target_data(config)
@@ -800,8 +798,7 @@ def filter_targets_for_matches_and_filters(
     ],
 )
 def set_marker_callback(lat, lon, config):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
     x = [lat, lon]
     return (
         dl.Marker(
@@ -818,8 +815,7 @@ def set_marker_callback(lat, lon, config):
     [State("modal-location", "is_open"), State("store-config", "data")],
 )
 def toggle_location_modal_callback(n1, n2, is_open, config):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     return get_modal(n1, n2, is_open)
 
@@ -991,8 +987,7 @@ def update_time_location_data_callback(lat, lon, date_string=None):
 def update_target_for_status_callback(
     profile_list, status_match, priority_match, config
 ):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     df_target_status = get_object_from_global_store("df_target_status")
     df_target_status = df_target_status[df_target_status["GROUP"].isin(profile_list)]
@@ -1019,8 +1014,7 @@ def update_target_for_status_callback(
 def update_radio_status_for_targets_callback(
     targets, target_status_store, profile_list, config
 ):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     df_target_status = get_object_from_global_store("df_target_status")
     status = None
@@ -1054,8 +1048,7 @@ def update_radio_status_for_targets_callback(
     ],
 )
 def update_target_with_status_callback(status, priority, targets, profile_list, config):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     df_target_status = get_object_from_global_store("df_target_status")
     if len(targets) == 0:
@@ -1127,8 +1120,7 @@ def render_content_callback(tab, n1):
     [State("store-config", "data")],
 )
 def set_bulk_options_callback(n, config):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
     priority_options = []
     for valid_priority_name in config.get("valid_priorities"):
         label = str(valid_priority_name).replace("_", " ").title()
@@ -1284,7 +1276,7 @@ def update_table_callback(rows, columns, selected_rows):
     [Input("store-config", "data")],
 )
 def update_ui_vis_callback(config):
-    if "planner" in config.get("running_mode", []):
+    if use_planner(config):
         profile_list_style = {}
     else:
         profile_list_style = {"display": "none"}
@@ -1301,16 +1293,15 @@ def update_ui_vis_callback(config):
         Output("tab-inspector", "style"),
         Output("tab-inspector", "disabled"),
     ],
-    [Input("dummy-id", "children")],
+    [Input("dummy-id", "children"), Input("store-config", "data")],
     [
         State("tabs", "active_tab"),
-        State("store-config", "data"),
     ],
 )
 def set_target_review_status_callback(
     dummy_id,
-    tab,
     config,
+    tab,
 ):
     disabled = False
     planning_disabled = disabled
@@ -1318,10 +1309,18 @@ def set_target_review_status_callback(
     inspector_disabled = disabled
 
     if tab is None:
-        tab = "tab-settings"
         tab = "tab-inspector"
-    if "planner" not in config.get("running_mode", []):
+    if not use_planner(config):
         planning_disabled = True
+        table_disabled = True
+        tab = "tab-inspector"
+    if not use_inspector(config):
+        inspector_disabled = True
+        tab = "tab-target"
+
+    if inspector_disabled and planning_disabled:
+        tab = "tab-settings"
+
     review_tab_style = {}
     tab_review_label_style = "text-primary"
     if planning_disabled:
@@ -1481,8 +1480,7 @@ def get_target_data_callback(
 ):
     global all_target_coords, all_targets
 
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     target_data = get_target_data(config)
 
@@ -1505,9 +1503,7 @@ def get_target_data_callback(
 def update_contrast_callback(dummy_input, local_mpsas, k_ext, config):
     global all_target_coords
 
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
-
+    check_use_planner(config)
     if local_mpsas is None:
         local_mpsas = config.get("mpsas")
     filter_bandwidth = config.get("bandwidth")
@@ -1568,9 +1564,7 @@ def store_data_callback(
     profile_list,
     config,
 ):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
-
+    check_use_planner(config)
     global all_target_coords, all_targets
 
     df_targets = get_object_from_global_store("df_targets")
@@ -2731,7 +2725,7 @@ def set_bkg_color(p):
     [
         State("alert-auto", "children"),
         State("store-config", "data"),
-        State("silence-alerts", "on"),
+        State(SwitchConfig.SILENCE_ALERTS_SWITCH, "on"),
     ],
 )
 def toggle_alert_callback(
@@ -2848,7 +2842,7 @@ def toggle_alert_callback(
         Input({"type": "dir", "sub-type": "calibration", "index": ALL}, "value"),
         Input({"type": "dir", "sub-type": "preproc-out", "index": ALL}, "value"),
         Input("thread-count-slider", "value"),
-        Input("running-mode-switch", "value"),
+        Input("process-batch-size-slider", "value"),
         Input("profile-list", "value"),
         Input("profile-list", "options"),
         Input(InspectorThresholds.ECC_THR, "value"),
@@ -2868,6 +2862,12 @@ def toggle_alert_callback(
         Input(PlannerConfig.PROFILES, "value"),
         Input(PlannerConfig.TARGET_PRIORITIES, "value"),
         Input(PlannerConfig.TARGET_STATUS, "value"),
+        Input(SwitchConfig.SILENCE_ALERTS_SWITCH, "on"),
+        Input(SwitchConfig.SIRIL_SWITCH, "on"),
+        Input(SwitchConfig.PLANNER_SWITCH, "on"),
+        Input(SwitchConfig.INSPECTOR_SWITCH, "on"),
+        Input(SwitchConfig.CULL_DATA_SWITCH, "on"),
+        Input(SwitchConfig.VOYAGER_SWITCH, "on"),
     ],
 )
 def change_save_button_color_callback(n_save_clicks, *wargs):
@@ -2904,19 +2904,28 @@ def toggle_collapse(n, is_open):
 
 @app.callback(
     [
+        Output({"type": "dir", "sub-type": "target", "index": ALL}, "disabled"),
+        Output({"type": "dir", "sub-type": "data", "index": ALL}, "disabled"),
         Output({"type": "dir", "sub-type": "calibration", "index": ALL}, "disabled"),
         Output({"type": "dir", "sub-type": "preproc-out", "index": ALL}, "disabled"),
         Output("preprocess-col", "style"),
     ],
-    [Input("siril-switch", "on")],
+    [
+        Input(SwitchConfig.SIRIL_SWITCH, "on"),
+        Input(SwitchConfig.PLANNER_SWITCH, "on"),
+        Input(SwitchConfig.INSPECTOR_SWITCH, "on"),
+    ],
 )
-def toggle_siril_callback(is_on):
+def toggle_siril_callback(siril_on, planner_on, inspector_on):
     style = {"display": "none"}
-    # style = {}
-    if is_on:
+    if siril_on:
         style = {}
-    disabled = not is_on
-    return [disabled], [disabled], style
+    cal_disabled = not siril_on
+    preproc_disabled = not siril_on
+    target_disabled = not planner_on
+    data_disabled = not inspector_on
+
+    return [target_disabled], [data_disabled], [cal_disabled], [preproc_disabled], style
 
 
 @app.callback(
@@ -3030,7 +3039,6 @@ def set_aip_profile_and_options(n, aip_profile):
 @app.callback(
     [
         Output("store-config", "data"),
-        Output("running-mode-switch", "value"),
         Output("config-text", "value"),
     ],
     [
@@ -3038,7 +3046,6 @@ def set_aip_profile_and_options(n, aip_profile):
     ],
     [
         State("store-config", "data"),
-        State("running-mode-switch", "value"),
         State({"type": "dir", "sub-type": "target", "index": ALL}, "value"),
         State({"type": "dir", "sub-type": "data", "index": ALL}, "value"),
         State({"type": "dir", "sub-type": "calibration", "index": ALL}, "value"),
@@ -3048,6 +3055,7 @@ def set_aip_profile_and_options(n, aip_profile):
         State({"type": "dir", "sub-type": "calibration", "index": ALL}, "valid"),
         State({"type": "dir", "sub-type": "preproc-out", "index": ALL}, "valid"),
         State("thread-count-slider", "value"),
+        State("process-batch-size-slider", "value"),
         State("profile-list", "value"),
         State("profile-list", "options"),
         State(PlannerConfig.TARGET_STATUS, "value"),
@@ -3073,14 +3081,18 @@ def set_aip_profile_and_options(n, aip_profile):
         State(InspectorThresholds.IQR_SCALE, "value"),
         State(InspectorThresholds.TRAIL_THR, "value"),
         State(InspectorThresholds.GRADIENT_THR, "value"),
-        State(VoyagerConfig.SWITCH, "on"),
+        State(SwitchConfig.VOYAGER_SWITCH, "on"),
+        State(SwitchConfig.SIRIL_SWITCH, "on"),
+        State(SwitchConfig.SILENCE_ALERTS_SWITCH, "on"),
+        State(SwitchConfig.PLANNER_SWITCH, "on"),
+        State(SwitchConfig.INSPECTOR_SWITCH, "on"),
+        State(SwitchConfig.CULL_DATA_SWITCH, "on"),
     ],
     prevent_initial_call=True,
 )
 def update_config_callback(
     n,
     config_data,
-    running_modes,
     target_dirs,
     data_dirs,
     calibration_dirs,
@@ -3090,6 +3102,7 @@ def update_config_callback(
     calibration_dirs_valid,
     preproc_out_dirs_valid,
     n_thread_count,
+    n_batch_size,
     values,
     options,
     status_match,
@@ -3116,12 +3129,15 @@ def update_config_callback(
     trail_thr,
     gradient_thr,
     voyager_switch,
+    siril_switch,
+    silence_alerts_switch,
+    planner_switch,
+    inspector_switch,
+    cull_data_switch,
 ):
     try:
         log.debug(f"app.env = {app.env}")
         config_data = get_config(env=app.env)
-
-        config_data["running_mode"] = running_modes
 
         if all(target_dirs_valid):
             config_data["directories"]["target_dirs"] = target_dirs
@@ -3146,7 +3162,6 @@ def update_config_callback(
         config_data["voyager_config"][VoyagerConfig.PORT] = voyager_port
         config_data["voyager_config"][VoyagerConfig.USER] = voyager_user
         config_data["voyager_config"][VoyagerConfig.PASSWORD] = voyager_password
-        config_data["voyager_config"][VoyagerConfig.SWITCH] = voyager_switch
 
         config_data["planner_config"] = {}
         config_data["planner_config"][PlannerConfig.PROFILES] = list(profile_selection)
@@ -3168,6 +3183,16 @@ def update_config_callback(
         ] = min_frame_overlap_frac
         config_data["planner_config"][PlannerConfig.K_EXTINCTION] = k_extinction
 
+        config_data["switch_config"] = {}
+        config_data["switch_config"][
+            SwitchConfig.SILENCE_ALERTS_SWITCH
+        ] = silence_alerts_switch
+        config_data["switch_config"][SwitchConfig.SIRIL_SWITCH] = siril_switch
+        config_data["switch_config"][SwitchConfig.PLANNER_SWITCH] = planner_switch
+        config_data["switch_config"][SwitchConfig.INSPECTOR_SWITCH] = inspector_switch
+        config_data["switch_config"][SwitchConfig.CULL_DATA_SWITCH] = cull_data_switch
+        config_data["switch_config"][SwitchConfig.VOYAGER_SWITCH] = voyager_switch
+
         config_data["inspector_thresholds"] = {}
         config_data["inspector_thresholds"][InspectorThresholds.ECC_THR] = ecc_thr
         config_data["inspector_thresholds"][
@@ -3183,6 +3208,7 @@ def update_config_callback(
         config_data["theme"] = theme
 
         config_data["n_threads"] = n_thread_count
+        config_data["process_file_batch_size"] = n_batch_size
         app.queue.put_nowait(config_data)
         app.rfp.stop_loop = True
         save_config(config_data, app.env)
@@ -3190,7 +3216,7 @@ def update_config_callback(
     except:
         log.warning("Config data could not be loaded from text", exc_info=EXC_INFO)
         log.warning(f"Config data parsed: {config_data}")
-    return config_data, config_data["running_mode"], yaml.dump(config_data)
+    return config_data, yaml.dump(config_data)
 
 
 def get_df_for_status(target_names=None, filenames=None):
@@ -3409,18 +3435,11 @@ def run_dash(
     debug=True,
     monitor_mode_on=True,
     rfp=None,
-    running_mode="All",
     threaded=True,
     queue=None,
     ready_queue=None,
 ):
     env = config.get("env")
-
-    log.info(f"================== {running_mode} =====================")
-    if running_mode == "All":
-        config["running_mode"] = ["inspector", "planner"]
-    elif running_mode == "Inspector Only":
-        config["running_mode"] = ["inspector"]
 
     save_config(config, env)
     app.env = env
@@ -3442,7 +3461,7 @@ def run_dash(
     app.preproc_count = 0
     app.preproc_status = ""
 
-    open_browser(port)
+    # open_browser(port)
 
     app.run(
         debug=debug,
@@ -3465,9 +3484,6 @@ def startup(config):
     log.info("-" * 80)
     env = config.get("env")
     log.info(f"Using ENV = {env}".center(80, " "))
-    use_planner, use_inspector = get_running_modes(config)
-    log.info(f"Using planner:   {use_planner}".center(80, " "))
-    log.info(f"Using inspector: {use_inspector}".center(80, " "))
     log.info("=" * 80)
 
 
@@ -3495,7 +3511,6 @@ def run_app(
     threaded=True,
     no_processor=False,
     disable_monitor_mode=False,
-    running_mode="All",
     env="primary",
     ready_queue=None,
 ):
@@ -3525,7 +3540,6 @@ def run_app(
         debug=debug,
         threaded=threaded,
         monitor_mode_on=not disable_monitor_mode,
-        running_mode=running_mode,
         rfp=rfp,
         queue=q,
         ready_queue=ready_queue,

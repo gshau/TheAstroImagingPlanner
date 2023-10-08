@@ -113,3 +113,4 @@ TRANSLATED_FILTERS = {
 
 
 IS_PROD = bool(os.getenv("IS_PROD", True))
+# IS_PROD = False

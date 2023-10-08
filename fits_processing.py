@@ -24,6 +24,7 @@ from astro_planner.target import (
 )
 
 from astro_planner.logger import log
+from config import SwitchConfig
 
 
 def get_table_names(conn):
@@ -235,31 +236,40 @@ class RunFileProcessor:
         enable_limits = False
 
         log.info(self.target_dirs)
-        update_db_with_targets(
-            conn,
-            target_dirs=self.target_dirs,
-            enable_limits=enable_limits,
-            use_robotarget=self.use_robotarget,
-            robotarget_kwargs=self.robotarget_kwargs,
-        )
+        switch_config = SwitchConfig()
+        switch_config.set_var(self.config.get("switch_config", {}))
 
-        data_file_list = get_fits_file_list(
-            self.config,
-            data_dirs=self.data_dirs,
-            enable_limits=enable_limits,
-            preproc_out_dirs=self.preproc_out_dirs,
-        )
-        cal_file_list = get_fits_file_list(
-            self.config,
-            data_dirs=self.calibration_dirs,
-            enable_limits=enable_limits,
-            preproc_out_dirs=self.preproc_out_dirs,
-        )
+        if switch_config.planner_switch:
+            update_db_with_targets(
+                conn,
+                target_dirs=self.target_dirs,
+                enable_limits=enable_limits,
+                use_robotarget=self.use_robotarget,
+                robotarget_kwargs=self.robotarget_kwargs,
+            )
+
+        data_file_list = []
+        cal_file_list = []
+        if switch_config.inspector_switch:
+            data_file_list = get_fits_file_list(
+                self.config,
+                data_dirs=self.data_dirs,
+                enable_limits=enable_limits,
+                preproc_out_dirs=self.preproc_out_dirs,
+            )
+
+        if switch_config.siril_switch:
+            cal_file_list = get_fits_file_list(
+                self.config,
+                data_dirs=self.calibration_dirs,
+                enable_limits=enable_limits,
+                preproc_out_dirs=self.preproc_out_dirs,
+            )
         file_list = cal_file_list + data_file_list
         log.info(f"File list length: {len(file_list)}")
-        self.n_removed += remove_orphaned_rows(conn, file_list)
-        # self.n_removed = 0
-        log.info(f"Files removed: {self.n_removed}")
+        if switch_config.cull_data_switch:
+            self.n_removed += remove_orphaned_rows(conn, file_list)
+            log.info(f"Files removed: {self.n_removed}")
 
         new_files = []
         file_list = sorted(list(set(file_list)))
@@ -270,11 +280,11 @@ class RunFileProcessor:
         log.info(new_files)
 
         self.stop_loop = False
-        chunk_size = self.config.get("chunk_size", 4)
+        process_file_batch_size = self.config.get("process_file_batch_size", 8)
         extract_thresh = self.config.get("extract_thresh", 0.5)
         if len(new_files) > 0:
             self.pending_file_list = new_files
-            for file_chunk in list(chunks(new_files, chunk_size)):
+            for file_chunk in list(chunks(new_files, process_file_batch_size)):
                 if self.stop_loop:
                     break
                 n_threads = self.config.get("n_threads", 2)
@@ -282,7 +292,7 @@ class RunFileProcessor:
                     conn,
                     file_chunk,
                     n_threads=n_threads,
-                    n_chunk=chunk_size,
+                    n_chunk=process_file_batch_size,
                     extract_thresh=extract_thresh,
                     use_simple=self.config.get("use_simple_bkg_eval", True),
                 )

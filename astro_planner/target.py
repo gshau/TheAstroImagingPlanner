@@ -291,7 +291,7 @@ class NINASequenceTargets(Targets):
 
 
 def target_file_reader(filename, **kwargs):
-    if ".mdb" in filename:
+    if "VoyRC.db" in filename:
         return RoboClipTargets(filename, **kwargs)
     if ".sgf" in filename:
         return SGPSequenceTargets(filename, **kwargs)

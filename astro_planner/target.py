@@ -190,7 +190,7 @@ class Targets:
         self.df_targets = df_input
         self.process_targets(self.df_targets)
         profiles = [
-            profile for profile in self.target_list.keys() if type(profile) == str
+            profile for profile in self.target_list.keys() if isinstance(profile, str)
         ]
         self.profiles = sorted(profiles)
 

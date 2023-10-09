@@ -157,8 +157,6 @@ def update_frame_metrics(
                     ["agg_stars", "xy_frame", "frame_gradients"],
                     ["aggregated_star_metrics", "xy_frame_metrics", "frame_gradients"],
                 ):
-                    print(result_key, table_name)
-                    print(result[result_key].head())
                     push_rows_to_table(
                         result[result_key],
                         conn,

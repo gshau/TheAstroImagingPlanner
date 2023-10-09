@@ -68,9 +68,6 @@ directories:
   data_dirs: []
   preproc_out_dirs: []
   target_dirs: []
-running_mode:
-- inspector
-- planner
 sensor_map: {}
 theme: LITERA
 use_simple_bkg_eval: true
@@ -87,3 +84,10 @@ valid_status:
 - Closed
 - Dropped
 - Testing
+switch_config:
+  cull_data_switch: false
+  inspector_switch: true
+  planner_switch: true
+  silence_alerts_switch: false
+  siril_switch: false
+  voyager_switch: false

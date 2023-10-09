@@ -20,6 +20,11 @@ from astro_planner.globals import (
 )
 
 
+def use_planner(config):
+    log.info(config.get("switch_config", {}).get("planner_switch", False))
+    return config.get("switch_config", {}).get("planner_switch", False)
+
+
 class ThreadWithReturnValue(threading.Thread):
     def __init__(
         self, group=None, target=None, name=None, args=(), kwargs={}, Verbose=None
@@ -61,8 +66,7 @@ def pull_data(conn, config, targets=[], dates=[], join_type="inner"):
             extra_col_queries = f'{extra_col_queries}\n fh."{extra_col}",'
     target_query = get_target_query(targets)
     query = f"""
-        select  
-                fh.full_file_path,
+        select fh.full_file_path,
                 fh.filename,
                 fh.file_type,
                 fh."OBJECT",
@@ -72,7 +76,7 @@ def pull_data(conn, config, targets=[], dates=[], join_type="inner"):
                 fh."OBJCTRA",
                 fh."OBJCTDEC",
                 fh."OBJCTALT",
-                fh."OBJCTAZ",     
+                fh."OBJCTAZ",
                 fh."FOCUSTEM",
                 fh."FOCUSPOS",
                 fh."NAXIS1",
@@ -103,21 +107,21 @@ def pull_data(conn, config, targets=[], dates=[], join_type="inner"):
                 asm.log_flux_mean,
                 asm.bkg_val,
                 fh.is_valid_header,
-                fg.const, 
-                fg.fit_rmse, 
-                fg.frame_rmse, 
+                fg.const,
+                fg.fit_rmse,
+                fg.frame_rmse,
                 fg.gradient_dir,
-                fg.gradient_strength, 
-                fg.quadratic_aspect, 
-                fg.quadratic_dir, 
-                fg.quadratic_strength,            
-                fg.r2, 
-                fg.relative_gradient_strength, 
-                fg.relative_quadratic_strength, 
+                fg.gradient_strength,
+                fg.quadratic_aspect,
+                fg.quadratic_dir,
+                fg.quadratic_strength,
+                fg.r2,
+                fg.relative_gradient_strength,
+                fg.relative_quadratic_strength,
                 fg.residual_rmse
-        from fits_headers fh 
-            {join_type} join aggregated_star_metrics asm 
-                on fh.filename  = asm.filename 
+        from fits_headers fh
+            {join_type} join aggregated_star_metrics asm
+                on fh.filename  = asm.filename
             {join_type} join frame_gradients fg
                 on fg.filename = fh.filename
             where fh.is_valid_header = True 
@@ -353,7 +357,7 @@ def pull_target_data(conn, config):
         FROM targets
     """
 
-    if "planner" not in config.get("running_mode", []):
+    if not use_planner(config):
         return None, None, None
     try:
         with conn:

@@ -65,7 +65,13 @@ def update_db_with_targets(
 def init_target_status(conn):
     status_query = """
     CREATE TABLE IF NOT EXISTS target_status
-        ("TARGET" varchar(512), "GROUP" varchar(512), status varchar(512), exposure_goal varchar(2048), exposure_acquired varchar(2048), priority varchar(512), metadata varchar(2048),
+        ("TARGET" varchar(512),
+         "GROUP" varchar(512),
+         status varchar(512),
+         exposure_goal varchar(2048),
+         exposure_acquired varchar(2048),
+         priority varchar(512),
+         metadata varchar(2048),
         UNIQUE("TARGET", "GROUP") );
         """
 

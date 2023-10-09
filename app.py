@@ -91,6 +91,7 @@ from astro_planner.globals import (
     BB_FILTERS,
     TABLE_EXPORT_FORMAT,
     ROUTE_PREFIX,
+    IS_PROD,
 )
 
 
@@ -1308,7 +1309,7 @@ def set_target_review_status_callback(
     inspector_disabled = disabled
 
     if current_tab is None:
-        current_tab = "tab-settings"
+        current_tab = "tab-inspector"
     if not use_planner(config):
         planning_disabled = True
         table_disabled = True
@@ -3461,7 +3462,8 @@ def run_dash(
     app.preproc_count = 0
     app.preproc_status = ""
 
-    # open_browser(port)
+    if IS_PROD:
+        open_browser(port)
 
     app.run(
         debug=debug,

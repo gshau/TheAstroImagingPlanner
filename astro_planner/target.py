@@ -53,17 +53,6 @@ DEFAULT_SUBEXPOSURES = {
 }
 
 
-def normalize_target_name(target):
-    if target:
-        target = target.lower()
-        target = target.replace("-", "_")
-        target = target.replace(" ", "_")
-        target = re.sub(r"^(?:sh2)_*", "sh2-", target)
-        for catalog in ["ic", "vdb", "ngc", "ldn", "lbn", "arp", "abell"]:
-            target = re.sub(f"^(?:{catalog})_*", f"{catalog}_", target)
-    return target
-
-
 class Target:
     def __init__(self, name, ra=None, dec=None, notes=""):
         self.name = name
@@ -177,7 +166,7 @@ class Targets:
             note = str(row.NOTE)
             if note == "nan":
                 note = ""
-            target_name = normalize_target_name(row.TARGET)
+            target_name = row.TARGET
             target = Target(
                 target_name,
                 ra=row.RAJ2000 * u.hourangle,

@@ -8,7 +8,7 @@ import numpy as np
 
 from astro_planner.logger import log
 from astro_planner.site import get_utc_offset
-from astro_planner.target import normalize_target_name, Targets
+from astro_planner.target import Targets
 from astro_planner.utils import timer
 from astro_planner.globals import (
     EXC_INFO,
@@ -144,7 +144,6 @@ def pull_data(conn, config, targets=[], dates=[], join_type="inner"):
         root_name = df_data["full_file_path"].apply(lambda f: f.split("/")[1])
 
     df_data["OBJECT"] = df_data["OBJECT"].fillna(root_name)
-    df_data["OBJECT"] = df_data["OBJECT"].apply(normalize_target_name)
 
     for col in ["fwhm_mean", "fwhm_median", "fwhm_std"]:
         df_data[f"{col}_arcsec"] = df_data[col] * df_data["arcsec_per_pixel"]
@@ -359,10 +358,6 @@ def pull_target_data(conn, config):
         with conn:
             df_targets = pd.read_sql(target_query, conn)
             df_target_status = pd.read_sql("SELECT * FROM target_status;", conn)
-        df_targets["TARGET"] = df_targets["TARGET"].apply(normalize_target_name)
-        df_target_status["TARGET"] = df_target_status["TARGET"].apply(
-            normalize_target_name
-        )
     except (sqlite3.OperationalError, pd.io.sql.DatabaseError):
         log.info("Problem with reading targets")
         df = None

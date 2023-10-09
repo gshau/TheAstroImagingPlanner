@@ -19,7 +19,6 @@ from astro_planner.globals import BASE_DIR, EXC_INFO
 from astro_planner.utils import get_db_conn
 from astro_planner.target import (
     target_file_reader,
-    normalize_target_name,
     robotarget_reader,
 )
 
@@ -81,9 +80,7 @@ def init_target_status(conn):
 
     # Set initial status as "pending"
     df_targets = pd.read_sql("select * from targets;", conn)
-    df_targets["TARGET"] = df_targets["TARGET"].apply(normalize_target_name)
     df_status = pd.read_sql("select * from target_status;", conn)
-    df_status["TARGET"] = df_status["TARGET"].apply(normalize_target_name)
     if df_targets.shape[0] == 0:
         return None
     df0 = df_targets.merge(df_status, on=["TARGET", "GROUP"], how="left")

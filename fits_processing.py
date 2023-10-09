@@ -64,7 +64,13 @@ def update_db_with_targets(
 def init_target_status(conn):
     status_query = """
     CREATE TABLE IF NOT EXISTS target_status
-        ("TARGET" varchar(512), "GROUP" varchar(512), status varchar(512), exposure_goal varchar(2048), exposure_acquired varchar(2048), priority varchar(512), metadata varchar(2048),
+        ("TARGET" varchar(512),
+         "GROUP" varchar(512),
+         status varchar(512),
+         exposure_goal varchar(2048),
+         exposure_acquired varchar(2048),
+         priority varchar(512),
+         metadata varchar(2048),
         UNIQUE("TARGET", "GROUP") );
         """
 
@@ -117,8 +123,15 @@ def update_targets(
     if not file_list:
         file_list = []
         for target_dir in target_dirs:
-            for extension in ["mdb", "sgf", "xml", "ninaTargetSet"]:
-                file_list += glob.glob(f"{target_dir}/**/*.{extension}", recursive=True)
+            for extension in ["db", "sgf", "xml", "ninaTargetSet"]:
+                if extension == "db":
+                    file_list += glob.glob(
+                        f"{target_dir}/**/VoyRC.{extension}", recursive=True
+                    )
+                else:
+                    file_list += glob.glob(
+                        f"{target_dir}/**/*.{extension}", recursive=True
+                    )
     if len(file_list) == 0:
         return None
     n_files = len(file_list)
@@ -127,7 +140,7 @@ def update_targets(
     files_with_data = get_file_list_with_data(file_list)
     target_columns = ["filename", "TARGET", "GROUP", "RAJ2000", "DECJ2000", "NOTE"]
     if files_with_data:
-        df_list = []
+        df_list = [pd.DataFrame()]
         for filename in files_with_data:
             try:
                 target_kwargs = {}

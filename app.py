@@ -193,9 +193,6 @@ def update_data(conn, config, targets=[], global_dict=GLOBAL_DICT):
     if use_inspector(config):
         t0 = time.time()
         df_data = pull_data(conn, config)
-        # is_demo = True
-        # if is_demo:
-        #     df_data = df_data.sort_values("DATE-OBS").head(50)
         push_object_to_global_store(df_data, "df_data", global_dict=global_dict)
         log.info(f"Time elapsed: {time.time() - t0:.2f}")
 
@@ -1304,7 +1301,7 @@ def update_ui_vis_callback(config):
 def set_target_review_status_callback(
     dummy_id,
     config,
-    tab,
+    current_tab,
 ):
     disabled = False
     planning_disabled = disabled
@@ -1316,13 +1313,15 @@ def set_target_review_status_callback(
     if not use_planner(config):
         planning_disabled = True
         table_disabled = True
-        tab = "tab-inspector"
+        if current_tab == "tab-target" or current_tab == "tab-targets-table":
+            current_tab = "tab-settings"
     if not use_inspector(config):
         inspector_disabled = True
-        tab = "tab-target"
+        if current_tab == "tab-inspector":
+            current_tab = "tab-settings"
 
     if inspector_disabled and planning_disabled:
-        tab = "tab-settings"
+        current_tab = "tab-settings"
 
     review_tab_style = {}
     tab_review_label_style = "text-primary"
@@ -1341,9 +1340,9 @@ def set_target_review_status_callback(
         tab_inspector_label_style = None
 
     if disabled:
-        tab = "tab-settings"
+        current_tab = "tab-settings"
     return (
-        tab,
+        current_tab,
         review_tab_style,
         planning_disabled,
         table_tab_style,
@@ -1693,8 +1692,7 @@ def update_target_graph_visibility_callback(
     monitor_mode_off,
     config,
 ):
-    if "planner" not in config.get("running_mode", []):
-        raise PreventUpdate
+    check_use_planner(config)
 
     ctx = dash.callback_context
     if ctx.triggered and not monitor_mode_off:
@@ -2485,7 +2483,7 @@ def update_scatter_plot_callback(
         / (df_eff["DATE-OBS_duration"] + df_eff[f"{EXPOSURE_COL}_last"])
     ).mean()
 
-    progress_graph.figure.layout.title.text = f"{progress_graph.figure.layout.title.text}<br>Acquisition / Total Efficiency: {100 * relative_efficiency:.1f}% / {100 * absolute_efficiency:.1f}%"
+    progress_graph.figure.layout.title.text = f"{progress_graph.figure.layout.title.text}<br>Acquisition / Total Efficiency: {100 * relative_efficiency:.1f}% / {100 * absolute_efficiency:.1f}%"  # noqa E501
 
     progress_graph.figure.layout.height = 600
     progress_graph.figure = set_bkg_color(progress_graph.figure)

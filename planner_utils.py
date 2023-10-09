@@ -256,7 +256,10 @@ def get_target_ephemeris_data_for_plotly(
                     df0.loc[~show_trace, value] = np.nan
                     transit_time = str(df0["alt"].idxmax())
                     text = df0.apply(
-                        lambda row: f"Target: {target_name}<br>Profile: {profile}<br>Transit: {transit_time}<br>Status: {status}<br>Priority: {priority}<br>Notes: {notes_text}<br>Moon distance: {row['moon_distance']:.1f} degrees<br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas",
+                        lambda row: f"""Target: {target_name}<br>Profile: {profile}<br>Transit: {transit_time}
+                                    <br>Status: {status}<br>Priority: {priority}<br>Notes: {notes_text}
+                                    <br>Moon distance: {row['moon_distance']:.1f} degrees
+                                    <br>Local sky brightness (experimental): {row['sky_mpsas']:.2f} mpsas""",
                         axis=1,
                     )
 
@@ -338,7 +341,7 @@ def update_weather(site, config):
         "https://www.star.nesdis.noaa.gov/GOES/sector_band.php?sat=G16&sector=umv&band=11&length=36",
     )
 
-    clear_outside_forecast_img = f"http://clearoutside.com/forecast_image_large/{np.round(site.lat, 2)}/{np.round(site.lon, 2)}/forecast.png"
+    clear_outside_forecast_img = f"http://clearoutside.com/forecast_image_large/{np.round(site.lat, 2)}/{np.round(site.lon, 2)}/forecast.png"  # noqa E501
 
     return (
         graph_data,

@@ -179,7 +179,7 @@ class Targets:
         self.df_targets = df_input
         self.process_targets(self.df_targets)
         profiles = [
-            profile for profile in self.target_list.keys() if type(profile) == str
+            profile for profile in self.target_list.keys() if isinstance(profile, str)
         ]
         self.profiles = sorted(profiles)
 
@@ -189,7 +189,7 @@ class RoboClipTargets(Targets):
         super().__init__()
 
         conn = sqlite3.connect(filename)
-        df_targets = pd.read_s("select * from RoboClip", conn)
+        df_targets = pd.read_sql("select * from RoboClip", conn)
         self.df_targets = df_targets
 
         self.df_targets.rename({"GRUPPO": "GROUP"}, axis=1, inplace=True)
@@ -280,7 +280,7 @@ class NINASequenceTargets(Targets):
 
 
 def target_file_reader(filename, **kwargs):
-    if ".mdb" in filename:
+    if "VoyRC.db" in filename:
         return RoboClipTargets(filename, **kwargs)
     if ".sgf" in filename:
         return SGPSequenceTargets(filename, **kwargs)

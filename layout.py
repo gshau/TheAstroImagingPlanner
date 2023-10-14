@@ -254,15 +254,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
         navbar = dbc.NavbarSimple(
             id="navbar",
             children=[
-                # dbc.NavItem(
-                #     dbc.NavLink(
-                #         "Project Repository",
-                #         id="github-link",
-                #         href="https://github.com/gshau/AstroPlanner/",
-                #         className="fa-github",
-                #         target="_blank",
-                #     )
-                # ),
                 dbc.NavItem(
                     dbc.NavLink(
                         "Clear Outside Report",
@@ -300,7 +291,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                         "Donate",
                         id="donate-link",
                         href=DONATE_SITE,
-                        # className="fa-github",
                         target="_blank",
                     )
                 ),
@@ -308,7 +298,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             brand="The AstroImaging Planner",
             brand_href="https://github.com/gshau/AstroPlanner/",
             color="primary",
-            # dark=True,
             style={"display": "none"},
         )
 
@@ -725,10 +714,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 dl.LayerGroup(
                     id="location-marker",
                 ),
-                # dl.GestureHandling(),
-                # dl.LocateControl(
-                #     options={"locateOptions": {"enableHighAccuracy": True}}
-                # ),  # requires https
             ],
             style={
                 "height": "50vh",
@@ -739,7 +724,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             center=[planner_config.lat, planner_config.lon],
             zoom=12,
             id="map",
-            # boundsOptions={"padding": [15, 15]},  ## fails
         )
 
         location_picker_modal = html.Div(
@@ -1148,20 +1132,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
 
         profile_list = html.Div(
             [
-                # dmc.Group(
-                #     [
-                #         DashIconify(
-                #             icon="ion:logo-github",
-                #             width=30,
-                #             rotate=1,
-                #             flip="horizontal",
-                #         ),
-                #         DashIconify(icon="flat-ui:settings", width=30),
-                #         DashIconify(icon="feather:info", color="pink", width=30),
-                #     ]
-                # ),
-                # change to modal for changing profile
-                # need button to add new profile
                 dcc.Markdown(f"""Current AIP Profile: {config.get('env')}"""),
                 dcc.Dropdown(
                     id="aip-profile",
@@ -1175,8 +1145,8 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                             html.Div(
                                 [
                                     dbc.Button(
-                                        "Change Profile",
-                                        id="aip-profile-change-button",
+                                        "Load Profile",
+                                        id="aip-profile-load-button",
                                         n_clicks=0,
                                         color="info",
                                     )
@@ -1189,8 +1159,8 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                             html.Div(
                                 [
                                     dbc.Button(
-                                        "Add New Profile (Inactive)",
-                                        id="aip-profile-new-button",
+                                        "Edit Profiles",
+                                        id="aip-profile-edit-button",
                                         n_clicks=0,
                                         color="success",
                                     )
@@ -1201,66 +1171,75 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                         ),
                     ]
                 ),
+                html.Div(
+                    [
+                        dbc.Modal(
+                            [
+                                dbc.ModalHeader("AIP Profiles"),
+                                dbc.ModalBody(
+                                    [
+                                        dcc.Dropdown(
+                                            id="aip-profile-list",
+                                            placeholder="Select Profiles",
+                                            options=[],
+                                            multi=False,
+                                        ),
+                                        dbc.InputGroup(
+                                            [
+                                                # dbc.InputGroupText("New Profile Name"),
+                                                dbc.Input(id="aip-profile-selected"),
+                                                dbc.Button(
+                                                    "Save New Profile",
+                                                    id="save-aip-profile-button",
+                                                    color="success",
+                                                    className="mr-1",
+                                                ),
+                                            ],
+                                            id="new-aip-profile-group",
+                                            style={"display": "none"},
+                                        ),
+                                    ]
+                                ),
+                                dbc.ModalFooter(
+                                    [
+                                        dbc.Badge(
+                                            "",
+                                            id="aip-profile-status",
+                                            color="primary",
+                                            className="me-1",
+                                        ),
+                                        dbc.Button(
+                                            "Add New Profile",
+                                            id="new-aip-profile-button",
+                                            color="primary",
+                                            className="mr-1",
+                                        ),
+                                        dbc.Button(
+                                            "Delete",
+                                            id="aip-profile-delete-button",
+                                            color="warning",
+                                            className="mr-1",
+                                        ),
+                                        dbc.Button(
+                                            "Close",
+                                            id="aip-profile-close-button",
+                                            color="secondary",
+                                            className="mr-1",
+                                        ),
+                                    ]
+                                ),
+                            ],
+                            id="aip-profile-modal",
+                            size="xl",
+                        ),
+                    ],
+                    className="d-grid gap-2",
+                ),
             ]
         )
 
-        # with open(f"{DATA_DIR}/data/license/license.txt", "r") as f:
-        #     license_text = "".join(f.readlines())
-
-        # license_div = html.Div(
-        #     [
-        #         dbc.Button("Open License Info", id="license-modal-open", n_clicks=0),
-        #         dbc.Modal(
-        #             [
-        #                 dbc.ModalHeader(dbc.ModalTitle("License Info")),
-        #                 dbc.ModalBody(
-        #                     [
-        #                         dbc.Textarea(
-        #                             value=license_text,
-        #                             size="sm",
-        #                             className="mb-3",
-        #                             placeholder="License data",
-        #                             id="license-text",
-        #                             style={
-        #                                 "width": "100%",
-        #                                 "height": 400,
-        #                             },
-        #                             debounce=True,
-        #                         ),
-        #                         dbc.Alert(
-        #                             "",
-        #                             id="license-status-text",
-        #                             color="primary",
-        #                             is_open=False,
-        #                         ),
-        #                     ]
-        #                 ),
-        #                 dbc.ModalFooter(
-        #                     [
-        #                         dbc.Button(
-        #                             "Save",
-        #                             id="license-save",
-        #                             n_clicks=0,
-        #                             color="success",
-        #                         ),
-        #                         dbc.Button(
-        #                             "Close",
-        #                             id="license-modal-close",
-        #                             className="ms-auto",
-        #                             n_clicks=0,
-        #                         ),
-        #                     ]
-        #                 ),
-        #             ],
-        #             id="license-modal",
-        #             is_open=False,
-        #         ),
-        #     ]
-        # )
-
         input_dir_list = html.Div(
             [
-                # dcc.Markdown("""## Directory Settings"""),
                 dbc.FormFloating(
                     [
                         dbc.Input(
@@ -1565,20 +1544,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                     ],
                     value="downloads",
                 ),
-                # dmc.AccordionItem(
-                #     [
-                #         dmc.AccordionControl(
-                #             dcc.Markdown("### License"),
-                #             icon=DashIconify(
-                #                 icon="clarity:license-line",
-                #                 color=dmc.theme.DEFAULT_COLORS["red"][6],
-                #                 width=20,
-                #             ),
-                #         ),
-                #         dmc.AccordionPanel(license_div),
-                #     ],
-                #     value="license",
-                # ),
             ],
             value=[
                 "profile",
@@ -1587,7 +1552,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 "basic-settings",
                 "special-settings",
                 # "downloads",
-                # "license",
             ],
         )
         settings_container = dbc.Container(
@@ -1825,7 +1789,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                     min=-365 * 10,
                                     max=365 * 10,
                                     value=1,
-                                    #   if IS_PROD else 0,
                                     step=1,
                                     debounce=True,
                                     type="number",
@@ -1929,7 +1892,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                                 "Force Update",
                                 id="force-update-button",
                                 color="warning",
-                                # style={"display": "none"},
                                 style={"textAlign": "center"},
                                 className="d-grid col-10 mx-auto",
                                 n_clicks=0,
@@ -2209,14 +2171,7 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
             className="d-grid gap-2 col-12 mx-auto",
         )
 
-        # the styles for the main content position it to the right of the sidebar and
-        # add some padding.
-        CONTENT_STYLE = {
-            # "position": "relative",
-            # "margin-left": "22%",
-            # "margin-right": "2rem",
-            # "padding": "2rem 1rem",
-        }
+        CONTENT_STYLE = {}
 
         sidebar = html.Div(
             id="sidebar",
@@ -2614,7 +2569,6 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 dbc.Row(
                     [
                         dbc.Col(tabs, width=5),
-                        # dbc.Col(new_tabs, width=5),
                         dbc.Col([]),
                         dbc.Col([], width=3, id="location-tab-text"),
                         dbc.Col([], width=1, id="bortle-tab-badge"),
@@ -2652,6 +2606,7 @@ def serve_layout(app, monitor_mode_on=True, update_data_fn=None):
                 html.Div(id="dummy-id-2", style={"display": "none"}),
                 html.Div(id="dummy-id-3", style={"display": "none"}),
                 html.Div(id="dummy-id-4", style={"display": "none"}),
+                html.Div(id="dummy-id-5", style={"display": "none"}),
                 html.Div(id="dummy-id", style={"display": "none"}),
                 html.Div(id="dummy-id-target-data", style={"display": "none"}),
                 html.Div(id="dummy-id-contrast-data", style={"display": "none"}),

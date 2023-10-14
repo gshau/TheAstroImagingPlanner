@@ -10,7 +10,7 @@ import os
 import webbrowser
 import pytz
 import requests
-
+import shutil
 import plotly.io as pio
 
 
@@ -852,7 +852,7 @@ def update_download_lpmap_style_callback(x):
 
 
 @app.callback(
-    Output("aip-profile-change-button", "n_clicks"),
+    Output("aip-profile-load-button", "n_clicks"),
     [Input("download-lpmap", "n_clicks")],
     prevent_initial_call=True,
 )
@@ -2942,23 +2942,95 @@ def show_config_callback(n, state):
     return state
 
 
-# new modal for aip-profile-new-button
-# cancel
-# add
-# remove
+@app.callback(
+    Output("aip-profile-modal", "is_open"),
+    [
+        Input("aip-profile-edit-button", "n_clicks"),
+        Input("aip-profile-close-button", "n_clicks"),
+    ],
+    [State("aip-profile-modal", "is_open")],
+    prevent_initial_call=True,
+)
+def aip_profile_edit_callback(n1, n2, is_open):
+    return get_modal(n1, n2, is_open)
+
+
+@app.callback(
+    Output("aip-profile-list", "options"),
+    [
+        Input("aip-profile-modal", "is_open"),
+        Input("dummy-id-5", "children"),
+    ],
+    prevent_initial_call=True,
+)
+def aip_profile_add_callback(is_open, n1):
+    profiles = get_aip_profiles()
+    profiles_options = make_options(profiles)
+    return profiles_options
+
+
+@app.callback(
+    [
+        Output("new-aip-profile-group", "style"),
+        Output("aip-profile-status", "children"),
+        Output("aip-profile-status", "color"),
+        Output("aip-profile-status", "style"),
+        Output("aip-profile-selected", "value"),
+        Output("dummy-id-5", "children"),
+    ],
+    [
+        Input("new-aip-profile-button", "n_clicks"),
+        Input("save-aip-profile-button", "n_clicks"),
+        Input("aip-profile-delete-button", "n_clicks"),
+    ],
+    [State("aip-profile-selected", "value"), State("aip-profile-list", "value")],
+    prevent_initial_call=True,
+)
+def toggle_new_aip_profile_group_visible_callback(
+    n_new, n_save, n_delete, new_profile_name, profile_to_delete
+):
+    button_id = get_called_button_id()
+    group_style = {"display": "none"}
+    status_style = {"display": "none"}
+    status = ""
+    status_color = "primary"
+
+    if button_id == "new-aip-profile-button":
+        group_style = {}
+
+    elif button_id == "aip-profile-delete-button":
+        status_style = {}
+        profile_dir = f"{DATA_DIR}/data/user/{profile_to_delete}"
+        if not os.path.exists(profile_dir):
+            status = f"This profile does not exist: {profile_to_delete}"
+            status_color = "warning"
+        else:
+            shutil.rmtree(profile_dir)
+            status = f"Profile {new_profile_name} in {profile_dir} has been deleted"
+            status_color = "success"
+    elif button_id == "save-aip-profile-button":
+        status_style = {}
+        profile_dir = f"{DATA_DIR}/data/user/{new_profile_name}"
+        if os.path.exists(profile_dir):
+            status = "This profile already exists"
+            status_color = "warning"
+        else:
+            os.makedirs(profile_dir)
+            status = f"New profile {new_profile_name} created in {profile_dir}"
+            status_color = "success"
+
+    return group_style, status, status_color, status_style, None, []
 
 
 @app.callback(
     [
         Output("dummy-profile", "children"),
         Output("page-content", "children"),
-        # Output("url", "href"),
         Output("force-update-button", "n_clicks"),
         Output("config-save", "n_clicks"),
-        # Output("store-config", "data"),
     ],
     [
-        Input("aip-profile-change-button", "n_clicks"),
+        Input("aip-profile-load-button", "n_clicks"),
     ],
     [
         State("aip-profile", "value"),
@@ -3027,10 +3099,11 @@ def get_aip_profiles():
     ],
     [
         Input("config-save", "n_clicks"),
+        Input("dummy-id-5", "children"),
     ],
     [State("aip-profile", "value")],
 )
-def set_aip_profile_and_options(n, aip_profile):
+def set_aip_profile_and_options(n, dummy_id, aip_profile):
     profiles = get_aip_profiles()
     profile_options = make_options(profiles)
 
@@ -3371,11 +3444,11 @@ def get_preproc_dirs_callback(config):
     [Input({"type": "dir", "sub-type": ALL, "index": ALL}, "value")],
 )
 def check_validity_callback(dir_list):
-    are_paths = [os.path.exists(dir) if dir is not None else False for dir in dir_list]
-    not_paths = [
-        not os.path.exists(dir) if dir is not None else False for dir in dir_list
+    is_valid = [
+        os.path.exists(dir) or (dir == "") if dir is not None else True
+        for dir in dir_list
     ]
-    return are_paths, not_paths
+    return is_valid, [not x for x in is_valid]
 
 
 @app.server.route("/status/<target_name>")
@@ -3491,16 +3564,16 @@ def startup(config):
 
 def start_watcher(config, rfp, q):
     data_dirs = config.get("directories", {}).get("data_dirs", [])
-    if data_dirs is None:
+    if data_dirs is None or len(data_dirs) == 0:
         data_dirs = []
     target_dirs = config.get("directories", {}).get("target_dirs", [])
-    if target_dirs is None:
+    if target_dirs is None or len(target_dirs) == 0:
         target_dirs = []
     calibration_dirs = config.get("directories", {}).get("calibration_dirs", [])
-    if calibration_dirs is None:
+    if calibration_dirs is None or len(calibration_dirs) == 0:
         calibration_dirs = []
     preproc_out_dirs = config.get("directories", {}).get("preproc_out_dirs", [])
-    if preproc_out_dirs is None:
+    if preproc_out_dirs is None or len(preproc_out_dirs) == 0:
         preproc_out_dirs = []
     watch_dirs = data_dirs + target_dirs + calibration_dirs + preproc_out_dirs
     w = Watcher(watch_dirs, target=rfp, queue=q)

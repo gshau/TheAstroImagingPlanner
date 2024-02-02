@@ -1,5 +1,5 @@
 astropy[all]==4.2
-dash==1.18.1
+dash==2.15.0
 dash-bootstrap-components==0.11.1
 dash-core-components==1.14.1
 dash-html-components==1.1.1
